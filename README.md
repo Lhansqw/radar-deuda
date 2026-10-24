@@ -23,3 +23,4 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | Documento | Contenido |
 |---|---|
 | [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Fase 1: viabilidad, riesgos, arquitectura y MVP |
+| [docs/DECISIONES.md](docs/DECISIONES.md) | Fase 2: comparación de tecnologías y stack |
