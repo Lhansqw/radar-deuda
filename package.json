@@ -1,0 +1,30 @@
+{
+  "name": "radar-deuda",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plataforma de escritorio para detectar y gestionar deuda técnica en repositorios (motor de análisis + IA).",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "tsc -p packages/engine/tsconfig.build.json",
+    "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.13.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5"
+  }
+}

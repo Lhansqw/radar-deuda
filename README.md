@@ -18,6 +18,31 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 4. **Barato primero.** Análisis deterministas e incrementales; la IA solo se usa
    donde aporta valor.
 
+## Estructura
+
+```
+radar-deuda/
+├─ packages/
+│  └─ engine/            Motor de análisis determinista (sin Electron, sin red)
+│     ├─ src/
+│     └─ test/
+├─ docs/                 Arquitectura, decisiones, entorno, metodología
+├─ tsconfig.base.json    TypeScript estricto compartido
+├─ eslint.config.js
+└─ vitest.config.ts
+```
+
+Paquetes previstos: `packages/sources` (Git y GitHub, fase 6), `packages/ai` (fase 7) y
+`apps/desktop` (Electron + React, fase 8).
+
+## Comandos
+
+```powershell
+npm ci            # instala dependencias exactas del lockfile
+npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit)
+npm run build     # compila el motor a packages/engine/dist
+```
+
 ## Documentación
 
 | Documento | Contenido |

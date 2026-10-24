@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.log
+.radar-cache/
+bench-results/
+.env
+.env.*
+!.env.example
