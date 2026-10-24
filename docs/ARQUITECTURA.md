@@ -161,3 +161,5 @@ Medidos con `npm run bench` sobre repositorios sintéticos (fase 5) y reales (fa
 | Reanálisis sin cambios (caché caliente) | ≤ 25 % del tiempo en frío |
 | Memoria del motor (RSS pico, repositorio mediano) | < 512 MB |
 | La interfaz nunca se bloquea durante un análisis | El motor corre en un `utilityProcess` |
+
+Resultados medidos y cómo reproducirlos: [RENDIMIENTO.md](RENDIMIENTO.md).
