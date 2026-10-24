@@ -1,0 +1,12 @@
+{
+  "name": "demo-tienda",
+  "version": "1.0.0",
+  "dependencies": {
+    "express": "*",
+    "lodash": "^4.17.21",
+    "utilidades-internas": "github:empresa/utilidades"
+  },
+  "devDependencies": {
+    "lodash": "^4.17.21"
+  }
+}

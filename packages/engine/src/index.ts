@@ -9,3 +9,4 @@ export { computeScore } from './score.js';
 export { defaultCacheDir } from './cache.js';
 export { redactSecrets } from './analyzers/secrets.js';
 export * from './analyzers/index.js';
+export { formatReport } from './report.js';

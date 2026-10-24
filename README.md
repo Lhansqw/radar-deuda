@@ -43,6 +43,24 @@ npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit)
 npm run build     # compila el motor a packages/engine/dist
 ```
 
+## Analizar un repositorio
+
+```powershell
+npm run analyze -- examples\demo-repo
+npm run analyze -- C:\ruta\a\otro\repo --json informe.json
+npm run analyze -- C:\ruta\a\otro\repo --fail-on high   # código 1 si hay hallazgos altos o críticos (CI)
+```
+
+Opciones: `--json <archivo>`, `--no-cache`, `--cache-dir <dir>`, `--concurrency <n>`,
+`--top <n>`, `--fail-on <critical|high|medium|low>`, `--quiet`. `Ctrl+C` cancela.
+
+La caché se guarda en `%LOCALAPPDATA%\radar-deuda\cache`, nunca dentro del repositorio
+analizado. El motor solo **lee** archivos: no ejecuta código, no instala dependencias y no
+hace peticiones de red.
+
+`examples/demo-repo` contiene deuda técnica intencionada (función compleja, duplicación,
+ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador funciona.
+
 ## Documentación
 
 | Documento | Contenido |

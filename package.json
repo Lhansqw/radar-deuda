@@ -11,6 +11,7 @@
     "node": ">=22.13"
   },
   "scripts": {
+    "analyze": "tsx packages/engine/src/cli.ts",
     "build": "tsc -p packages/engine/tsconfig.build.json",
     "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit",
     "lint": "eslint .",
