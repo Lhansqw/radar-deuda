@@ -17,6 +17,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench": "tsx packages/engine/scripts/bench.ts",
     "check": "npm run typecheck && npm run lint && npm test"
   },
   "devDependencies": {
