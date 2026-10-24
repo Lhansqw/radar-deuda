@@ -4,6 +4,7 @@ import { getSourceFile } from '../src/analyzers/shared.js';
 import { resolveConfig } from '../src/config.js';
 import type { Finding } from '../src/types.js';
 import { fileInput } from './helpers/file-input.js';
+import { memoryStore } from './helpers/memory-store.js';
 
 const importsOf = (code: string, file = 'src/a.ts') => extractImports(getSourceFile(fileInput(file, code)));
 
@@ -15,7 +16,7 @@ async function analyze(files: Record<string, string>, fanOut = 20): Promise<Find
   }
   const finalize = architectureAnalyzer.finalize;
   if (!finalize) throw new Error('el analizador de arquitectura debe implementar finalize');
-  return finalize(artifacts, resolveConfig({ thresholds: { fanOut } }), { readText: async () => null });
+  return finalize(artifacts, resolveConfig({ thresholds: { fanOut } }), { readText: async () => null, store: memoryStore() });
 }
 
 describe('extractImports', () => {

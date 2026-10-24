@@ -1,7 +1,18 @@
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { cloneFinding, findClones, fingerprintSource, forEachToken, type DuplicationArtifact } from '../src/analyzers/duplication.js';
+import {
+  cloneFinding,
+  duplicationAnalyzer,
+  findCandidates,
+  findClones,
+  fingerprintSource,
+  forEachToken,
+  refineCandidates,
+  type DuplicationArtifact,
+} from '../src/analyzers/duplication.js';
 import { resolveConfig } from '../src/config.js';
+import { fileInput } from './helpers/file-input.js';
+import { memoryStore } from './helpers/memory-store.js';
 
 const config = resolveConfig();
 
@@ -107,5 +118,67 @@ describe('cloneFinding', () => {
     expect(f.locations).toHaveLength(2);
     expect(f.evidence[0]?.kind).toBe('clone');
     expect(f.effort.minutes).toBeGreaterThan(20);
+  });
+});
+
+describe('caché de verificación por par', () => {
+  const finalize = duplicationAnalyzer.finalize as NonNullable<typeof duplicationAnalyzer.finalize>;
+
+  function setup(files: Record<string, string>) {
+    const artifacts = new Map<string, DuplicationArtifact>();
+    for (const [rel, text] of Object.entries(files)) {
+      const art = duplicationAnalyzer.analyze(fileInput(rel, text), config).artifact;
+      if (art) artifacts.set(rel, art);
+    }
+    let reads = 0;
+    const readText = async (rel: string): Promise<string | null> => {
+      reads++;
+      return files[rel] ?? null;
+    };
+    return { artifacts, readText, reads: () => reads };
+  }
+
+  it('el reanálisis sin cambios no relee ningún archivo y da el mismo resultado', async () => {
+    const files = { 'a.ts': BLOCK, 'b.ts': BLOCK, 'c.ts': `const x = 1;\n${BLOCK}` };
+    const store = memoryStore();
+    const first = setup(files);
+    const cold = await finalize(first.artifacts, config, { readText: first.readText, store });
+    expect(first.reads()).toBe(3);
+    expect(store.writes).toBeGreaterThan(0);
+
+    const second = setup(files);
+    const warm = await finalize(second.artifacts, config, { readText: second.readText, store });
+    expect(second.reads()).toBe(0);
+    expect(warm).toEqual(cold);
+  });
+
+  it('si cambia un archivo solo se recalculan sus pares', async () => {
+    const store = memoryStore();
+    const v1 = { 'a.ts': BLOCK, 'b.ts': BLOCK, 'c.ts': BLOCK };
+    const s1 = setup(v1);
+    await finalize(s1.artifacts, config, { readText: s1.readText, store });
+
+    const v2 = { ...v1, 'c.ts': `${BLOCK}\nexport const extra = 1;` };
+    const s2 = setup(v2);
+    const findings = await finalize(s2.artifacts, config, { readText: s2.readText, store });
+    expect(s2.reads()).toBe(2); // c.ts y una de sus parejas; el par (a, b) sale del almacén
+    expect(findings[0]?.locations).toHaveLength(3);
+  });
+
+  it('no guarda resultados si el archivo cambió entre el huellado y la verificación', async () => {
+    const store = memoryStore();
+    const s = setup({ 'a.ts': BLOCK, 'b.ts': BLOCK });
+    await finalize(s.artifacts, config, { readText: async (rel) => (rel === 'b.ts' ? `${BLOCK}\n// editado` : BLOCK), store });
+    expect(store.writes).toBe(0);
+  });
+
+  it('con un presupuesto mínimo de memoria el resultado es el mismo', async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 6; i++) files[`f${i}.ts`] = BLOCK;
+    const { files: names, candidates } = findCandidates(setup(files).artifacts);
+    const read = async (rel: string) => files[rel] ?? null;
+    const amplio = await refineCandidates(names, [...candidates], read);
+    const minimo = await refineCandidates(names, [...candidates], read, { tokenBudget: 1 });
+    expect(minimo).toEqual(amplio);
   });
 });

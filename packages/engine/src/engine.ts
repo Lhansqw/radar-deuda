@@ -107,7 +107,8 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
   for (const analyzer of fileAnalyzers) {
     if (!analyzer.finalize) continue;
     try {
-      findings.push(...(await analyzer.finalize(artifacts.get(analyzer.id) ?? new Map(), config, { readText })));
+      const store = cache.finalizeStore(keyOf(analyzer));
+      findings.push(...(await analyzer.finalize(artifacts.get(analyzer.id) ?? new Map(), config, { readText, store })));
     } catch (err) {
       errors.push({ analyzer: keyOf(analyzer), message: errorMessage(err) });
     }
@@ -243,6 +244,7 @@ async function processFile(
   const memoStore = new Map<string, unknown>();
   const input = {
     meta,
+    contentHash,
     text,
     lines,
     memo<T>(key: string, create: () => T): T {

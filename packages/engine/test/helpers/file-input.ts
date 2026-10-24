@@ -1,6 +1,6 @@
 import { classify, isTestPath } from '../../src/discovery.js';
 import type { FileInput, FileMeta } from '../../src/types.js';
-import { splitLines } from '../../src/util.js';
+import { sha1, splitLines } from '../../src/util.js';
 
 /** Construye la entrada de un analizador a partir de un texto en memoria. */
 export function fileInput(relPath: string, text: string): FileInput {
@@ -17,6 +17,7 @@ export function fileInput(relPath: string, text: string): FileInput {
   const memo = new Map<string, unknown>();
   return {
     meta,
+    contentHash: sha1(text),
     text,
     lines: splitLines(text),
     memo<T>(key: string, create: () => T): T {

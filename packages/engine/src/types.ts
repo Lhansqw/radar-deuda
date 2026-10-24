@@ -111,6 +111,8 @@ export interface SkippedFile {
 /** Entrada que reciben los analizadores por archivo. */
 export interface FileInput {
   meta: FileMeta;
+  /** SHA-1 del contenido en bytes; identifica el contenido aunque cambie la ruta o la fecha. */
+  contentHash: string;
   text: string;
   lines: string[];
   /**
@@ -138,6 +140,18 @@ export interface FileAnalyzer<A = unknown> {
 export interface FinalizeContext {
   /** Relee un archivo concreto (solo los implicados; nunca el repositorio entero). */
   readText(relPath: string): Promise<string | null>;
+  /**
+   * Almacén persistente entre ejecuciones, propio de este analizador y su versión.
+   * Las claves deben derivarse del contenido de las entradas, de modo que un valor
+   * guardado siga siendo correcto mientras la clave coincida. Solo se conservan
+   * las entradas leídas o escritas en la ejecución actual.
+   */
+  store: FinalizeStore;
+}
+
+export interface FinalizeStore {
+  get(key: string): unknown;
+  set(key: string, value: unknown): void;
 }
 
 export interface ProjectContext {

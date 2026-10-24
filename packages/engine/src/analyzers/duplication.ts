@@ -1,6 +1,6 @@
 import ts from 'typescript';
-import type { AnalysisConfig, FileAnalyzer, Finding, Location } from '../types.js';
-import { computeLineStarts, findingId, lineAt } from '../util.js';
+import type { AnalysisConfig, FileAnalyzer, FinalizeStore, Finding, Location } from '../types.js';
+import { computeLineStarts, findingId, lineAt, sha1 } from '../util.js';
 import { isJsLike, languageVariantFor } from './shared.js';
 
 /**
@@ -10,11 +10,13 @@ import { isJsLike, languageVariantFor } from './shared.js';
  * - Cada archivo se tokeniza con el escáner de TypeScript (ignora comentarios).
  * - Se calculan hashes rodantes de K tokens y se conserva el mínimo de cada
  *   ventana de W hashes. Garantía: toda coincidencia de ≥ K + W − 1 tokens se detecta.
- * - Las huellas (pocas por archivo) son cacheables, así que el análisis entre
- *   archivos es incremental: solo se retokenizan los archivos modificados.
+ * - Las huellas (pocas por archivo) son cacheables por archivo.
+ * - La verificación de cada par de archivos se guarda con una clave derivada
+ *   del contenido de ambos y de sus candidatos: en un reanálisis solo se
+ *   retokenizan los pares en los que algo cambió.
  */
 const ID = 'duplication';
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const TOOL = `${ID}@${VERSION}`;
 
 export const K = 25;
@@ -33,6 +35,8 @@ export type Fingerprint = [number, number, number, number];
 export interface DuplicationArtifact {
   tokens: number;
   fps: Fingerprint[];
+  /** Hash del contenido del archivo; habilita la caché de verificación por par. */
+  hash?: string;
 }
 
 function fnv1a(s: string): number {
@@ -269,61 +273,148 @@ export function tokenSequence(text: string, relPath: string): TokenSeq {
   };
 }
 
+/** Región verificada de un par: [líneaIniA, líneaFinA, líneaIniB, líneaFinB, tokens]. */
+type PairRegion = [number, number, number, number, number];
+
+function isPairRegions(v: unknown): v is PairRegion[] {
+  return Array.isArray(v) && v.every((r) => Array.isArray(r) && r.length === 5 && r.every((n) => typeof n === 'number'));
+}
+
+export interface RefineOptions {
+  /** Hash del contenido de cada archivo (mismo orden que `files`). */
+  hashes?: ReadonlyArray<string | undefined>;
+  /** Almacén persistente para reutilizar verificaciones entre ejecuciones. */
+  store?: FinalizeStore;
+  /** Tokens que pueden mantenerse en memoria a la vez (≈14 bytes por token). */
+  tokenBudget?: number;
+}
+
+/** Secuencias de tokens con desalojo LRU acotado por número total de tokens. */
+class SequenceCache {
+  private readonly entries = new Map<number, TokenSeq | null>();
+  private tokens = 0;
+  /** Hash del texto leído de cada entrada, para comprobar que coincide con el huellado. */
+  readonly readHashes = new Map<number, string>();
+  reads = 0;
+
+  constructor(
+    private readonly files: readonly string[],
+    private readonly readText: (rel: string) => Promise<string | null>,
+    private readonly budget: number,
+  ) {}
+
+  async get(fi: number): Promise<TokenSeq | null> {
+    if (this.entries.has(fi)) {
+      const hit = this.entries.get(fi) ?? null;
+      this.entries.delete(fi);
+      this.entries.set(fi, hit);
+      return hit;
+    }
+    const file = this.files[fi] as string;
+    const raw = await this.readText(file);
+    this.reads++;
+    const text = raw !== null && raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+    const seq = text === null ? null : tokenSequence(text, file);
+    if (raw !== null) this.readHashes.set(fi, sha1(raw));
+    this.entries.set(fi, seq);
+    this.tokens += seq?.ids.length ?? 0;
+    for (const [key, value] of this.entries) {
+      if (this.tokens <= this.budget || this.entries.size <= 2) break;
+      this.entries.delete(key);
+      this.readHashes.delete(key);
+      this.tokens -= value?.ids.length ?? 0;
+    }
+    return seq;
+  }
+}
+
+/** Verifica un candidato token a token y lo extiende; null si no se confirma. */
+function verify(c: Candidate, a: TokenSeq, b: TokenSeq): PairRegion | null {
+  let i = c.pA;
+  let j = c.pB;
+  let len = 0;
+  while (i + len < a.ids.length && j + len < b.ids.length && a.ids[i + len] === b.ids[j + len] && (c.fa !== c.fb || i + len < j)) len++;
+  if (len < K) return null; // no se confirma: colisión de hash o archivo modificado
+  while (i > 0 && j > 0 && a.ids[i - 1] === b.ids[j - 1]) {
+    i--;
+    j--;
+    len++;
+  }
+  if (c.fa === c.fb && i + len > j) len = j - i; // sin solapamiento dentro del mismo archivo
+  // Bordes limpios: la extensión puede arrastrar un `;` o `}` de la sentencia anterior.
+  while (len > 0 && a.leading[i] === 1) {
+    i++;
+    j++;
+    len--;
+  }
+  while (len > 0 && a.trailing[i + len - 1] === 1) len--;
+  if (len < K) return null;
+  return [a.startLines[i] as number, a.endLines[i + len - 1] as number, b.startLines[j] as number, b.endLines[j + len - 1] as number, len];
+}
+
 /**
  * Refina cada candidato comparando los tokens reales: verifica la coincidencia
  * (descarta colisiones de hash o archivos cambiados) y la extiende a izquierda y
  * derecha hasta el primer token distinto. Así las líneas reportadas son exactas.
- * Solo se releen los archivos implicados, con una caché acotada.
+ *
+ * Los candidatos se procesan por par de archivos. Si hay almacén, el resultado
+ * de cada par se guarda con una clave que depende del contenido de ambos
+ * archivos y de sus candidatos, de modo que solo se recalcula si algo cambió.
  */
 export async function refineCandidates(
   files: readonly string[],
   candidates: Candidate[],
   readText: (rel: string) => Promise<string | null>,
+  options: RefineOptions = {},
 ): Promise<Array<[Region, Region]>> {
-  const seqCache = new Map<number, TokenSeq | null>();
-  const getSeq = async (fi: number): Promise<TokenSeq | null> => {
-    if (seqCache.has(fi)) return seqCache.get(fi) ?? null;
-    if (seqCache.size >= 64) seqCache.clear();
-    const file = files[fi] as string;
-    const text = await readText(file);
-    const seq = text === null ? null : tokenSequence(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text, file);
-    seqCache.set(fi, seq);
-    return seq;
-  };
+  const { hashes, store, tokenBudget = 4_000_000 } = options;
+  const seqs = new SequenceCache(files, readText, tokenBudget);
+  candidates.sort((x, y) => x.fa - y.fa || x.fb - y.fb || x.pA - y.pA || x.pB - y.pB);
 
-  candidates.sort((x, y) => x.fa - y.fa || x.fb - y.fb || x.pA - y.pA);
-  const seen = new Set<string>();
   const out: Array<[Region, Region]> = [];
-  for (const c of candidates) {
-    const a = await getSeq(c.fa);
-    const b = c.fa === c.fb ? a : await getSeq(c.fb);
-    if (!a || !b) continue;
-    let i = c.pA;
-    let j = c.pB;
-    let len = 0;
-    while (i + len < a.ids.length && j + len < b.ids.length && a.ids[i + len] === b.ids[j + len] && (c.fa !== c.fb || i + len < j)) len++;
-    if (len < K) continue; // no se confirma: colisión de hash o archivo modificado
-    while (i > 0 && j > 0 && a.ids[i - 1] === b.ids[j - 1]) {
-      i--;
-      j--;
-      len++;
-    }
-    if (c.fa === c.fb && i + len > j) len = j - i; // sin solapamiento dentro del mismo archivo
-    // Bordes limpios: la extensión puede arrastrar un `;` o `}` de la sentencia anterior.
-    while (len > 0 && a.leading[i] === 1) {
-      i++;
-      j++;
-      len--;
-    }
-    while (len > 0 && a.trailing[i + len - 1] === 1) len--;
-    if (len < K) continue;
-    const key = `${c.fa}|${c.fb}|${i}|${j}|${len}`;
-    if (seen.has(key)) continue;
+  const seen = new Set<string>();
+  const emit = (fa: number, fb: number, r: PairRegion): void => {
+    const key = `${fa}|${fb}|${r.join(',')}`;
+    if (seen.has(key)) return;
     seen.add(key);
     out.push([
-      { file: files[c.fa] as string, startLine: a.startLines[i] as number, endLine: a.endLines[i + len - 1] as number, tokens: len },
-      { file: files[c.fb] as string, startLine: b.startLines[j] as number, endLine: b.endLines[j + len - 1] as number, tokens: len },
+      { file: files[fa] as string, startLine: r[0], endLine: r[1], tokens: r[4] },
+      { file: files[fb] as string, startLine: r[2], endLine: r[3], tokens: r[4] },
     ]);
+  };
+
+  for (let start = 0; start < candidates.length; ) {
+    const first = candidates[start] as Candidate;
+    let end = start;
+    while (end < candidates.length && (candidates[end] as Candidate).fa === first.fa && (candidates[end] as Candidate).fb === first.fb) end++;
+    const group = candidates.slice(start, end);
+    start = end;
+
+    const hA = hashes?.[first.fa];
+    const hB = hashes?.[first.fb];
+    const storeKey = store && hA && hB ? sha1(`${hA}|${hB}|${group.map((c) => `${c.pA},${c.pB}`).join(';')}`) : undefined;
+    if (storeKey && store) {
+      const cached = store.get(storeKey);
+      if (isPairRegions(cached)) {
+        for (const r of cached) emit(first.fa, first.fb, r);
+        continue;
+      }
+    }
+
+    const a = await seqs.get(first.fa);
+    const b = first.fa === first.fb ? a : await seqs.get(first.fb);
+    if (!a || !b) continue;
+    const regions: PairRegion[] = [];
+    for (const c of group) {
+      const r = verify(c, a, b);
+      if (r) regions.push(r);
+    }
+    for (const r of regions) emit(first.fa, first.fb, r);
+
+    // Solo se guarda si el contenido leído es el mismo que se huelló (sin carreras con ediciones).
+    if (storeKey && store) {
+      if (seqs.readHashes.get(first.fa) === hA && seqs.readHashes.get(first.fb) === hB) store.set(storeKey, regions);
+    }
   }
   return out;
 }
@@ -365,9 +456,11 @@ export async function findClones(
   artifacts: ReadonlyMap<string, DuplicationArtifact>,
   config: AnalysisConfig,
   readText: (rel: string) => Promise<string | null>,
+  store?: FinalizeStore,
 ): Promise<Region[][]> {
   const { files, candidates } = findCandidates(artifacts);
-  const pairs = await refineCandidates(files, candidates, readText);
+  const hashes = files.map((f) => artifacts.get(f)?.hash);
+  const pairs = await refineCandidates(files, candidates, readText, store ? { hashes, store } : { hashes });
   return groupClones(pairs, config);
 }
 
@@ -406,9 +499,9 @@ export const duplicationAnalyzer: FileAnalyzer<DuplicationArtifact> = {
   description: 'Clones de código entre archivos y dentro del mismo archivo (tokens + winnowing).',
   supports: (meta) => isJsLike(meta),
   analyze(input) {
-    return { findings: [], artifact: fingerprintSource(input.text, input.meta.relPath) };
+    return { findings: [], artifact: { ...fingerprintSource(input.text, input.meta.relPath), hash: input.contentHash } };
   },
   async finalize(artifacts, config, ctx) {
-    return (await findClones(artifacts, config, ctx.readText)).map(cloneFinding);
+    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map(cloneFinding);
   },
 };

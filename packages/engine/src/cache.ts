@@ -1,10 +1,10 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { FileAnalysisResult, FileMeta } from './types.js';
+import type { FileAnalysisResult, FileMeta, FinalizeStore } from './types.js';
 import { sha1 } from './util.js';
 
-const CACHE_FORMAT = 1;
+const CACHE_FORMAT = 2;
 
 interface FileEntry {
   size: number;
@@ -18,6 +18,8 @@ interface CacheFile {
   format: number;
   configHash: string;
   files: Record<string, FileEntry>;
+  /** Resultados de las fases entre archivos. Clave: `analizador@versión`. */
+  finalize: Record<string, Record<string, unknown>>;
 }
 
 /**
@@ -31,6 +33,8 @@ interface CacheFile {
 export class AnalysisCache {
   private data: CacheFile;
   private dirty = false;
+  /** Entradas de `finalize` usadas en esta ejecución; el resto se descarta al guardar. */
+  private readonly touched = new Map<string, Map<string, unknown>>();
 
   private constructor(
     private readonly filePath: string | null,
@@ -40,7 +44,7 @@ export class AnalysisCache {
     this.data =
       loaded && loaded.format === CACHE_FORMAT && loaded.configHash === configHash
         ? loaded
-        : { format: CACHE_FORMAT, configHash, files: {} };
+        : { format: CACHE_FORMAT, configHash, files: {}, finalize: {} };
   }
 
   static disabled(configHash: string): AnalysisCache {
@@ -91,6 +95,27 @@ export class AnalysisCache {
     this.dirty = true;
   }
 
+  /** Almacén persistente para la fase entre archivos de un analizador. */
+  finalizeStore(analyzerKey: string): FinalizeStore {
+    const previous = this.data.finalize[analyzerKey] ?? {};
+    let used = this.touched.get(analyzerKey);
+    if (!used) this.touched.set(analyzerKey, (used = new Map()));
+    const current = used;
+    return {
+      get: (key) => {
+        if (current.has(key)) return current.get(key);
+        if (!Object.hasOwn(previous, key)) return undefined;
+        const value = previous[key];
+        current.set(key, value);
+        return value;
+      },
+      set: (key, value) => {
+        current.set(key, value);
+        this.dirty = true;
+      },
+    };
+  }
+
   /** Elimina entradas de archivos que ya no existen. */
   prune(existing: ReadonlySet<string>): void {
     for (const key of Object.keys(this.data.files)) {
@@ -103,7 +128,19 @@ export class AnalysisCache {
 
   /** Escritura atómica: archivo temporal + rename. */
   async save(): Promise<void> {
-    if (!this.filePath || !this.dirty) return;
+    if (!this.filePath) return;
+    // Solo sobreviven los almacenes y entradas usados en esta ejecución (las
+    // versiones antiguas de un analizador y los pares que ya no existen se van).
+    const next: CacheFile['finalize'] = {};
+    for (const [analyzer, used] of this.touched) if (used.size > 0) next[analyzer] = Object.fromEntries(used);
+    const sizes = (f: CacheFile['finalize']): string =>
+      Object.entries(f)
+        .map(([k, v]) => `${k}:${Object.keys(v).length}`)
+        .sort()
+        .join('|');
+    if (sizes(next) !== sizes(this.data.finalize)) this.dirty = true;
+    this.data.finalize = next;
+    if (!this.dirty) return;
     await mkdir(path.dirname(this.filePath), { recursive: true });
     const tmp = `${this.filePath}.${process.pid}.tmp`;
     await writeFile(tmp, JSON.stringify(this.data), 'utf8');
@@ -115,7 +152,14 @@ export class AnalysisCache {
 function isCacheFile(v: unknown): v is CacheFile {
   if (typeof v !== 'object' || v === null) return false;
   const o = v as Record<string, unknown>;
-  return typeof o['format'] === 'number' && typeof o['configHash'] === 'string' && typeof o['files'] === 'object' && o['files'] !== null;
+  return (
+    typeof o['format'] === 'number' &&
+    typeof o['configHash'] === 'string' &&
+    typeof o['files'] === 'object' &&
+    o['files'] !== null &&
+    typeof o['finalize'] === 'object' &&
+    o['finalize'] !== null
+  );
 }
 
 /** Directorio de caché por defecto según el sistema operativo. */
