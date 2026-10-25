@@ -161,6 +161,23 @@ describe('analyzeRepository', () => {
     expect(report.score.codeLines).toBe(1);
   });
 
+  it('la cobertura declarada por un analizador de proyecto sustituye a la del motor', async () => {
+    const repo = await tmp({ 'src/a.ts': 'export const a = 1;' });
+    const report = await analyzeRepository(repo.root, {
+      cacheDir: null,
+      projectAnalyzers: [
+        {
+          id: 'vulns',
+          version: '1.0.0',
+          description: 'prueba',
+          analyzeProject: async () => [],
+          coverage: () => [{ area: 'Dependencias', status: 'analyzed', detail: 'Consultado OSV.' }],
+        },
+      ],
+    });
+    expect(report.coverage.filter((c) => c.area === 'Dependencias')).toEqual([{ area: 'Dependencias', status: 'analyzed', detail: 'Consultado OSV.' }]);
+  });
+
   it('se puede cancelar', async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 200; i++) files[`src/m${i}.ts`] = NESTED;

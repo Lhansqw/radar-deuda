@@ -132,10 +132,14 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
       }
     },
   };
+  const extraCoverage: CoverageNote[] = [];
   for (const analyzer of projectAnalyzers) {
+    signal?.throwIfAborted();
     try {
       findings.push(...(await analyzer.analyzeProject(ctx)));
+      extraCoverage.push(...(analyzer.coverage?.() ?? []));
     } catch (err) {
+      if (signal?.aborted) throw err;
       errors.push({ analyzer: `${analyzer.id}@${analyzer.version}`, message: errorMessage(err) });
     }
   }
@@ -165,7 +169,7 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
     score: computeScore(deduped, codeLines),
     findings: deduped,
     summary: summarize(deduped),
-    coverage: buildCoverage(files, skipped),
+    coverage: mergeCoverage(buildCoverage(files, skipped), extraCoverage),
     errors,
     stats: {
       durationMs: Math.round(performance.now() - started),
@@ -322,6 +326,17 @@ function buildCoverage(files: readonly FileMeta[], skipped: readonly SkippedFile
     notes.push({ area: 'Archivos omitidos', status: 'partial', detail: `${skipped.length} archivo(s) omitidos (binarios, minificados, demasiado grandes o ilegibles). Ver stats.skipped.` });
   }
   return notes;
+}
+
+/** Las notas de los analizadores sustituyen a las del motor con la misma área. */
+function mergeCoverage(base: CoverageNote[], extra: readonly CoverageNote[]): CoverageNote[] {
+  const out = [...base];
+  for (const note of extra) {
+    const i = out.findIndex((n) => n.area === note.area);
+    if (i >= 0) out[i] = note;
+    else out.push(note);
+  }
+  return out;
 }
 
 function errorMessage(err: unknown): string {

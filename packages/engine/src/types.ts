@@ -168,6 +168,11 @@ export interface ProjectAnalyzer {
   readonly version: string;
   readonly description: string;
   analyzeProject(ctx: ProjectContext): Promise<Finding[]>;
+  /**
+   * Cobertura tras ejecutarse (p. ej. qué lockfiles pudo leer). Sustituye a
+   * la nota por defecto del motor con la misma `area`.
+   */
+  coverage?(): CoverageNote[];
 }
 
 export interface ProgressEvent {
