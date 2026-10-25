@@ -53,6 +53,19 @@ describe('cloneOrUpdate', () => {
     expect(await readdir(base)).toEqual(['prueba__demo']);
   });
 
+  it('con shallowSince descarga solo el historial del periodo (y basta con el último si no hay ninguno)', async () => {
+    origin = await createGitRepo();
+    await origin.commit({ 'a.ts': 'v1' }, 'antiguo', { date: Date.parse('2020-01-01') / 1000 });
+    await origin.commit({ 'a.ts': 'v2' }, 'reciente-1', { date: Date.parse('2026-03-01') / 1000 });
+    await origin.commit({ 'a.ts': 'v3' }, 'reciente-2', { date: Date.parse('2026-04-01') / 1000 });
+    const url = `file://${origin.root}`;
+    const r = await cloneInternal(ref, { baseDir: await tmp(), url, extraConfig: LOCAL, shallowSince: '2026-01-01' });
+    expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: r.dir })).trim()).toBe('2');
+    const none = await cloneInternal(ref, { baseDir: await tmp(), url, extraConfig: LOCAL, shallowSince: '2030-01-01' });
+    expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: none.dir })).trim()).toBe('1');
+    await expect(cloneOrUpdate(ref, { baseDir: await tmp(), shallowSince: 'ayer' })).rejects.toThrow(/Fecha no válida/);
+  });
+
   it('actualiza un clon existente y elimina archivos ajenos', async () => {
     origin = await createGitRepo();
     await origin.commit({ 'a.ts': 'v1' }, 'c1');
