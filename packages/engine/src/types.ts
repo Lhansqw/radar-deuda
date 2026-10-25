@@ -220,6 +220,37 @@ export interface AnalysisReport {
   /** Fallos aislados de un analizador: no detienen el análisis, pero se declaran. */
   errors: AnalyzerError[];
   stats: RunStats;
+  /** Control de versiones del repositorio analizado (lo añade @radar/sources). */
+  vcs?: VcsInfo;
+  /** Archivos que cambian a menudo y acumulan deuda (lo añade @radar/sources). */
+  hotspots?: Hotspot[];
+}
+
+export interface VcsInfo {
+  head: string | null;
+  branch: string | null;
+  /** Sin credenciales. */
+  remoteUrl: string | null;
+  /** Historial incompleto (clon superficial): el análisis de cambios es parcial. */
+  shallow: boolean;
+}
+
+/**
+ * Punto crítico: frecuencia de cambio × deuda acumulada (Tornhill, "Your Code
+ * as a Crime Scene"). No es un hallazgo nuevo ni suma esfuerzo: prioriza los
+ * hallazgos existentes de ese archivo.
+ */
+export interface Hotspot {
+  file: string;
+  commits: number;
+  linesChanged: number;
+  /** Número de autores distintos (nunca se guardan sus identidades). */
+  authors: number;
+  lastChangeAt: string;
+  debtMinutes: number;
+  findingIds: string[];
+  /** 0–100: producto normalizado de frecuencia de cambio y deuda. */
+  score: number;
 }
 
 export interface AnalyzerError {
