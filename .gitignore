@@ -7,3 +7,8 @@ bench-results/
 .env
 .env.*
 !.env.example
+
+# Editores
+.idea/
+.vscode/*
+!.vscode/extensions.json
