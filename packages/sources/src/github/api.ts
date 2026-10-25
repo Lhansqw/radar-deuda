@@ -24,9 +24,14 @@ export interface GitHubClientOptions extends HttpOptions {
   baseUrl?: string;
 }
 
-/** Token desde el entorno; nunca se lee de archivos del repositorio ni se guarda en disco. */
+/**
+ * Token desde RADAR_GITHUB_TOKEN; nunca se lee de archivos del repositorio
+ * ni se guarda en disco. Deliberadamente no se usan GITHUB_TOKEN ni GH_TOKEN:
+ * suelen pertenecer a otras herramientas y tener más permisos de los
+ * necesarios (mínimo privilegio: un token explícito para esta aplicación).
+ */
 export function tokenFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const t = env['RADAR_GITHUB_TOKEN'] ?? env['GITHUB_TOKEN'] ?? env['GH_TOKEN'];
+  const t = env['RADAR_GITHUB_TOKEN'];
   return t && t.trim() !== '' ? t.trim() : undefined;
 }
 

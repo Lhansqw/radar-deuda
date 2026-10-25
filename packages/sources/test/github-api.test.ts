@@ -127,9 +127,9 @@ describe('GitHubClient', () => {
     expect(await fine.checkToken()).toEqual({ kind: 'fine-grained', login: 'nik', warnings: [] });
   });
 
-  it('lee el token del entorno en orden de preferencia', () => {
-    expect(tokenFromEnv({ GITHUB_TOKEN: 'b', RADAR_GITHUB_TOKEN: 'a' })).toBe('a');
-    expect(tokenFromEnv({ GH_TOKEN: ' c ' })).toBe('c');
-    expect(tokenFromEnv({ GITHUB_TOKEN: '' })).toBeUndefined();
+  it('solo usa RADAR_GITHUB_TOKEN, nunca tokens de otras herramientas', () => {
+    expect(tokenFromEnv({ GITHUB_TOKEN: 'b', RADAR_GITHUB_TOKEN: ' a ' })).toBe('a');
+    expect(tokenFromEnv({ GH_TOKEN: 'c', GITHUB_TOKEN: 'd' })).toBeUndefined();
+    expect(tokenFromEnv({ RADAR_GITHUB_TOKEN: '' })).toBeUndefined();
   });
 });
