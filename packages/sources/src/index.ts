@@ -9,3 +9,4 @@ export { computeHotspots, type HotspotOptions } from './git/hotspots.js';
 export { requestJson, requestText, HttpError, type FetchLike, type HttpOptions } from './http.js';
 export { parseGitHubRepo, cloneUrl, webUrl, type GitHubRepoRef } from './github/url.js';
 export { GitHubClient, tokenFromEnv, type GitHubClientOptions, type GitHubRepository, type TokenCheck } from './github/api.js';
+export { cloneOrUpdate, defaultReposDir, listClones, authEnv, type CloneOptions, type CloneResult } from './github/clone.js';
