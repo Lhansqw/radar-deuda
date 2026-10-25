@@ -170,11 +170,14 @@ export function outdatedAnalyzer(registry: NpmRegistryClient): ProjectAnalyzer {
         };
         await Promise.all(Array.from({ length: Math.min(registry.concurrency, direct.length) }, worker));
       }
-      note = {
-        area: 'Versiones de dependencias',
-        status: failed === 0 && locks.npm.length > 0 ? 'analyzed' : 'partial',
-        detail: `${checked} dependencia(s) directa(s) comparadas con el registro de npm${failed > 0 ? `; ${failed} no se pudieron consultar` : ''}.`,
-      };
+      note =
+        locks.npm.length === 0
+          ? { area: 'Versiones de dependencias', status: 'not-analyzed', detail: 'No hay package-lock.json: sin versiones instaladas exactas que comparar con el registro.' }
+          : {
+              area: 'Versiones de dependencias',
+              status: failed === 0 ? 'analyzed' : 'partial',
+              detail: `${checked} dependencia(s) directa(s) comparadas con el registro de npm${failed > 0 ? `; ${failed} no se pudieron consultar` : ''}.`,
+            };
       return findings;
     },
   };
