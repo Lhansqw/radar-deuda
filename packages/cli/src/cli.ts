@@ -2,9 +2,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { analyzeRepository } from './engine.js';
-import { formatReport } from './report.js';
-import { SEVERITY_ORDER, type Severity } from './types.js';
+import { analyzeRepository, formatReport, SEVERITY_ORDER, type Severity } from '@radar/engine';
 
 const HELP = `
 Uso: radar-deuda <ruta-del-repositorio> [opciones]

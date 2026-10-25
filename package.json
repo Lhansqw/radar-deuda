@@ -5,15 +5,16 @@
   "description": "Plataforma de escritorio para detectar y gestionar deuda técnica en repositorios (motor de análisis + IA).",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/engine",
+    "packages/cli"
   ],
   "engines": {
     "node": ">=22.13"
   },
   "scripts": {
-    "analyze": "tsx packages/engine/src/cli.ts",
-    "build": "tsc -p packages/engine/tsconfig.build.json",
-    "typecheck": "tsc -p packages/engine/tsconfig.json --noEmit",
+    "analyze": "tsx packages/cli/src/cli.ts",
+    "build": "npm run build --workspaces",
+    "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

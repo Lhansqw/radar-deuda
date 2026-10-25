@@ -12,14 +12,14 @@
       "default": "./dist/index.js"
     }
   },
-  "bin": {
-    "radar-deuda": "dist/cli.js"
-  },
   "dependencies": {
     "ignore": "^7.0.14",
     "typescript": "~6.0.3"
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
   }
 }

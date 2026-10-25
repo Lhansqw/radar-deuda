@@ -49,10 +49,10 @@ radar-deuda/
 │     │  ├─ analyzers/   Un archivo por analizador (registro en index.ts)
 │     │  ├─ discovery.ts Recorrido seguro del repositorio
 │     │  ├─ cache.ts     Caché incremental persistente
-│     │  ├─ engine.ts    Orquestador: analyzeRepository()
-│     │  └─ cli.ts       Comando radar-deuda
+│     │  └─ engine.ts    Orquestador: analyzeRepository()
 │     ├─ test/           Pruebas unitarias y de integración (Vitest)
 │     └─ scripts/        Benchmark de rendimiento
+│  └─ cli/               Comando radar-deuda: orquesta el motor y las fuentes
 ├─ examples/demo-repo/   Repositorio con deuda técnica intencionada
 ├─ docs/                 Arquitectura, decisiones, entorno, metodología, rendimiento
 ├─ tsconfig.base.json    TypeScript estricto compartido
@@ -63,12 +63,15 @@ radar-deuda/
 Paquetes previstos: `packages/sources` (Git y GitHub, fase 6), `packages/ai` (fase 7) y
 `apps/desktop` (Electron + React, fase 8).
 
+En desarrollo, los paquetes se importan entre sí desde su código fuente (`paths` en
+`tsconfig.json` y `alias` en `vitest.config.ts`); `npm run build` los compila en orden.
+
 ## Comandos
 
 ```powershell
 npm ci            # instala dependencias exactas del lockfile
 npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit)
-npm run build     # compila el motor a packages/engine/dist
+npm run build     # compila los paquetes en orden (engine → cli) a packages/*/dist
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
 ```
 
