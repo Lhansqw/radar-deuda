@@ -103,6 +103,16 @@ describe('computeHotspots', () => {
     expect(hotspots[0]?.findingIds.length).toBeGreaterThan(0);
   });
 
+  it('excluye los archivos de pruebas salvo que se pida lo contrario', async () => {
+    repo = await createGitRepo();
+    await repo.commit({ 'test/x.test.ts': complex(1) }, 'c1', { date: T0 });
+    await repo.commit({ 'test/x.test.ts': complex(2) }, 'c2', { date: T0 + DAY });
+    const report = await analyzeRepository(repo.root, { cacheDir: null });
+    const churn = await fileChurn(repo.root, { since: SINCE });
+    expect(computeHotspots(report, churn)).toEqual([]);
+    expect(computeHotspots(report, churn, { includeTests: true }).map((h) => h.file)).toEqual(['test/x.test.ts']);
+  });
+
   it('convierte las rutas cuando se analiza una subcarpeta del repositorio', async () => {
     repo = await createGitRepo();
     await repo.commit({ 'app/src/x.ts': complex(1) }, 'c1', { date: T0 });

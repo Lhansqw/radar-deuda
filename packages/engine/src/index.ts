@@ -5,6 +5,7 @@
 export * from './types.js';
 export { analyzeRepository, safeJoin, type AnalyzeOptions } from './engine.js';
 export { findingId, sha1 } from './util.js';
+export { isTestPath } from './discovery.js';
 export { resolveConfig, configHash, DEFAULT_CONFIG, DEFAULT_THRESHOLDS, ENGINE_VERSION, type ConfigOverrides } from './config.js';
 export { computeScore } from './score.js';
 export { defaultCacheDir } from './cache.js';
