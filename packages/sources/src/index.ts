@@ -4,3 +4,5 @@
  */
 export { runGit, GitError, hardenedArgs, sanitizedEnv, HARDENING_CONFIG, type GitRunOptions } from './git/run.js';
 export { getRepoInfo, stripCredentials, type RepoInfo } from './git/local.js';
+export { changedFiles, fileChurn, resolveCommit, unquoteGitPath, type ChangedFile, type ChangeStatus, type ChurnOptions, type FileChurn } from './git/history.js';
+export { computeHotspots, type HotspotOptions } from './git/hotspots.js';
