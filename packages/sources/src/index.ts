@@ -12,3 +12,5 @@ export { GitHubClient, tokenFromEnv, type GitHubClientOptions, type GitHubReposi
 export { cloneOrUpdate, defaultReposDir, listClones, authEnv, type CloneOptions, type CloneResult } from './github/clone.js';
 export { parseNpmLockfile, nameFromPath, lockfileLine, type InstalledPackage, type Inventory } from './deps/lockfile.js';
 export { cvss3BaseScore, severityFromScore } from './deps/cvss.js';
+export { OsvClient, recordSeverity, fixedVersions, type OsvClientOptions, type OsvRecord, type PackageQuery, type Vulnerability } from './deps/osv.js';
+export { vulnerabilityAnalyzer, vulnerabilityFinding, findLockfiles, recommendedVersion } from './deps/vulnerabilities.js';
