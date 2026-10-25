@@ -7,7 +7,8 @@
     "noEmit": true,
     "types": ["node"],
     "paths": {
-      "@radar/engine": ["./packages/engine/src/index.ts"]
+      "@radar/engine": ["./packages/engine/src/index.ts"],
+      "@radar/sources": ["./packages/sources/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "packages/*/scripts/**/*.ts"]
