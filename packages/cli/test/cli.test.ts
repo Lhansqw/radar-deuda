@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AnalysisReport } from '../src/types.js';
-import { createTmpRepo, type TmpRepo } from './helpers/tmp-repo.js';
+import type { AnalysisReport } from '@radar/engine';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLI = path.join(here, '..', 'src', 'cli.ts');
@@ -15,16 +15,16 @@ function cli(...args: string[]) {
   return { code: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
-let out: TmpRepo | undefined;
+let out: string | undefined;
 afterEach(async () => {
-  await out?.cleanup();
+  if (out) await rm(out, { recursive: true, force: true });
   out = undefined;
 });
 
 describe('CLI', () => {
   it('analiza el repositorio de ejemplo, muestra el resumen y guarda el JSON', async () => {
-    out = await createTmpRepo();
-    const json = path.join(out.root, 'informe.json');
+    out = await mkdtemp(path.join(os.tmpdir(), 'radar-cli-'));
+    const json = path.join(out, 'informe.json');
     const r = cli(DEMO, '--no-cache', '--quiet', '--json', json);
     expect(r.code).toBe(0);
     expect(r.stdout).toMatch(/Mantenibilidad: \d+\/100/);

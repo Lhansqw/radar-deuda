@@ -1,0 +1,14 @@
+{
+  // Comprobación de tipos de todo el monorepo. En desarrollo, los paquetes se
+  // resuelven desde su código fuente (tsx y Vitest usan las mismas rutas); al
+  // compilar, cada paquete usa su tsconfig.build.json y los .d.ts de dist/.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@radar/engine": ["./packages/engine/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "packages/*/scripts/**/*.ts"]
+}
