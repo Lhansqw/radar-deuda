@@ -96,8 +96,9 @@ flowchart LR
 
 | Paquete | Responsabilidad | Depende de |
 |---|---|---|
-| `packages/engine` | Motor determinista, CLI. Sin Electron, sin red | `typescript`, `ignore` |
-| `packages/sources` (fase 6) | Git local, clonado y API de GitHub | `engine` (tipos) |
+| `packages/engine` | Motor determinista. Sin Electron, sin red | `typescript`, `ignore` |
+| `packages/sources` | Git endurecido, clonado y API de GitHub, OSV, registro npm | `engine`, `semver` |
+| `packages/cli` | Comando `radar-deuda`: orquesta motor y fuentes | `engine`, `sources` |
 | `packages/ai` (fase 7) | Proveedores intercambiables, contexto, validación | `engine` (tipos) |
 | `apps/desktop` (fase 8) | Electron + React + SQLite | todos |
 
