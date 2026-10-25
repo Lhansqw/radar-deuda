@@ -315,7 +315,7 @@ function buildCoverage(files: readonly FileMeta[], skipped: readonly SkippedFile
     { area: 'Complejidad y duplicación', status: jsts > 0 ? 'analyzed' : 'not-analyzed', detail: `${jsts} archivo(s) JS/TS analizados con la API del compilador de TypeScript.` },
     { area: 'Arquitectura', status: jsts > 0 ? 'partial' : 'not-analyzed', detail: 'Ciclos y acoplamiento según importaciones relativas. No se resuelven alias de tsconfig (paths) ni paquetes del monorepo.' },
     { area: 'Secretos', status: 'analyzed', detail: 'Patrones de formatos conocidos y asignaciones de alta entropía en todos los archivos de texto.' },
-    { area: 'Dependencias', status: 'partial', detail: 'Higiene de manifiestos npm. Versiones desactualizadas y vulnerabilidades conocidas: pendiente (fase 6, requiere red).' },
+    { area: 'Dependencias', status: 'partial', detail: 'Higiene de manifiestos npm. Para vulnerabilidades conocidas y versiones desactualizadas ejecuta con --online.' },
     { area: 'Pruebas', status: 'partial', detail: 'Heurística por convención de nombres; no mide cobertura real.' },
     { area: 'Reglas de estilo y errores (ESLint/Semgrep)', status: 'not-analyzed', detail: 'Integración prevista en una fase posterior.' },
   ];
