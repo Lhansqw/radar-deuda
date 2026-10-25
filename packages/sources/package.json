@@ -16,9 +16,13 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@radar/engine": "0.1.0"
+    "@radar/engine": "0.1.0",
+    "semver": "^7.8.5"
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "devDependencies": {
+    "@types/semver": "^7.8.0"
   }
 }
