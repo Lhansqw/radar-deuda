@@ -6,6 +6,7 @@
   "type": "module",
   "workspaces": [
     "packages/engine",
+    "packages/sources",
     "packages/cli"
   ],
   "engines": {
