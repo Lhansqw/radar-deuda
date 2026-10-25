@@ -18,6 +18,11 @@ export interface CloneOptions {
   token?: string;
   /** Rama o etiqueta; por defecto la rama principal del remoto. */
   branch?: string;
+  /**
+   * Descarga solo el historial desde esta fecha (AAAA-MM-DD) en lugar de un
+   * único commit: lo necesario para medir la frecuencia de cambio.
+   */
+  shallowSince?: string;
   baseDir?: string;
   /** Tamaño máximo aceptado según la API de GitHub (KB). Se comprueba si se pasa `sizeKb`. */
   maxSizeKb?: number;
@@ -67,8 +72,10 @@ export async function cloneOrUpdate(ref: GitHubRepoRef, options: CloneOptions = 
 }
 
 export async function cloneInternal(ref: GitHubRepoRef, options: InternalCloneOptions): Promise<CloneResult> {
-  const { token, branch, baseDir = defaultReposDir(), maxSizeKb = 1024 * 1024, sizeKb, signal, timeoutMs = 10 * 60_000, url = cloneUrl(ref), extraConfig = [] } = options;
+  const { token, branch, shallowSince, baseDir = defaultReposDir(), maxSizeKb = 1024 * 1024, sizeKb, signal, timeoutMs = 10 * 60_000, url = cloneUrl(ref), extraConfig = [] } = options;
   if (branch !== undefined && !SAFE_BRANCH.test(branch)) throw new Error(`Nombre de rama no válido: ${branch}`);
+  if (shallowSince !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(shallowSince)) throw new Error(`Fecha no válida: ${shallowSince}`);
+  const depthArgs = shallowSince ? [`--shallow-since=${shallowSince}`] : ['--depth', '1'];
   if (sizeKb !== undefined && sizeKb > maxSizeKb) {
     throw new Error(`El repositorio ocupa ${Math.round(sizeKb / 1024)} MB y supera el límite de ${Math.round(maxSizeKb / 1024)} MB.`);
   }
@@ -82,7 +89,7 @@ export async function cloneInternal(ref: GitHubRepoRef, options: InternalCloneOp
   const sameRepo = existing !== null && path.resolve(existing.root) === path.resolve(dir) && existing.remoteUrl === url;
   if (sameRepo) {
     const target = branch ?? 'HEAD';
-    await runGit([...cfg, 'fetch', '--depth', '1', '--no-tags', '--prune', 'origin', '--end-of-options', target], { ...base, cwd: dir });
+    await fetchWithFallback(cfg, depthArgs, ['--no-tags', '--prune', 'origin', '--end-of-options', target], { ...base, cwd: dir });
     await runGit([...cfg, 'reset', '--hard', '-q', 'FETCH_HEAD'], { ...base, cwd: dir });
     await runGit([...cfg, 'clean', '-ffdxq'], { ...base, cwd: dir });
     const head = (await runGit(['rev-parse', 'HEAD'], { cwd: dir })).trim();
@@ -91,10 +98,8 @@ export async function cloneInternal(ref: GitHubRepoRef, options: InternalCloneOp
 
   const tmp = path.join(baseDir, `.${name}.tmp-${process.pid}-${Date.now()}`);
   try {
-    await runGit(
-      [...cfg, 'clone', '--depth', '1', '--single-branch', '--no-tags', '--no-recurse-submodules', '-c', 'core.symlinks=false', '-q', ...(branch ? ['--branch', branch] : []), '--', url, tmp],
-      { ...base, cwd: baseDir },
-    );
+    const rest = ['--single-branch', '--no-tags', '--no-recurse-submodules', '-c', 'core.symlinks=false', '-q', ...(branch ? ['--branch', branch] : []), '--', url, tmp];
+    await cloneWithFallback(cfg, depthArgs, rest, { ...base, cwd: baseDir }, tmp);
     if (await exists(dir)) await rm(dir, { recursive: true, force: true }); // clon anterior roto o de otro remoto
     await rename(tmp, dir);
   } catch (err) {
@@ -103,6 +108,31 @@ export async function cloneInternal(ref: GitHubRepoRef, options: InternalCloneOp
   }
   const head = (await runGit(['rev-parse', 'HEAD'], { cwd: dir })).trim();
   return { dir, head, updated: false };
+}
+
+/**
+ * Con --shallow-since, Git falla si no hay ningún commit en el periodo
+ * ("no commits selected"); en ese caso basta con el último commit.
+ */
+const NO_COMMITS_IN_RANGE = /no commits selected|shallow-since|shallow file has changed/i;
+
+async function cloneWithFallback(cfg: string[], depthArgs: string[], rest: string[], opts: Parameters<typeof runGit>[1], tmp: string): Promise<void> {
+  try {
+    await runGit([...cfg, 'clone', ...depthArgs, ...rest], opts);
+  } catch (err) {
+    if (depthArgs[0] === '--depth' || !(err instanceof Error) || !NO_COMMITS_IN_RANGE.test(err.message)) throw err;
+    await rm(tmp, { recursive: true, force: true });
+    await runGit([...cfg, 'clone', '--depth', '1', ...rest], opts);
+  }
+}
+
+async function fetchWithFallback(cfg: string[], depthArgs: string[], rest: string[], opts: Parameters<typeof runGit>[1]): Promise<void> {
+  try {
+    await runGit([...cfg, 'fetch', ...depthArgs, ...rest], opts);
+  } catch (err) {
+    if (depthArgs[0] === '--depth' || !(err instanceof Error) || !NO_COMMITS_IN_RANGE.test(err.message)) throw err;
+    await runGit([...cfg, 'fetch', '--depth', '1', ...rest], opts);
+  }
 }
 
 async function exists(p: string): Promise<boolean> {
