@@ -14,3 +14,4 @@ export { parseNpmLockfile, nameFromPath, lockfileLine, type InstalledPackage, ty
 export { cvss3BaseScore, severityFromScore } from './deps/cvss.js';
 export { OsvClient, recordSeverity, fixedVersions, type OsvClientOptions, type OsvRecord, type PackageQuery, type Vulnerability } from './deps/osv.js';
 export { vulnerabilityAnalyzer, vulnerabilityFinding, findLockfiles, recommendedVersion } from './deps/vulnerabilities.js';
+export { NpmRegistryClient, outdatedAnalyzer, outdatedFinding, deprecatedFinding, majorsBehind, type NpmRegistryOptions, type PackageSummary } from './deps/outdated.js';
