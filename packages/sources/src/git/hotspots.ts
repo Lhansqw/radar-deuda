@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AnalysisReport, Hotspot } from '@radar/engine';
+import { isTestPath, type AnalysisReport, type Hotspot } from '@radar/engine';
 import type { FileChurn } from './history.js';
 
 export interface HotspotOptions {
@@ -8,6 +8,13 @@ export interface HotspotOptions {
   /** Mínimo de commits para considerar que un archivo "cambia a menudo". */
   minCommits?: number;
   limit?: number;
+  /**
+   * Incluir archivos de pruebas. Por defecto no: su deuda sigue en los
+   * hallazgos, pero refactorizar código de producción rinde más.
+   */
+  includeTests?: boolean;
+  /** Puntuación mínima para aparecer (por defecto 5): por debajo es ruido. */
+  minScore?: number;
 }
 
 /**
@@ -17,7 +24,7 @@ export interface HotspotOptions {
  * que cambia mucho pero está limpio puntúan bajo.
  */
 export function computeHotspots(report: AnalysisReport, churn: ReadonlyMap<string, FileChurn>, options: HotspotOptions = {}): Hotspot[] {
-  const { prefix = '', minCommits = 2, limit = 15 } = options;
+  const { prefix = '', minCommits = 2, limit = 15, includeTests = false, minScore = 5 } = options;
   const debt = new Map<string, { minutes: number; ids: string[] }>();
   for (const f of report.findings) {
     if (f.severity === 'info') continue;
@@ -35,7 +42,7 @@ export function computeHotspots(report: AnalysisReport, churn: ReadonlyMap<strin
   for (const c of churn.values()) {
     if (c.commits < minCommits) continue;
     const rel = prefix ? path.posix.relative(prefix, c.file) : c.file;
-    if (rel.startsWith('..')) continue;
+    if (rel.startsWith('..') || (!includeTests && isTestPath(rel))) continue;
     const d = debt.get(rel);
     if (!d || d.minutes <= 0) continue;
     candidates.push({ churn: c, rel, minutes: d.minutes, ids: d.ids });
@@ -57,6 +64,7 @@ export function computeHotspots(report: AnalysisReport, churn: ReadonlyMap<strin
         score: Math.round(100 * (c.churn.commits / maxCommits) * (c.minutes / maxDebt)),
       }),
     )
+    .filter((h) => h.score >= minScore)
     .sort((a, b) => b.score - a.score || b.commits - a.commits || a.file.localeCompare(b.file))
     .slice(0, limit);
 }
