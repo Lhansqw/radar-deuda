@@ -2,7 +2,7 @@
   "name": "@radar/cli",
   "version": "0.1.0",
   "private": true,
-  "description": "Línea de comandos de Radar de Deuda Técnica: orquesta el motor y las fuentes (Git, GitHub, dependencias).",
+  "description": "Línea de comandos de Radar de Deuda Técnica: orquesta el motor y las fuentes (Git, GitHub, dependencias en línea).",
   "type": "module",
   "bin": {
     "radar-deuda": "dist/cli.js"
@@ -11,7 +11,8 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
-    "@radar/engine": "0.1.0"
+    "@radar/engine": "0.1.0",
+    "@radar/sources": "0.1.0"
   },
   "engines": {
     "node": ">=22.13"
