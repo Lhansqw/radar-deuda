@@ -62,6 +62,38 @@ describe('opciones de IA', () => {
     expect(parseAiOptions({ ai: 'anthropic', 'ai-budget': '0.1' })).toMatchObject({ provider: 'anthropic', budgetUsd: 0.1, limit: 8, plan: true });
     expect(parseCli(['.', '--ai', 'lmstudio', '--no-ai-plan'])).toMatchObject({ kind: 'run', options: { ai: { provider: 'lmstudio', plan: false } } });
   });
+
+  it('OpenRouter exige un modelo válido y sus opciones de privacidad no aplican a otros proveedores', () => {
+    expect(parseAiOptions({ ai: 'openrouter' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'sin-proveedor' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'lmstudio', 'ai-zdr': true })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-zdr': true, 'ai-allow-data-collection': true })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'qwen/qwen3-coder', 'ai-zdr': true })).toMatchObject({ provider: 'openrouter', model: 'qwen/qwen3-coder', zeroDataRetention: true });
+  });
+});
+
+describe('--ai openrouter', () => {
+  it('envía solo metadatos, sin retención de datos, y usa el coste real informado', async () => {
+    const chats: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/models')) return Response.json({ data: [{ id: 'qwen/qwen3-coder', pricing: { prompt: '0.0000002', completion: '0.0000008' } }] });
+      const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
+      chats.push(body);
+      const isPlan = body.messages[0]?.content.includes('planifica') ?? false;
+      return Response.json({ model: body.model, choices: [{ message: { content: answer(body.messages.map((m) => m.content).join('\n'), isPlan) }, finish_reason: 'stop' }], usage: { prompt_tokens: 800, completion_tokens: 120, cost: 0.0003 } });
+    });
+    vi.stubEnv('RADAR_OPENROUTER_API_KEY', 'sk-or-de-prueba');
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const json = path.join(await tmp(), 'r.json');
+    const o: CliOptions = { target: await repo(), noCache: true, online: false, history: false, quiet: true, top: 5, json, ai: { provider: 'openrouter', model: 'qwen/qwen3-coder', limit: 3, budgetUsd: 0.5, plan: true } };
+    await run(o, io, new AbortController().signal);
+    const report = JSON.parse(await readFile(json, 'utf8')) as AnalysisReport;
+    expect(report.ai?.privacy).toBe('metadatos');
+    expect(chats.every((c) => (c['provider'] as { data_collection: string }).data_collection === 'deny')).toBe(true);
+    expect(JSON.stringify(chats)).not.toContain('for (const x of a)');
+    expect(report.ai?.usage.costUsd).toBeCloseTo(0.0003 * chats.length, 8);
+    vi.unstubAllEnvs();
+  });
 });
 
 describe('--ai con un servidor local compatible con OpenAI (como LM Studio)', () => {

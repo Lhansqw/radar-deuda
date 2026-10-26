@@ -5,6 +5,7 @@ import {
   ANTHROPIC_MODELS,
   AnthropicProvider,
   OpenAiCompatibleProvider,
+  OpenRouterProvider,
   PRESETS,
   runAi,
   type Budget,
@@ -14,9 +15,10 @@ import {
 
 export const AI_HELP = `
 IA (opcional; el análisis funciona sin ella):
-  --ai <proveedor>        lmstudio | ollama | anthropic | openai | url
+  --ai <proveedor>        lmstudio | ollama | anthropic | openrouter | openai | url
   --ai-url <url>          Servidor compatible con OpenAI (con --ai url, o para cambiar el puerto local)
   --ai-model <id>         Modelo. Local: por defecto el primero cargado. Anthropic: ${ANTHROPIC_MODELS.fast}
+                          OpenRouter: obligatorio, p. ej. proveedor/modelo (ver openrouter.ai/models)
   --ai-plan-model <id>    Modelo para el plan (Anthropic: ${ANTHROPIC_MODELS.balanced})
   --privacy <modo>        local | metadatos | fragmentos
                           Por defecto: local con proveedores locales; metadatos (sin código) en la nube.
@@ -24,11 +26,15 @@ IA (opcional; el análisis funciona sin ella):
   --ai-limit <n>          Hallazgos a explicar (por defecto 8)
   --ai-budget <usd>       Coste máximo por análisis en la nube (por defecto 0.50)
   --no-ai-plan            No generar el plan de reducción
-  Claves: RADAR_ANTHROPIC_API_KEY, RADAR_OPENAI_API_KEY (variables de entorno; nunca en archivos)
+  --ai-zdr                OpenRouter: solo endpoints de retención cero (Zero Data Retention)
+  --ai-allow-data-collection
+                          OpenRouter: permitir proveedores que guardan o entrenan con los datos (por defecto no)
+  Claves: RADAR_ANTHROPIC_API_KEY, RADAR_OPENROUTER_API_KEY, RADAR_OPENAI_API_KEY
+          (variables de entorno; nunca en archivos)
 `;
 
-export type AiProviderName = 'lmstudio' | 'ollama' | 'anthropic' | 'openai' | 'url';
-const PROVIDERS: readonly AiProviderName[] = ['lmstudio', 'ollama', 'anthropic', 'openai', 'url'];
+export type AiProviderName = 'lmstudio' | 'ollama' | 'anthropic' | 'openrouter' | 'openai' | 'url';
+const PROVIDERS: readonly AiProviderName[] = ['lmstudio', 'ollama', 'anthropic', 'openrouter', 'openai', 'url'];
 const PRIVACY: readonly PrivacyMode[] = ['local', 'metadatos', 'fragmentos'];
 
 export interface AiCliOptions {
@@ -40,6 +46,8 @@ export interface AiCliOptions {
   limit: number;
   budgetUsd: number;
   plan: boolean;
+  zeroDataRetention?: boolean;
+  allowDataCollection?: boolean;
 }
 
 export const AI_ARGS = {
@@ -51,6 +59,8 @@ export const AI_ARGS = {
   'ai-limit': { type: 'string' },
   'ai-budget': { type: 'string' },
   'no-ai-plan': { type: 'boolean', default: false },
+  'ai-zdr': { type: 'boolean', default: false },
+  'ai-allow-data-collection': { type: 'boolean', default: false },
 } as const;
 
 type AiValues = { [K in keyof typeof AI_ARGS]?: (typeof AI_ARGS)[K]['type'] extends 'boolean' ? boolean : string };
@@ -64,6 +74,14 @@ export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
   }
   if (!PROVIDERS.includes(v.ai as AiProviderName)) return new Error(`Proveedor de IA no válido: ${v.ai} (usa ${PROVIDERS.join(', ')}).`);
   if (v.ai === 'url' && !v['ai-url']) return new Error('--ai url requiere --ai-url <url>.');
+  if ((v['ai-zdr'] || v['ai-allow-data-collection']) && v.ai !== 'openrouter') return new Error('--ai-zdr y --ai-allow-data-collection solo aplican a --ai openrouter.');
+  if (v['ai-zdr'] && v['ai-allow-data-collection']) return new Error('--ai-zdr y --ai-allow-data-collection son incompatibles.');
+  if (v.ai === 'openrouter') {
+    if (!v['ai-model']) return new Error('--ai openrouter requiere --ai-model <proveedor/modelo> (elige uno en https://openrouter.ai/models).');
+    for (const m of [v['ai-model'], v['ai-plan-model']]) {
+      if (m !== undefined && !OpenRouterProvider.isValidModelId(m)) return new Error(`Id de modelo de OpenRouter no válido: ${m} (formato proveedor/modelo).`);
+    }
+  }
   if (v.privacy !== undefined && !PRIVACY.includes(v.privacy as PrivacyMode)) return new Error(`Modo de privacidad no válido: ${v.privacy} (usa ${PRIVACY.join(', ')}).`);
   const limit = v['ai-limit'] !== undefined ? Number(v['ai-limit']) : 8;
   const budget = v['ai-budget'] !== undefined ? Number(v['ai-budget']) : 0.5;
@@ -74,6 +92,8 @@ export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
     limit,
     budgetUsd: budget,
     plan: !v['no-ai-plan'],
+    ...(v['ai-zdr'] ? { zeroDataRetention: true } : {}),
+    ...(v['ai-allow-data-collection'] ? { allowDataCollection: true } : {}),
     ...(v['ai-url'] ? { url: v['ai-url'] } : {}),
     ...(v['ai-model'] ? { model: v['ai-model'] } : {}),
     ...(v['ai-plan-model'] ? { planModel: v['ai-plan-model'] } : {}),
@@ -89,6 +109,12 @@ export function createProvider(o: AiCliOptions, env: NodeJS.ProcessEnv = process
       return new OpenAiCompatibleProvider({ ...PRESETS.ollama, ...(o.url ? { baseUrl: o.url } : {}) });
     case 'anthropic':
       return new AnthropicProvider({ apiKey: env['RADAR_ANTHROPIC_API_KEY'] ?? '' });
+    case 'openrouter':
+      return new OpenRouterProvider({
+        apiKey: env['RADAR_OPENROUTER_API_KEY'] ?? '',
+        ...(o.zeroDataRetention ? { zeroDataRetention: true } : {}),
+        ...(o.allowDataCollection ? { allowDataCollection: true } : {}),
+      });
     case 'openai': {
       const apiKey = env['RADAR_OPENAI_API_KEY'];
       if (!apiKey) throw new Error('Falta la clave de OpenAI: define RADAR_OPENAI_API_KEY.');
@@ -128,6 +154,13 @@ export async function runAiFromCli(
   const privacy: PrivacyMode = o.privacy ?? (provider.locality === 'local' ? 'local' : 'metadatos');
   const model = await chooseModel(o, provider, signal);
   const planModel = o.planModel ?? (o.provider === 'anthropic' ? ANTHROPIC_MODELS.balanced : model);
+  if (o.provider === 'openrouter') {
+    io.info(
+      o.allowDataCollection
+        ? 'OpenRouter: se permiten proveedores que pueden guardar o entrenar con los datos (--ai-allow-data-collection).'
+        : `OpenRouter: solo proveedores que no guardan ni entrenan con los datos${o.zeroDataRetention ? ', con retención cero' : ''}.`,
+    );
+  }
   if (provider.locality === 'cloud') {
     io.info(
       privacy === 'fragmentos'
