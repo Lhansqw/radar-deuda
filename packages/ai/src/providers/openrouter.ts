@@ -1,5 +1,5 @@
 import { HttpError, requestJson } from '@radar/sources';
-import { checkApiKey, KEY_RULES, ProviderError, type ModelPrice, type PreflightPlan } from '../provider.js';
+import { checkApiKey, KEY_RULES, ProviderError, type CompletionRequest, type CompletionResult, type ModelPrice, type PreflightPlan } from '../provider.js';
 import { OpenAiCompatibleProvider, type OpenAiCompatibleOptions } from './openai-compatible.js';
 
 /**
@@ -14,9 +14,54 @@ import { OpenAiCompatibleProvider, type OpenAiCompatibleOptions } from './openai
  * que el endpoint soporte response_format (require_parameters), para que no
  * caiga en uno que lo ignore.
  */
+/**
+ * Cuánto debe razonar un modelo que razona. "auto" lo desactiva cuando el
+ * modelo lo permite (explicar un hallazgo no necesita razonamiento largo y así
+ * la respuesta cabe y llega antes) o, si no, usa el esfuerzo mínimo admitido.
+ */
+export type ReasoningPreference = 'auto' | 'none' | 'minimal' | 'low' | 'medium' | 'high';
+export const REASONING_PREFERENCES: readonly ReasoningPreference[] = ['auto', 'none', 'minimal', 'low', 'medium', 'high'];
+
+/** Tokens adicionales de salida que se reservan para el razonamiento según el esfuerzo. */
+const REASONING_HEADROOM: Record<string, number> = { none: 0, minimal: 1000, low: 2000, medium: 4000, high: 8000, xhigh: 16000, max: 16000 };
+
+export interface ReasoningPlan {
+  /** Parámetro reasoning a enviar, o undefined si no se envía (el modelo no lo admite o no razona). */
+  reasoning?: { effort: string; exclude?: boolean };
+  /** Esfuerzo que se espera que use el modelo ("none" si no razonará). */
+  effort: string;
+  /** Tokens de salida adicionales para que el razonamiento no deje sin espacio a la respuesta. */
+  headroom: number;
+}
+
+/**
+ * Decide el razonamiento de una consulta a partir del catálogo.
+ * Referencia: /docs/guides/best-practices/reasoning-tokens (el límite de tokens
+ * incluye razonamiento y respuesta; effort "none" lo desactiva salvo en los
+ * modelos con razonamiento obligatorio, que lo rechazan).
+ */
+export function planReasoning(model: OpenRouterModel | null, preference: ReasoningPreference): ReasoningPlan {
+  const r = model?.reasoning;
+  if (!model || !r) return { effort: 'none', headroom: 0 };
+  const controllable = model.supportedParameters.includes('reasoning');
+  if (!controllable) {
+    // No se puede ajustar: si razona por defecto, al menos se deja margen.
+    return r.mandatory || r.defaultEnabled ? { effort: 'desconocido', headroom: REASONING_HEADROOM['medium'] as number } : { effort: 'none', headroom: 0 };
+  }
+  const allowed = (r.supportedEfforts ?? ['high', 'medium', 'low', 'minimal', 'none']).filter((e) => e !== 'none' || !r.mandatory);
+  const lowest = [...allowed].reverse().find((e) => e !== 'none') ?? 'low';
+  let effort: string = preference === 'auto' ? 'none' : preference;
+  if (!allowed.includes(effort)) effort = effort === 'none' ? lowest : (allowed.find((e) => (REASONING_HEADROOM[e] ?? 0) <= (REASONING_HEADROOM[effort] ?? 0) && e !== 'none') ?? lowest);
+  if (effort === 'none') return { reasoning: { effort: 'none' }, effort, headroom: 0 };
+  // El texto del razonamiento no se usa: exclude evita recibirlo (se sigue cobrando como salida).
+  return { reasoning: { effort, exclude: true }, effort, headroom: REASONING_HEADROOM[effort] ?? REASONING_HEADROOM['medium'] as number };
+}
+
 export interface OpenRouterOptions extends Omit<OpenAiCompatibleOptions, 'id' | 'label' | 'baseUrl' | 'apiKey' | 'locality'> {
   apiKey: string;
   baseUrl?: string;
+  /** Razonamiento de los modelos que razonan (por defecto "auto"). */
+  reasoning?: ReasoningPreference;
   /** Permitir proveedores que guardan o entrenan con los datos (por defecto no). */
   allowDataCollection?: boolean;
   /** Solo endpoints de retención cero (Zero Data Retention). */
@@ -96,10 +141,11 @@ const MODEL_ID = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
 
 export class OpenRouterProvider extends OpenAiCompatibleProvider {
   private readonly routing: Record<string, unknown>;
+  private readonly reasoningPreference: ReasoningPreference;
   private catalog: Promise<Map<string, OpenRouterModel>> | null = null;
 
   constructor(options: OpenRouterOptions) {
-    const { apiKey, baseUrl = 'https://openrouter.ai/api/v1', allowDataCollection = false, zeroDataRetention = false, ...rest } = options;
+    const { apiKey, baseUrl = 'https://openrouter.ai/api/v1', allowDataCollection = false, zeroDataRetention = false, reasoning = 'auto', ...rest } = options;
     checkApiKey(apiKey, KEY_RULES.openrouter, 'openrouter');
     super({
       ...rest,
@@ -112,6 +158,23 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
       extraHeaders: { 'X-Title': 'Radar de Deuda Tecnica' },
     });
     this.routing = { data_collection: allowDataCollection ? 'allow' : 'deny', ...(zeroDataRetention ? { zdr: true } : {}) };
+    this.reasoningPreference = reasoning;
+  }
+
+  /**
+   * Ajusta cada consulta al modelo: controla su razonamiento y amplía el límite
+   * de salida con el margen que este necesita (sin pasar del máximo publicado).
+   * Sin catálogo, la consulta se envía tal cual.
+   */
+  override async complete(req: CompletionRequest): Promise<CompletionResult> {
+    const info = await this.model(req.model, req.signal).catch((err: unknown) => {
+      if (req.signal?.aborted) throw err;
+      return null;
+    });
+    const plan = planReasoning(info, this.reasoningPreference);
+    let maxOutputTokens = req.maxOutputTokens + plan.headroom;
+    if (info?.maxCompletionTokens) maxOutputTokens = Math.min(maxOutputTokens, info.maxCompletionTokens);
+    return this.send({ ...req, maxOutputTokens }, plan.reasoning ? { reasoning: plan.reasoning } : {});
   }
 
   static isValidModelId(model: string): boolean {
