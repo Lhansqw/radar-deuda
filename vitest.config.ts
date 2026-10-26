@@ -9,7 +9,7 @@ export const resolve: ViteUserConfig['resolve'] = {
 };
 
 export const baseTest = {
-  include: ['packages/**/test/**/*.test.ts'],
+  include: ['packages/**/test/**/*.test.ts', 'apps/**/test/**/*.test.ts'],
   environment: 'node',
   testTimeout: 60_000,
   pool: 'forks',

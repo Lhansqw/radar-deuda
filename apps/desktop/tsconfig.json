@@ -1,0 +1,15 @@
+{
+  // Procesos de Node (principal, preload, análisis), scripts y pruebas.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "paths": {
+      "@radar/engine": ["../../packages/engine/src/index.ts"],
+      "@radar/sources": ["../../packages/sources/src/index.ts"],
+      "@radar/ai": ["../../packages/ai/src/index.ts"],
+      "@radar/pipeline": ["../../packages/pipeline/src/index.ts"]
+    }
+  },
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/worker/**/*.ts", "src/shared/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "vite.config.ts"]
+}

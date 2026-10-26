@@ -63,7 +63,7 @@ radar-deuda/
 └─ vitest.config.ts
 ```
 
-Paquete previsto: `apps/desktop` (Electron + React, fase 8).
+La aplicación de escritorio está en `apps/desktop` (Electron 44 + React 19, fase 8).
 
 En desarrollo, los paquetes se importan entre sí desde su código fuente (`paths` en
 `tsconfig.json` y `alias` en `vitest.config.ts`); `npm run build` los compila en orden.
@@ -76,6 +76,8 @@ npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit; nun
 npm run test:live # pruebas contra servicios reales (requieren RADAR_LIVE=1 o RADAR_LIVE_LLM)
 npm run build     # compila los paquetes en orden (engine → sources → ai → pipeline → cli) a packages/*/dist
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
+npm run desktop   # compila y abre la aplicación de escritorio
+npm run desktop:dev   # aplicación con recarga en caliente de la interfaz
 ```
 
 ## Analizar un repositorio
