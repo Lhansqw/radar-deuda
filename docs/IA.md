@@ -124,7 +124,7 @@ OpenAI también está soportado (`--ai openai --ai-model <id>`, clave en `RADAR_
 
 ```powershell
 $env:RADAR_LIVE_LLM = "lmstudio"
-npx vitest run packages/ai/test/live.test.ts
+npm run test:live -- packages/ai/test/live.test.ts
 Remove-Item Env:RADAR_LIVE_LLM
 ```
 
@@ -137,8 +137,11 @@ $env:RADAR_LIVE_LLM = "openrouter"
 $env:RADAR_LIVE_MODEL = "a/modelo:free"
 $env:RADAR_LIVE_ALLOW_DATA_COLLECTION = "1"        # necesario con muchos modelos gratuitos
 $env:RADAR_LIVE_FALLBACK = "b/modelo:free"         # opcional
-npx vitest run packages/ai/test/live.test.ts
+npm run test:live -- packages/ai/test/live.test.ts
 ```
+
+Las pruebas en vivo solo se ejecutan con `npm run test:live`. `npm test` y `npm run check`
+anulan estas variables aunque sigan definidas en la terminal, así que nunca salen a la red.
 
 ## Qué sale del equipo
 

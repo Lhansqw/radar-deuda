@@ -71,7 +71,8 @@ En desarrollo, los paquetes se importan entre sí desde su código fuente (`path
 
 ```powershell
 npm ci            # instala dependencias exactas del lockfile
-npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit)
+npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit; nunca sale a la red)
+npm run test:live # pruebas contra servicios reales (requieren RADAR_LIVE=1 o RADAR_LIVE_LLM)
 npm run build     # compila los paquetes en orden (engine → sources → ai → cli) a packages/*/dist
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
 ```
