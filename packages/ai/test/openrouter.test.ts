@@ -74,6 +74,32 @@ describe('OpenRouterProvider', () => {
     expect(fetch.calls[0]?.url).toBe('https://openrouter.ai/api/v1/models');
   });
 
+  it('interpreta el catálogo: precio, gratuidad, salida estructurada y razonamiento', async () => {
+    const fetch = fakeFetch(() =>
+      json({
+        data: [
+          { id: 'a/razona', name: 'Razona', context_length: 128000, pricing: { prompt: '0', completion: '0' }, top_provider: { max_completion_tokens: 8192 }, supported_parameters: ['reasoning', 'structured_outputs'], reasoning: { mandatory: true, supported_efforts: ['high', 'low'] } },
+          { id: 'b/simple', pricing: { prompt: '0.000001', completion: '0.000002' }, supported_parameters: ['temperature'] },
+          { name: 'sin id' },
+        ],
+      }),
+    );
+    const p = new OpenRouterProvider({ apiKey: KEY, fetch });
+    const [m1, m2] = await Promise.all([p.model('a/razona'), p.model('b/simple')]); // una sola descarga compartida
+    expect(fetch.calls).toHaveLength(1);
+    expect(m1).toMatchObject({ name: 'Razona', contextLength: 128000, maxCompletionTokens: 8192, free: true, structuredOutputs: true, reasoning: { mandatory: true, defaultEnabled: true, supportedEfforts: ['high', 'low'] } });
+    expect(m2).toMatchObject({ name: 'b/simple', free: false, structuredOutputs: false, reasoning: null, maxCompletionTokens: null });
+    expect(await p.models()).toHaveLength(2);
+  });
+
+  it('si el catálogo no se puede descargar, se vuelve a intentar en la siguiente consulta', async () => {
+    let n = 0;
+    const fetch = fakeFetch(() => (++n <= 2 ? json({ error: 'caído' }, 503) : json({ data: [{ id: 'a/b', pricing: { prompt: '0', completion: '0' } }] })));
+    const p = new OpenRouterProvider({ apiKey: KEY, fetch, retries: 0, sleep: noSleep });
+    await expect(p.models()).rejects.toMatchObject({ kind: 'unavailable' }); // con un reintento: 2 peticiones fallidas
+    expect((await p.model('a/b'))?.free).toBe(true);
+  });
+
   it('valida el formato del id de modelo y exige la clave', () => {
     expect(OpenRouterProvider.isValidModelId('anthropic/claude-haiku-5.5')).toBe(true);
     expect(OpenRouterProvider.isValidModelId('qwen/qwen3-coder:free')).toBe(true);

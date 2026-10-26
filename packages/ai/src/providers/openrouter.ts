@@ -24,7 +24,62 @@ export interface OpenRouterOptions extends Omit<OpenAiCompatibleOptions, 'id' | 
 }
 
 interface ModelsResponse {
-  data?: Array<{ id?: string; pricing?: { prompt?: string; completion?: string } }>;
+  data?: Array<{
+    id?: string;
+    name?: string;
+    context_length?: number | null;
+    pricing?: { prompt?: string; completion?: string };
+    top_provider?: { max_completion_tokens?: number | null } | null;
+    supported_parameters?: string[];
+    reasoning?: { mandatory?: boolean; default_enabled?: boolean; supported_efforts?: string[] | null } | null;
+  }>;
+}
+
+/** Lo que la aplicación necesita saber de cada modelo del catálogo de OpenRouter. */
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  contextLength: number | null;
+  /** Máximo de tokens de salida del proveedor principal, si se publica. */
+  maxCompletionTokens: number | null;
+  price: ModelPrice | null;
+  free: boolean;
+  supportedParameters: string[];
+  structuredOutputs: boolean;
+  /** null si el modelo no razona. */
+  reasoning: {
+    /** No se puede desactivar. */
+    mandatory: boolean;
+    /** Razona por defecto si no se indica nada. */
+    defaultEnabled: boolean;
+    /** Esfuerzos admitidos de mayor a menor; null si no hay lista. */
+    supportedEfforts: string[] | null;
+  } | null;
+}
+
+function toModel(m: NonNullable<ModelsResponse['data']>[number]): OpenRouterModel | null {
+  if (!m.id) return null;
+  const input = Number(m.pricing?.prompt);
+  const output = Number(m.pricing?.completion);
+  const price = Number.isFinite(input) && Number.isFinite(output) && input >= 0 && output >= 0 ? { inputPerMTok: input * 1_000_000, outputPerMTok: output * 1_000_000 } : null;
+  const params = Array.isArray(m.supported_parameters) ? m.supported_parameters.filter((p): p is string => typeof p === 'string') : [];
+  return {
+    id: m.id,
+    name: m.name ?? m.id,
+    contextLength: typeof m.context_length === 'number' ? m.context_length : null,
+    maxCompletionTokens: typeof m.top_provider?.max_completion_tokens === 'number' ? m.top_provider.max_completion_tokens : null,
+    price,
+    free: m.id.endsWith(':free') || (price !== null && price.inputPerMTok === 0 && price.outputPerMTok === 0),
+    supportedParameters: params,
+    structuredOutputs: params.includes('structured_outputs'),
+    reasoning: m.reasoning
+      ? {
+          mandatory: m.reasoning.mandatory === true,
+          defaultEnabled: m.reasoning.default_enabled !== false,
+          supportedEfforts: Array.isArray(m.reasoning.supported_efforts) ? m.reasoning.supported_efforts : null,
+        }
+      : null,
+  };
 }
 
 /** Respuesta de GET /api/v1/key (solo los campos que se usan). */
@@ -41,7 +96,7 @@ const MODEL_ID = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
 
 export class OpenRouterProvider extends OpenAiCompatibleProvider {
   private readonly routing: Record<string, unknown>;
-  private prices: Map<string, ModelPrice> | null = null;
+  private catalog: Promise<Map<string, OpenRouterModel>> | null = null;
 
   constructor(options: OpenRouterOptions) {
     const { apiKey, baseUrl = 'https://openrouter.ai/api/v1', allowDataCollection = false, zeroDataRetention = false, ...rest } = options;
@@ -67,27 +122,39 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
     body['provider'] = { ...this.routing, ...(structured ? { require_parameters: true } : {}) };
   }
 
+  /**
+   * Catálogo de modelos (GET /api/v1/models), descargado una vez por instancia.
+   * Las peticiones simultáneas comparten la misma descarga; si falla, el
+   * siguiente intento vuelve a pedirlo.
+   * Referencia: /docs/api/api-reference/models/list-all-models-and-their-properties
+   */
+  async models(signal?: AbortSignal): Promise<OpenRouterModel[]> {
+    return [...(await this.loadCatalog(signal)).values()];
+  }
+
+  async model(id: string, signal?: AbortSignal): Promise<OpenRouterModel | null> {
+    return (await this.loadCatalog(signal)).get(id) ?? null;
+  }
+
+  private loadCatalog(signal?: AbortSignal): Promise<Map<string, OpenRouterModel>> {
+    this.catalog ??= requestJson<ModelsResponse>(`${this.baseUrl}/models`, { headers: this.headers() }, { ...this.http, retries: 1, timeoutMs: 20_000, maxBytes: 64 * 1024 * 1024, ...(signal ? { signal } : {}) })
+      .then(({ data }) => new Map((data.data ?? []).map(toModel).filter((m): m is OpenRouterModel => m !== null).map((m) => [m.id, m])))
+      .catch((err: unknown) => {
+        this.catalog = null;
+        throw this.explain(err);
+      });
+    return this.catalog;
+  }
+
   /** Precio publicado (la API lo da en USD por token, como texto; aquí, por millón de tokens). */
   async price(model: string, signal?: AbortSignal): Promise<ModelPrice | null> {
-    if (!this.prices) {
-      const { data } = await requestJson<ModelsResponse>(`${this.baseUrl}/models`, { headers: this.headers() }, { ...this.http, retries: 1, timeoutMs: 20_000, maxBytes: 64 * 1024 * 1024, ...(signal ? { signal } : {}) });
-      this.prices = new Map();
-      for (const m of data.data ?? []) {
-        const input = Number(m.pricing?.prompt);
-        const output = Number(m.pricing?.completion);
-        if (m.id && Number.isFinite(input) && Number.isFinite(output) && input >= 0 && output >= 0) {
-          this.prices.set(m.id, { inputPerMTok: input * 1_000_000, outputPerMTok: output * 1_000_000 });
-        }
-      }
-    }
-    return this.prices.get(model) ?? null;
+    return (await this.model(model, signal))?.price ?? null;
   }
 
   /** Un modelo es gratuito si es una variante ":free" o su precio publicado es cero. */
   async isFree(model: string, signal?: AbortSignal): Promise<boolean> {
     if (model.endsWith(':free')) return true;
-    const p = await this.price(model, signal).catch(() => null);
-    return p !== null && p.inputPerMTok === 0 && p.outputPerMTok === 0;
+    return (await this.model(model, signal).catch(() => null))?.free ?? false;
   }
 
   /**
