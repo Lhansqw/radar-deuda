@@ -17,7 +17,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 5 | Motor de análisis (primera versión funcional) + pruebas y benchmark | ✅ |
 | 6 | Git, GitHub, puntos críticos, vulnerabilidades (OSV) y versiones (npm) | ✅ |
 | 7 | Capa de IA con proveedores intercambiables (local y nube), privacidad y validación | ✅ |
-| 8 | Aplicación de escritorio y panel de resultados (empezada: robustez de la IA con OpenRouter) | En curso |
+| 8 | Aplicación de escritorio: proyectos, panel con radar, hallazgos, historial, configuración e IA bajo demanda | ✅ |
 | 9 | Recomendaciones, propuestas de corrección y chat | Pendiente |
 | 10 | Caché, análisis incremental y optimización (parte del motor ya hecha) | Parcial |
 | 11 | Pruebas, auditorías de seguridad y rendimiento | Pendiente |
@@ -63,7 +63,8 @@ radar-deuda/
 └─ vitest.config.ts
 ```
 
-La aplicación de escritorio está en `apps/desktop` (Electron 44 + React 19, fase 8).
+La aplicación de escritorio está en `apps/desktop` (Electron 44 + React 19); ver
+[docs/ESCRITORIO.md](docs/ESCRITORIO.md).
 
 En desarrollo, los paquetes se importan entre sí desde su código fuente (`paths` en
 `tsconfig.json` y `alias` en `vitest.config.ts`); `npm run build` los compila en orden.
@@ -122,3 +123,4 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Objetivos, benchmark y resultados medidos |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
 | [docs/IA.md](docs/IA.md) | Fase 7: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad y cómo se evita que la IA invente |
+| [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fase 8: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
