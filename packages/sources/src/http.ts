@@ -15,7 +15,11 @@ export interface HttpOptions {
   signal?: AbortSignal;
   /** Espera entre reintentos; inyectable para pruebas. */
   sleep?: (ms: number) => Promise<void>;
+  /** Qué respuestas son transitorias. Por defecto: 429 y 5xx. */
+  retryable?: (status: number, headers: Headers) => boolean;
 }
+
+export const defaultRetryable = (status: number): boolean => status === 429 || (status >= 500 && status <= 599);
 
 export class HttpError extends Error {
   constructor(
@@ -61,7 +65,7 @@ async function readLimited(res: Response, maxBytes: number): Promise<string> {
 }
 
 export async function requestText(url: string, init: RequestInit = {}, options: HttpOptions = {}): Promise<{ status: number; headers: Headers; text: string }> {
-  const { fetch: doFetch = globalThis.fetch, timeoutMs = 20_000, retries = 3, maxBytes = 20 * 1024 * 1024, signal, sleep = defaultSleep } = options;
+  const { fetch: doFetch = globalThis.fetch, timeoutMs = 20_000, retries = 3, maxBytes = 20 * 1024 * 1024, signal, sleep = defaultSleep, retryable = defaultRetryable } = options;
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     signal?.throwIfAborted();
@@ -80,7 +84,7 @@ export async function requestText(url: string, init: RequestInit = {}, options: 
       break;
     }
     const text = await readLimited(res, maxBytes);
-    const transient = res.status === 429 || (res.status >= 500 && res.status <= 599);
+    const transient = !res.ok && retryable(res.status, res.headers);
     if (transient && attempt < retries) {
       lastError = new HttpError(`HTTP ${res.status}`, res.status, res.headers, text);
       await sleep(retryDelay(attempt, res.headers));

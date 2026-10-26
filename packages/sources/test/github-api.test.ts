@@ -48,6 +48,13 @@ describe('requestText', () => {
     expect(waits).toEqual([2000, 2000]);
   });
 
+  it('permite decidir qué es transitorio (p. ej. 429 sin Retry-After no se reintenta)', async () => {
+    const fetch = fakeFetch(() => new Response('tope de gasto', { status: 429 }));
+    const retryable = (status: number, headers: Headers) => status === 429 && headers.has('retry-after');
+    await expect(requestText('https://api.example.com/x', {}, { fetch, sleep: noSleep, retryable })).rejects.toBeInstanceOf(HttpError);
+    expect(fetch.calls).toHaveLength(1);
+  });
+
   it('no reintenta errores del cliente', async () => {
     const fetch = fakeFetch(() => new Response('no', { status: 404 }));
     await expect(requestText('https://api.example.com/x', {}, { fetch, sleep: noSleep })).rejects.toBeInstanceOf(HttpError);
