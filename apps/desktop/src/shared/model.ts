@@ -2,7 +2,7 @@
  * Datos que viajan entre el proceso principal y la interfaz. Son objetos
  * planos (se copian por IPC con el algoritmo de clonado estructurado).
  */
-import type { Severity } from '@radar/engine';
+import type { AiFixProposal, Severity } from '@radar/engine';
 
 export type ProjectKind = 'local' | 'github';
 
@@ -60,6 +60,43 @@ export interface CatalogModel {
   contextLength: number | null;
   structuredOutputs: boolean;
   reasoning: 'no' | 'desactivable' | 'obligatorio' | 'no ajustable';
+}
+
+/** Lo que se enviaría para proponer una corrección (se muestra antes de enviarlo). */
+export interface FixPreviewInfo {
+  text: string;
+  snippets: Array<{ file: string; startLine: number; endLine: number }>;
+  provider: string;
+  cloud: boolean;
+  /** Hay que confirmar el envío (la privacidad configurada no permite enviar código). */
+  needsConsent: boolean;
+  /** OpenRouter puede enviarlo a proveedores que guardan o entrenan con los datos. */
+  mayRetain: boolean;
+}
+
+/** Propuesta guardada y si los archivos cambiaron desde entonces (el parche puede no aplicarse). */
+export interface StoredFixProposal {
+  proposal: AiFixProposal;
+  stale: boolean;
+}
+
+/** Datos de una respuesta de la IA en la conversación. */
+export interface ChatMeta {
+  references: Array<{ alias: string; findingId: string }>;
+  unknownReferences: string[];
+  truncated: boolean;
+  model: string;
+  costUsd: number | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  analysisId: number;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  /** Solo en las respuestas de la IA. */
+  meta: ChatMeta | null;
 }
 
 /** Estado de la clave de OpenRouter según el propio servicio. */
