@@ -78,6 +78,7 @@ npm run build     # compila los paquetes en orden (engine → sources → ai →
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
 npm run desktop   # compila y abre la aplicación de escritorio
 npm run desktop:dev   # aplicación con recarga en caliente de la interfaz
+npm run e2e:desktop   # prueba de extremo a extremo de la aplicación (abre una ventana; sin red)
 ```
 
 ## Analizar un repositorio
