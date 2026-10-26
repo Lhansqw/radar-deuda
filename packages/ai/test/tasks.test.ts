@@ -214,6 +214,37 @@ describe('runAi', () => {
     expect(plan).toEqual({ models: ['m', 'p'], requests: selectForAi(report).length + 1 });
   });
 
+  it('si la respuesta se corta por longitud, repite la misma consulta con el doble de margen', async () => {
+    const { report, readText } = await demo();
+    const seen: Array<{ max: number; messages: number }> = [];
+    let cut = true;
+    const provider = fakeProvider((req) => {
+      if (req.system.includes('planifica')) return goodPlan(req);
+      seen.push({ max: req.maxOutputTokens, messages: req.messages.length });
+      if (cut) {
+        cut = false;
+        return { text: '{"id_hallazgo": "', finishReason: 'length' };
+      }
+      return goodExplanation(req);
+    });
+    const ai = await runAi(report, { provider, model: 'm', privacy: 'local', readText, cacheDir: null, limit: 1, concurrency: 1 });
+    expect(ai.errors).toEqual([]);
+    expect(ai.explanations).toHaveLength(1);
+    expect(seen).toEqual([
+      { max: 1200, messages: 1 },
+      { max: 2400, messages: 1 }, // sin el texto cortado ni una petición de "corrección"
+    ]);
+  });
+
+  it('si se sigue cortando y casi todo fue razonamiento, lo explica', async () => {
+    const { report, readText } = await demo();
+    const provider = fakeProvider((req) =>
+      req.system.includes('planifica') ? goodPlan(req) : { text: '', finishReason: 'length', usage: { inputTokens: 100, outputTokens: req.maxOutputTokens, reasoningTokens: req.maxOutputTokens - 10 } },
+    );
+    const ai = await runAi(report, { provider, model: 'm', privacy: 'local', readText, cacheDir: null, limit: 1, plan: false });
+    expect(ai.errors[0]?.message).toMatch(/límite de longitud \(2400 tokens\): el modelo dedicó 2390 a razonar/);
+  });
+
   it('respeta el presupuesto y lo declara', async () => {
     const { report, readText } = await demo();
     const provider = fakeProvider(reply);

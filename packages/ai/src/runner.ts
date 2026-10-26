@@ -32,8 +32,9 @@ export class RefusalError extends Error {
 /**
  * Una consulta estructurada: caché → presupuesto → límite de concurrencia →
  * proveedor → validación. Si la respuesta no es válida, se pide UNA
- * corrección mostrando al modelo el error; si tampoco lo es, se informa del
- * fallo (nunca se muestra una respuesta sin validar).
+ * corrección mostrando al modelo el error; si se cortó por longitud, se repite
+ * con el doble de margen. Si tampoco sale bien, se informa del fallo (nunca se
+ * muestra una respuesta sin validar).
  */
 export async function askJson<T>(deps: RunnerDeps, o: AskOptions<T>): Promise<{ value: T; fromCache: boolean; model: string }> {
   const { provider, tracker, cache, limit, signal } = deps;
@@ -52,24 +53,31 @@ export async function askJson<T>(deps: RunnerDeps, o: AskOptions<T>): Promise<{ 
   const ref = { providerId: provider.id, locality: provider.locality, model: o.model };
   const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [{ role: 'user', content: o.user }];
   let lastError = '';
+  let maxOutputTokens = o.maxOutputTokens;
   for (let attempt = 0; attempt < 2; attempt++) {
     signal?.throwIfAborted();
     const estimated = estimateTokens(o.system + messages.map((m) => m.content).join('\n'));
-    const release = tracker.reserve(ref, estimated, o.maxOutputTokens);
+    const release = tracker.reserve(ref, estimated, maxOutputTokens);
     let result;
     try {
       result = await limit(() => {
         // Una tarea que esperaba turno no debe enviarse si mientras tanto se detuvo el análisis.
         signal?.throwIfAborted();
-        return provider.complete({ model: o.model, system: o.system, messages, maxOutputTokens: o.maxOutputTokens, jsonSchema: o.schema, ...(signal ? { signal } : {}) });
+        return provider.complete({ model: o.model, system: o.system, messages, maxOutputTokens, jsonSchema: o.schema, ...(signal ? { signal } : {}) });
       });
       tracker.record(ref, result.usage, estimated, result.latencyMs, result.costUsd);
     } finally {
       release();
     }
     if (result.finishReason === 'refusal') throw new RefusalError(`${provider.label} rechazó responder a esta consulta.`);
+    if (result.finishReason === 'length') {
+      // Pedir una "corrección" de una respuesta cortada no sirve: el modelo necesita más margen.
+      // Se repite la misma consulta con el doble de tokens de salida.
+      lastError = truncationMessage(result.usage, maxOutputTokens);
+      maxOutputTokens *= 2;
+      continue;
+    }
     try {
-      if (result.finishReason === 'length') throw new ValidationError('La respuesta se cortó por el límite de longitud.');
       const value = o.validate(extractJson(result.text));
       await cache.set(key, { value: extractJson(result.text), model: result.model }).catch(() => undefined);
       return { value, fromCache: false, model: result.model };
@@ -83,4 +91,13 @@ export async function askJson<T>(deps: RunnerDeps, o: AskOptions<T>): Promise<{ 
     }
   }
   throw new ValidationError(`Respuesta no válida tras un reintento: ${lastError}`);
+}
+
+/** Explica un corte por longitud; si casi todo fue razonamiento interno, lo dice. */
+function truncationMessage(usage: { outputTokens: number; reasoningTokens?: number } | null, limit: number): string {
+  const reasoning = usage?.reasoningTokens ?? 0;
+  if (usage && reasoning > 0 && reasoning >= usage.outputTokens / 2) {
+    return `La respuesta se cortó por el límite de longitud (${limit} tokens): el modelo dedicó ${reasoning} a razonar. Usa un modelo sin razonamiento o reduce su esfuerzo de razonamiento.`;
+  }
+  return `La respuesta se cortó por el límite de longitud (${limit} tokens).`;
 }
