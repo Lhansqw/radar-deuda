@@ -1,13 +1,20 @@
 import path from 'node:path';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog, safeStorage } from 'electron';
 import { APP_ENTRY } from '../shared/origin.js';
+import { CredentialStore } from './credentials.js';
+import { createHandlers } from './handlers.js';
+import { registerIpc } from './ipc.js';
 import { registerAppScheme, serveRenderer } from './protocol.js';
-import { enableSandboxEverywhere, hardenApp } from './security.js';
+import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
+import { Store } from './store.js';
 
 /** URL del servidor de Vite en desarrollo (npm run dev); null en la aplicación compilada. */
 const devServerUrl = process.env['RADAR_DEV_SERVER_URL'] ?? null;
-/** Carpeta del proceso principal compilado (dist/). */
+/** Carpeta del proceso principal compilado (dist/; el empaquetado es CommonJS). */
 const distDir = __dirname;
+
+// Datos en %APPDATA%\radar-deuda (o la carpeta indicada, para pruebas aisladas).
+app.setPath('userData', process.env['RADAR_DATA_DIR'] ?? path.join(app.getPath('appData'), 'radar-deuda'));
 
 // Ambas deben ocurrir antes de que la aplicación esté lista.
 registerAppScheme();
@@ -63,5 +70,25 @@ function createWindow(): BrowserWindow {
 function start(): void {
   hardenApp(devServerUrl);
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
-  createWindow();
+
+  const dataDir = app.getPath('userData');
+  const store = Store.open(path.join(dataDir, 'radar.db'));
+  app.on('will-quit', () => store.close());
+  const credentials = new CredentialStore(store, safeStorage);
+  let win: BrowserWindow | null = null;
+  registerIpc(
+    createHandlers({
+      store,
+      credentials,
+      info: () => ({ versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node }, dataDir }),
+      chooseFolder: async () => {
+        const options = { title: 'Elige la carpeta del proyecto', properties: ['openDirectory' as const] };
+        const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+        return r.canceled ? null : (r.filePaths[0] ?? null);
+      },
+      openExternal,
+    }),
+    devServerUrl,
+  );
+  win = createWindow();
 }

@@ -1,0 +1,60 @@
+/**
+ * Contrato de comunicación entre la interfaz y el proceso principal. Cada
+ * canal declara sus argumentos y su resultado; el proceso principal valida
+ * los argumentos en tiempo de ejecución (main/ipc-validation.ts) porque la
+ * interfaz se trata como no confiable.
+ */
+import type { AnalysisReport } from '@radar/engine';
+import type { AnalysisSummary, Project } from './model.js';
+import type { SecretName, SecretsStatus } from './secrets.js';
+import type { AppSettings } from './settings.js';
+
+export interface AppInfo {
+  versions: { app: string; electron: string; chrome: string; node: string };
+  /** Carpeta de datos de la aplicación (base de datos, clones). */
+  dataDir: string;
+}
+
+export interface IpcContract {
+  'app:info': { args: []; result: AppInfo };
+  'app:openExternal': { args: [url: string]; result: boolean };
+  'projects:list': { args: []; result: Project[] };
+  /** Abre el selector de carpetas del sistema; null si se cancela. */
+  'projects:addFolder': { args: []; result: Project | null };
+  'projects:addGithub': { args: [repo: string, branch: string | null]; result: Project };
+  'projects:remove': { args: [projectId: number]; result: null };
+  'analyses:list': { args: [projectId: number]; result: AnalysisSummary[] };
+  'analyses:report': { args: [analysisId: number]; result: AnalysisReport };
+  'settings:get': { args: []; result: AppSettings };
+  'settings:set': { args: [settings: AppSettings]; result: AppSettings };
+  'secrets:status': { args: []; result: SecretsStatus };
+  'secrets:set': { args: [name: SecretName, value: string]; result: SecretsStatus };
+  'secrets:delete': { args: [name: SecretName]; result: SecretsStatus };
+}
+
+export type Channel = keyof IpcContract;
+export type ArgsOf<C extends Channel> = IpcContract[C]['args'];
+export type ResultOf<C extends Channel> = IpcContract[C]['result'];
+
+export const CHANNELS = [
+  'app:info',
+  'app:openExternal',
+  'projects:list',
+  'projects:addFolder',
+  'projects:addGithub',
+  'projects:remove',
+  'analyses:list',
+  'analyses:report',
+  'settings:get',
+  'settings:set',
+  'secrets:status',
+  'secrets:set',
+  'secrets:delete',
+] as const satisfies readonly Channel[];
+
+/**
+ * Respuesta de cada canal. Los errores viajan como texto para que la
+ * interfaz muestre el mensaje tal cual (Electron añadiría "Error invoking
+ * remote method…" a una excepción).
+ */
+export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: string };
