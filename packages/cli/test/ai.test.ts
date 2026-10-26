@@ -73,6 +73,11 @@ describe('opciones de IA', () => {
     expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-reasoning': 'mucho' })).toBeInstanceOf(Error);
     expect(parseAiOptions({ ai: 'lmstudio', 'ai-reasoning': 'low' })).toBeInstanceOf(Error);
     expect(parseAiOptions({ 'ai-reasoning': 'low' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b:free', 'ai-fallback': ' c/d:free, e/f:free ' })).toMatchObject({ fallbackModels: ['c/d:free', 'e/f:free'] });
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-fallback': 'c/d,x' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-fallback': 'c/d,e/f,g/h,i/j' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-fallback': ',' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'anthropic', 'ai-fallback': 'c/d' })).toBeInstanceOf(Error);
   });
 });
 
@@ -189,6 +194,14 @@ describe('--ai anthropic', () => {
     await run({ ...base, ai: { ...(base.ai as AiCliOptions), model: 'nvidia/nemotron-3.5-super-vl:free' } }, capture, new AbortController().signal);
     expect(infos).toContain('Modelo nvidia/nemotron-3.5-super-vl:free (gratuito) · razona, pero se desactiva su razonamiento.');
     expect(chats[0]?.['reasoning']).toEqual({ effort: 'none' });
+
+    // Con un respaldo de pago: se envía la cadena y se avisa del posible coste.
+    infos.length = 0;
+    chats.length = 0;
+    await run({ ...base, ai: { ...(base.ai as AiCliOptions), model: 'nvidia/nemotron-3.5-super-vl:free', fallbackModels: ['nvidia/nemotron-3.5-super-vl'] } }, capture, new AbortController().signal);
+    expect(chats[0]?.['models']).toEqual(['nvidia/nemotron-3.5-super-vl:free', 'nvidia/nemotron-3.5-super-vl']);
+    expect(infos.some((m) => /gratuitos y de pago.*se cobrará/.test(m))).toBe(true);
+    expect(infos).toContain('Respaldo: si nvidia/nemotron-3.5-super-vl:free falla, se probará nvidia/nemotron-3.5-super-vl.');
     vi.unstubAllEnvs();
   });
 

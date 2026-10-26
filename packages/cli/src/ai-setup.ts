@@ -34,6 +34,8 @@ IA (opcional; el análisis funciona sin ella):
   --ai-zdr                OpenRouter: solo endpoints de retención cero (Zero Data Retention)
   --ai-allow-data-collection
                           OpenRouter: permitir proveedores que guardan o entrenan con los datos (por defecto no)
+  --ai-fallback <ids>     OpenRouter: modelos de respaldo separados por comas (hasta 3), por si el
+                          principal falla o está saturado. Para no pagar, usa solo modelos :free
   --ai-reasoning <nivel>  OpenRouter, modelos que razonan: auto | none | minimal | low | medium | high
                           (por defecto auto: lo desactiva si el modelo lo permite; si no, el mínimo)
   Claves: RADAR_ANTHROPIC_API_KEY, RADAR_OPENROUTER_API_KEY, RADAR_OPENAI_API_KEY
@@ -56,6 +58,7 @@ export interface AiCliOptions {
   zeroDataRetention?: boolean;
   allowDataCollection?: boolean;
   reasoning?: ReasoningPreference;
+  fallbackModels?: string[];
 }
 
 export const AI_ARGS = {
@@ -70,13 +73,14 @@ export const AI_ARGS = {
   'ai-zdr': { type: 'boolean', default: false },
   'ai-allow-data-collection': { type: 'boolean', default: false },
   'ai-reasoning': { type: 'string' },
+  'ai-fallback': { type: 'string' },
 } as const;
 
 type AiValues = { [K in keyof typeof AI_ARGS]?: (typeof AI_ARGS)[K]['type'] extends 'boolean' ? boolean : string };
 
 export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
   const usesAi = v.ai !== undefined;
-  const aiOnly = ['ai-url', 'ai-model', 'ai-plan-model', 'privacy', 'ai-limit', 'ai-budget', 'ai-reasoning'] as const;
+  const aiOnly = ['ai-url', 'ai-model', 'ai-plan-model', 'privacy', 'ai-limit', 'ai-budget', 'ai-reasoning', 'ai-fallback'] as const;
   if (!usesAi) {
     const stray = aiOnly.find((k) => v[k] !== undefined);
     return stray ? new Error(`--${stray} requiere --ai.`) : undefined;
@@ -88,6 +92,13 @@ export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
   if (v['ai-reasoning'] !== undefined) {
     if (v.ai !== 'openrouter') return new Error('--ai-reasoning solo aplica a --ai openrouter.');
     if (!REASONING_PREFERENCES.includes(v['ai-reasoning'] as ReasoningPreference)) return new Error(`Nivel de razonamiento no válido: ${v['ai-reasoning']} (usa ${REASONING_PREFERENCES.join(', ')}).`);
+  }
+  const fallback = v['ai-fallback'] !== undefined ? v['ai-fallback'].split(',').map((m) => m.trim()).filter((m) => m !== '') : undefined;
+  if (fallback !== undefined) {
+    if (v.ai !== 'openrouter') return new Error('--ai-fallback solo aplica a --ai openrouter.');
+    if (fallback.length === 0 || fallback.length > 3) return new Error('--ai-fallback necesita entre 1 y 3 modelos separados por comas.');
+    const bad = fallback.find((m) => !OpenRouterProvider.isValidModelId(m));
+    if (bad) return new Error(`Id de modelo de respaldo no válido: ${bad} (formato proveedor/modelo).`);
   }
   if (v.ai === 'openrouter') {
     if (!v['ai-model']) return new Error('--ai openrouter requiere --ai-model <proveedor/modelo> (elige uno en https://openrouter.ai/models).');
@@ -108,6 +119,7 @@ export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
     ...(v['ai-zdr'] ? { zeroDataRetention: true } : {}),
     ...(v['ai-allow-data-collection'] ? { allowDataCollection: true } : {}),
     ...(v['ai-reasoning'] ? { reasoning: v['ai-reasoning'] as ReasoningPreference } : {}),
+    ...(fallback ? { fallbackModels: fallback } : {}),
     ...(v['ai-url'] ? { url: v['ai-url'] } : {}),
     ...(v['ai-model'] ? { model: v['ai-model'] } : {}),
     ...(v['ai-plan-model'] ? { planModel: v['ai-plan-model'] } : {}),
@@ -131,6 +143,7 @@ export function createProvider(o: AiCliOptions, env: NodeJS.ProcessEnv = process
         ...(o.zeroDataRetention ? { zeroDataRetention: true } : {}),
         ...(o.allowDataCollection ? { allowDataCollection: true } : {}),
         ...(o.reasoning ? { reasoning: o.reasoning } : {}),
+        ...(o.fallbackModels ? { fallbackModels: o.fallbackModels } : {}),
       });
     case 'openai': {
       const apiKey = key('RADAR_OPENAI_API_KEY');
@@ -171,6 +184,10 @@ async function describeOpenRouterModels(provider: OpenRouterProvider, models: st
   }
   if (catalog.length === 0) return;
   const byId = new Map(catalog.map((m) => [m.id, m]));
+  const paid = models.filter((id) => byId.get(id)?.free === false);
+  if (paid.length > 0 && models.some((id) => byId.get(id)?.free)) {
+    io.warn(`Combinas modelos gratuitos y de pago (${paid.join(', ')}): si responde uno de pago, se cobrará su precio.`);
+  }
   for (const id of models) {
     const m = byId.get(id);
     if (!m) {
@@ -211,7 +228,10 @@ export async function runAiFromCli(
         : `OpenRouter: solo proveedores que no guardan ni entrenan con los datos${o.zeroDataRetention ? ', con retención cero' : ''}.`,
     );
   }
-  if (provider instanceof OpenRouterProvider) await describeOpenRouterModels(provider, [...new Set([model, planModel])], o.reasoning ?? 'auto', io, signal);
+  if (provider instanceof OpenRouterProvider) {
+    await describeOpenRouterModels(provider, [...new Set([model, planModel, ...(o.fallbackModels ?? [])])], o.reasoning ?? 'auto', io, signal);
+    if (o.fallbackModels) io.info(`Respaldo: si ${model} falla, se probará ${o.fallbackModels.join(', luego ')}.`);
+  }
   if (provider.locality === 'cloud') {
     io.info(
       privacy === 'fragmentos'
