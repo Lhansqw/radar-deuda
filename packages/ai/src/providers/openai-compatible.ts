@@ -28,7 +28,7 @@ export interface OpenAiCompatibleOptions extends HttpOptions {
 interface ChatCompletionResponse {
   model?: string;
   choices?: Array<{ message?: { content?: string | null; refusal?: string | null }; finish_reason?: string | null }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number | null };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number | null; completion_tokens_details?: { reasoning_tokens?: number | null } | null };
 }
 
 const FINISH: Record<string, FinishReason> = { stop: 'stop', length: 'length', content_filter: 'refusal' };
@@ -120,7 +120,11 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       finishReason: refusal ? 'refusal' : (FINISH[choice?.finish_reason ?? ''] ?? 'other'),
       usage:
         data.usage && typeof data.usage.prompt_tokens === 'number' && typeof data.usage.completion_tokens === 'number'
-          ? { inputTokens: data.usage.prompt_tokens, outputTokens: data.usage.completion_tokens }
+          ? {
+              inputTokens: data.usage.prompt_tokens,
+              outputTokens: data.usage.completion_tokens,
+              ...(typeof data.usage.completion_tokens_details?.reasoning_tokens === 'number' ? { reasoningTokens: data.usage.completion_tokens_details.reasoning_tokens } : {}),
+            }
           : null,
       latencyMs: Math.round(performance.now() - started),
       ...(headers.get('x-request-id') ? { requestId: headers.get('x-request-id') as string } : {}),

@@ -33,4 +33,9 @@ describe('formatAiSection', () => {
     expect(text).toContain('Aviso: Quedan 3 peticiones gratuitas hoy.');
     expect(text).toContain('… y 2 motivo(s) más');
   });
+
+  it('indica cuántos tokens de salida fueron de razonamiento', () => {
+    const ai: AiSection = { privacy: 'metadatos', explanations: [], usage: { ...usage, outputTokens: 1300, reasoningTokens: 1200 }, errors: [] };
+    expect(formatAiSection(ai, report, 'x')).toContain('/ 1300 de salida (1200 razonando)');
+  });
 });

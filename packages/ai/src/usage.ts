@@ -74,6 +74,7 @@ export class UsageTracker {
   private cacheHits = 0;
   private inputTokens = 0;
   private outputTokens = 0;
+  private reasoningTokens = 0;
   private cost = 0;
   private costUnknown = false;
   private latencyTotal = 0;
@@ -124,12 +125,13 @@ export class UsageTracker {
    * Registra el consumo real (o la estimación si el proveedor no lo informa).
    * Si el proveedor informa del coste cobrado, se usa ese en lugar de la tabla.
    */
-  record(ref: ModelRef, usage: { inputTokens: number; outputTokens: number } | null, estimatedInput: number, latencyMs: number, reportedCostUsd?: number): void {
+  record(ref: ModelRef, usage: { inputTokens: number; outputTokens: number; reasoningTokens?: number } | null, estimatedInput: number, latencyMs: number, reportedCostUsd?: number): void {
     const input = usage?.inputTokens ?? estimatedInput;
     const output = usage?.outputTokens ?? 0;
     this.requests++;
     this.inputTokens += input;
     this.outputTokens += output;
+    this.reasoningTokens += usage?.reasoningTokens ?? 0;
     const price = this.priceOf(ref);
     if (reportedCostUsd !== undefined && Number.isFinite(reportedCostUsd)) this.cost += reportedCostUsd;
     else if (price) this.cost += costOf(price, input, output);
@@ -148,6 +150,7 @@ export class UsageTracker {
       cacheHits: this.cacheHits,
       inputTokens: this.inputTokens,
       outputTokens: this.outputTokens,
+      ...(this.reasoningTokens > 0 ? { reasoningTokens: this.reasoningTokens } : {}),
       costUsd: this.costUnknown ? null : Number(this.cost.toFixed(6)),
       latencyMsTotal: Math.round(this.latencyTotal),
       latencyMsMax: Math.round(this.latencyMax),
