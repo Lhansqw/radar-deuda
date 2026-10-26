@@ -1,0 +1,16 @@
+{
+  // Interfaz: DOM y JSX, sin tipos de Node. Vite resuelve los módulos.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": [],
+    "paths": {
+      "@radar/engine": ["../../packages/engine/src/index.ts"]
+    }
+  },
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts"]
+}
