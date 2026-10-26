@@ -3,12 +3,14 @@ import path from 'node:path';
 import type { AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
 import type { CredentialStore } from './credentials.js';
+import type { JobManager } from './jobs.js';
 import type { Store } from './store.js';
 
 /** Lo que los manejadores necesitan del exterior; se inyecta para probarlos sin Electron. */
 export interface HandlerDeps {
   store: Store;
   credentials: CredentialStore;
+  jobs: Pick<JobManager, 'start' | 'cancel' | 'list'>;
   info: () => AppInfo;
   /** Selector de carpetas del sistema. */
   chooseFolder: () => Promise<string | null>;
@@ -72,5 +74,12 @@ export function createHandlers(d: HandlerDeps): Handlers {
       d.credentials.delete(name);
       return d.credentials.status();
     },
+
+    'jobs:start': (projectId) => d.jobs.start(projectId),
+    'jobs:cancel': (jobId) => {
+      d.jobs.cancel(jobId);
+      return null;
+    },
+    'jobs:list': () => d.jobs.list(),
   };
 }

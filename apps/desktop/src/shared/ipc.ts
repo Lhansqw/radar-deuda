@@ -5,6 +5,7 @@
  * interfaz se trata como no confiable.
  */
 import type { AnalysisReport } from '@radar/engine';
+import type { JobState } from './jobs.js';
 import type { AnalysisSummary, Project } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
@@ -30,7 +31,15 @@ export interface IpcContract {
   'secrets:status': { args: []; result: SecretsStatus };
   'secrets:set': { args: [name: SecretName, value: string]; result: SecretsStatus };
   'secrets:delete': { args: [name: SecretName]; result: SecretsStatus };
+  /** Inicia un análisis del proyecto con los ajustes actuales. */
+  'jobs:start': { args: [projectId: number]; result: JobState };
+  'jobs:cancel': { args: [jobId: string]; result: null };
+  /** El análisis en curso (si hay) y los recientes. */
+  'jobs:list': { args: []; result: JobState[] };
 }
+
+/** Canal de avisos del proceso principal a la interfaz (estado de los análisis). */
+export const JOB_EVENT_CHANNEL = 'jobs:event';
 
 export type Channel = keyof IpcContract;
 export type ArgsOf<C extends Channel> = IpcContract[C]['args'];
@@ -50,6 +59,9 @@ export const CHANNELS = [
   'secrets:status',
   'secrets:set',
   'secrets:delete',
+  'jobs:start',
+  'jobs:cancel',
+  'jobs:list',
 ] as const satisfies readonly Channel[];
 
 /**
