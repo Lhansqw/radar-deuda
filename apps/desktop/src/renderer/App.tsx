@@ -6,11 +6,13 @@ import { JobStatus } from './components/JobStatus.js';
 import { ProjectHeader } from './components/ProjectHeader.js';
 import { Sidebar, type View } from './components/Sidebar.js';
 import { useProjectData, useRadar } from './state.js';
+import { EMPTY_FILTER, type FindingFilter } from './lib/findings.js';
+import { Findings } from './views/Findings.js';
 import { NotAnalyzed } from './views/NotAnalyzed.js';
 import { Welcome } from './views/Welcome.js';
 
 /** Vistas del proyecto que existen en esta versión de la interfaz. */
-const PROJECT_VIEWS = ['panel'] as const;
+const PROJECT_VIEWS = ['panel', 'hallazgos'] as const;
 
 export function App() {
   const { projects, jobs, revisions, reloadProjects } = useRadar();
@@ -19,6 +21,9 @@ export function App() {
   const [addingGithub, setAddingGithub] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  // Filtros y hallazgo seleccionado, por proyecto (se conservan al cambiar de vista).
+  const [filters, setFilters] = useState<Record<number, FindingFilter>>({});
+  const [selectedFinding, setSelectedFinding] = useState<Record<number, string | null>>({});
 
   // Al abrir, o si el proyecto elegido desaparece, se muestra el primero.
   const project = projects?.find((p) => p.id === chosenId) ?? projects?.[0] ?? null;
@@ -58,7 +63,7 @@ export function App() {
         view={view}
         jobs={jobs}
         views={PROJECT_VIEWS}
-        counts={{}}
+        counts={data.report ? { hallazgos: data.report.findings.length } : {}}
         onSelect={(id) => {
           setSelectedId(id);
           if (view === 'ajustes') setView('panel');
@@ -88,14 +93,25 @@ export function App() {
               onRemove={() => void run(async () => (await window.radar.projects.remove(project.id), reloadProjects()))}
             />
             {job && !dismissed.has(job.jobId) ? <JobStatus job={job} onDismiss={() => setDismissed((d) => new Set(d).add(job.jobId))} /> : null}
-            <div className="workspace-body">
-              {data.report ? (
-                <div className="empty">
-                  <h2>
-                    {data.report.score.score}/100, calificación {data.report.score.rating}
-                  </h2>
-                  <p>{data.report.findings.length} hallazgos en el último análisis.</p>
-                </div>
+            <div className="workspace-body" data-view={view}>
+              {data.report && data.analysisId !== null ? (
+                view === 'hallazgos' ? (
+                  <Findings
+                    report={data.report}
+                    analysisId={data.analysisId}
+                    filter={filters[project.id] ?? EMPTY_FILTER}
+                    onFilter={(f) => setFilters((all) => ({ ...all, [project.id]: f }))}
+                    selectedId={selectedFinding[project.id] ?? null}
+                    onSelect={(id) => setSelectedFinding((all) => ({ ...all, [project.id]: id }))}
+                  />
+                ) : (
+                  <div className="empty">
+                    <h2>
+                      {data.report.score.score}/100, calificación {data.report.score.rating}
+                    </h2>
+                    <p>{data.report.findings.length} hallazgos en el último análisis.</p>
+                  </div>
+                )
               ) : data.loading ? null : (
                 <NotAnalyzed running={job?.status === 'running'} onAnalyze={analyze} />
               )}
