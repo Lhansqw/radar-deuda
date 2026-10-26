@@ -1,0 +1,26 @@
+{
+  "name": "@radar/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orquestación de un análisis completo (origen local o de GitHub, motor, historial de Git, dependencias en línea e IA). La usan la CLI y la aplicación de escritorio.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@radar/engine": "0.1.0",
+    "@radar/sources": "0.1.0",
+    "@radar/ai": "0.1.0"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

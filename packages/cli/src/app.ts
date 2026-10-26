@@ -2,40 +2,14 @@
  * Lógica de la CLI, separada del punto de entrada para poder probarla sin
  * lanzar un proceso.
  */
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import {
-  analyzeRepository,
-  compareReports,
-  DEFAULT_PROJECT_ANALYZERS,
-  defaultCacheDir,
-  formatComparison,
-  formatReport,
-  hasNewAtLeast,
-  parseReport,
-  SEVERITY_ORDER,
-  type AnalysisReport,
-  type ProjectAnalyzer,
-  type Severity,
-} from '@radar/engine';
-import {
-  cloneOrUpdate,
-  computeHotspots,
-  fileChurn,
-  getRepoInfo,
-  GitHubClient,
-  HttpError,
-  NpmRegistryClient,
-  OsvClient,
-  outdatedAnalyzer,
-  parseGitHubRepo,
-  tokenFromEnv,
-  vulnerabilityAnalyzer,
-} from '@radar/sources';
+import { compareReports, formatComparison, formatReport, hasNewAtLeast, parseReport, SEVERITY_ORDER, type Severity } from '@radar/engine';
+import { tokenFromEnv } from '@radar/sources';
 import { formatAiSection } from '@radar/ai';
-import { AI_ARGS, AI_HELP, parseAiOptions, runAiFromCli, type AiCliOptions } from './ai-setup.js';
+import { keysFromEnv, runPipeline, type PipelineEvent } from '@radar/pipeline';
+import { AI_ARGS, AI_HELP, parseAiOptions, type AiCliOptions } from './ai-setup.js';
 
 export const HELP = `
 Uso: radar-deuda <carpeta | owner/repo | URL de GitHub> [opciones]
@@ -161,102 +135,56 @@ export interface Io {
   warn(message: string): void;
 }
 
-/** Carpeta local o, si no existe, repositorio de GitHub clonado. */
-async function resolveTarget(o: CliOptions, io: Io, signal: AbortSignal): Promise<string> {
-  const local = path.resolve(o.target);
-  if (existsSync(local)) return local;
-  const ref = parseGitHubRepo(o.target);
-  if (!ref) throw new Error(`No existe la carpeta "${o.target}" ni es una referencia válida a GitHub (owner/repo o URL).`);
-
-  const token = tokenFromEnv();
-  const gh = new GitHubClient({ ...(token ? { token } : {}), signal });
-  let meta: Awaited<ReturnType<GitHubClient['getRepository']>> | null = null;
-  try {
-    meta = await gh.getRepository(ref);
-    if (token) for (const w of (await gh.checkToken()).warnings) io.warn(w);
-  } catch (err) {
-    // 401 (token inválido) y 404 (no existe o sin acceso) son definitivos. Los metadatos son opcionales:
-    // ante un límite de peticiones, un error del servidor o falta de red, se intenta clonar igualmente.
-    if (err instanceof Error && err.cause instanceof HttpError && (err.cause.status === 401 || err.cause.status === 404)) throw err;
-    io.warn(`No se pudieron obtener los metadatos de GitHub (${err instanceof Error ? err.message : String(err)}). Se intenta clonar igualmente.`);
+/** Progreso en una sola línea de la terminal (solo si es interactiva). */
+function progressLine(e: PipelineEvent, online: boolean): string | null {
+  switch (e.phase) {
+    case 'files':
+      return `Analizando archivos ${e.done}/${e.total}…`;
+    case 'cross-file':
+      return 'Análisis entre archivos…';
+    case 'project':
+      return online ? 'Consultando dependencias…' : 'Analizando el proyecto…';
+    case 'history':
+      return 'Leyendo el historial de Git…';
+    case 'ai':
+      return e.done < e.total ? `IA: ${e.done}/${e.total}…` : '';
+    case 'done':
+      return '';
+    default:
+      return null;
   }
-  io.info(`Clonando ${ref.owner}/${ref.repo}${meta ? ` (${Math.round(meta.sizeKb / 1024)} MB, rama ${o.branch ?? meta.defaultBranch})` : ''}…`);
-  const branch = o.branch ?? meta?.defaultBranch;
-  const clone = await cloneOrUpdate(ref, {
-    ...(token ? { token } : {}),
-    ...(branch ? { branch } : {}),
-    ...(o.history ? { shallowSince: historyStart(o) } : {}),
-    ...(meta ? { sizeKb: meta.sizeKb } : {}),
-    signal,
-  });
-  io.info(`${clone.updated ? 'Actualizado' : 'Clonado'} en ${clone.dir}`);
-  return clone.dir;
-}
-
-/** Inicio del periodo de historial: --since o hace 12 meses (AAAA-MM-DD). */
-function historyStart(o: CliOptions): string {
-  return o.since ?? new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function onlineAnalyzers(o: CliOptions): ProjectAnalyzer[] {
-  const base = o.noCache ? null : defaultCacheDir();
-  return [
-    vulnerabilityAnalyzer(new OsvClient({ cacheDir: base ? path.join(base, 'osv') : null })),
-    outdatedAnalyzer(new NpmRegistryClient({ cacheDir: base ? path.join(base, 'npm') : null })),
-  ];
-}
-
-/** Añade al informe el commit analizado y, con historial completo, los puntos críticos. */
-async function addGitContext(report: AnalysisReport, o: CliOptions, io: Io, signal: AbortSignal): Promise<void> {
-  let info;
-  try {
-    info = await getRepoInfo(report.root, signal);
-  } catch (err) {
-    io.warn(`Git no disponible: ${err instanceof Error ? err.message : String(err)}`);
-    return;
-  }
-  if (!info) return;
-  report.vcs = { head: info.head, branch: info.branch, remoteUrl: info.remoteUrl, shallow: info.shallow };
-  if (!o.history || !info.head) return;
-  const since = historyStart(o);
-  const prefix = path.relative(info.root, report.root).split(path.sep).join('/');
-  const churn = await fileChurn(info.root, { since, ...(prefix ? { pathPrefix: prefix } : {}), signal });
-  report.hotspots = computeHotspots(report, churn, { prefix });
-  report.coverage.push(
-    info.shallow
-      ? { area: 'Puntos críticos', status: 'partial', detail: `Clon superficial: solo se dispone del historial descargado (desde ${since} como mucho); ${churn.size} archivo(s) con cambios.` }
-      : { area: 'Puntos críticos', status: 'analyzed', detail: `Historial de Git desde ${since}: ${churn.size} archivo(s) con cambios.` },
-  );
 }
 
 export async function run(o: CliOptions, io: Io, signal: AbortSignal): Promise<number> {
   const showProgress = !o.quiet && process.stderr.isTTY;
-  const dir = await resolveTarget(o, io, signal);
-  if (o.online) io.info('Modo en línea: se enviarán nombres y versiones de paquetes a api.osv.dev y registry.npmjs.org.');
-
-  const report = await analyzeRepository(dir, {
-    config: o.concurrency !== undefined ? { concurrency: o.concurrency } : {},
-    ...(o.noCache ? { cacheDir: null } : o.cacheDir ? { cacheDir: o.cacheDir } : {}),
-    ...(o.online ? { projectAnalyzers: [...DEFAULT_PROJECT_ANALYZERS, ...onlineAnalyzers(o)] } : {}),
+  const token = tokenFromEnv();
+  const { report, aiLabel = '' } = await runPipeline(
+    {
+      target: o.target,
+      history: o.history,
+      online: o.online,
+      noCache: o.noCache,
+      ...(o.branch !== undefined ? { branch: o.branch } : {}),
+      ...(o.since !== undefined ? { since: o.since } : {}),
+      ...(o.cacheDir !== undefined ? { cacheDir: o.cacheDir } : {}),
+      ...(o.concurrency !== undefined ? { concurrency: o.concurrency } : {}),
+      ...(token ? { githubToken: token } : {}),
+      ...(o.ai ? { ai: o.ai, keys: keysFromEnv() } : {}),
+    },
+    {
+      info: io.info,
+      warn: io.warn,
+      ...(showProgress
+        ? {
+            progress: (e: PipelineEvent) => {
+              const line = progressLine(e, o.online);
+              if (line !== null) process.stderr.write(`\r${line.padEnd(40)}${line === '' ? '\r' : ''}`);
+            },
+          }
+        : {}),
+    },
     signal,
-    ...(showProgress
-      ? {
-          onProgress: (e) => {
-            if (e.phase === 'files') process.stderr.write(`\rAnalizando archivos ${e.done}/${e.total}…`);
-            if (e.phase === 'cross-file') process.stderr.write('\rAnálisis entre archivos…            ');
-            if (e.phase === 'project') process.stderr.write(`\r${o.online ? 'Consultando dependencias…' : 'Analizando el proyecto…'}      `);
-            if (e.phase === 'done') process.stderr.write('\r'.padEnd(60) + '\r');
-          },
-        }
-      : {}),
-  });
-  await addGitContext(report, o, io, signal);
-  let aiLabel = '';
-  if (o.ai) {
-    const r = await runAiFromCli(report, o.ai, io, signal, o.noCache ? null : defaultCacheDir());
-    report.ai = r.section;
-    aiLabel = r.label;
-  }
+  );
   console.log(formatReport(report, o.top));
   if (report.ai) console.log(formatAiSection(report.ai, report, aiLabel));
 

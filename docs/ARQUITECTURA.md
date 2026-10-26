@@ -99,8 +99,9 @@ flowchart LR
 | `packages/engine` | Motor determinista. Sin Electron, sin red | `typescript`, `ignore` |
 | `packages/sources` | Git endurecido, clonado y API de GitHub, OSV, registro npm | `engine`, `semver` |
 | `packages/ai` | Proveedores de IA intercambiables, contexto, privacidad y validación | `engine`, `sources` (HTTP) |
-| `packages/cli` | Comando `radar-deuda`: orquesta motor, fuentes e IA | `engine`, `sources`, `ai` |
-| `apps/desktop` (fase 8) | Electron + React + SQLite | todos |
+| `packages/pipeline` | Análisis completo: origen, motor, contexto de Git, dependencias en línea e IA (añadido en la fase 8) | `engine`, `sources`, `ai` |
+| `packages/cli` | Comando `radar-deuda`: opciones de la terminal e impresión | `pipeline` |
+| `apps/desktop` (fase 8) | Electron + React + SQLite | `pipeline` y los demás |
 
 El motor no conoce la interfaz ni la IA. Esto permite usarlo desde la terminal y en CI, y
 probarlo de forma aislada.

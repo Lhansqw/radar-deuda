@@ -54,7 +54,8 @@ radar-deuda/
 │     └─ scripts/        Benchmark de rendimiento
 │  ├─ sources/           Efectos externos: Git endurecido, GitHub, OSV, registro npm
 │  ├─ ai/                IA independiente del proveedor: explica y prioriza sin inventar
-│  └─ cli/               Comando radar-deuda: orquesta el motor y las fuentes
+│  ├─ pipeline/          Análisis completo (origen, motor, Git, dependencias, IA); lo usan la CLI y la app
+│  └─ cli/               Comando radar-deuda: opciones de la terminal e impresión del informe
 ├─ examples/demo-repo/   Repositorio con deuda técnica intencionada
 ├─ docs/                 Arquitectura, decisiones, entorno, metodología, rendimiento
 ├─ tsconfig.base.json    TypeScript estricto compartido
@@ -73,7 +74,7 @@ En desarrollo, los paquetes se importan entre sí desde su código fuente (`path
 npm ci            # instala dependencias exactas del lockfile
 npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit; nunca sale a la red)
 npm run test:live # pruebas contra servicios reales (requieren RADAR_LIVE=1 o RADAR_LIVE_LLM)
-npm run build     # compila los paquetes en orden (engine → sources → ai → cli) a packages/*/dist
+npm run build     # compila los paquetes en orden (engine → sources → ai → pipeline → cli) a packages/*/dist
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
 ```
 
