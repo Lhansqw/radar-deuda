@@ -141,6 +141,65 @@ describe('runAi', () => {
     expect(provider.calls).toHaveLength(0);
   });
 
+  it('al primer error de credenciales o cuota se detiene: no repite la consulta por cada hallazgo', async () => {
+    const { report, readText } = await demo();
+    for (const kind of ['auth', 'quota', 'rate-limit'] as const) {
+      const calls: string[] = [];
+      const provider = {
+        ...fakeProvider(reply, 'cloud'),
+        complete: async (req: { model: string }) => {
+          calls.push(req.model);
+          throw new ProviderError(`Fallo de tipo ${kind}.`, kind, 'falso');
+        },
+      };
+      const ai = await runAi(report, { provider, model: 'm', privacy: 'metadatos', readText, cacheDir: null, concurrency: 1 });
+      expect(calls).toHaveLength(1);
+      expect(ai.plan).toBeUndefined();
+      expect(ai.errors.map((e) => e.message)).toEqual([
+        `Fallo de tipo ${kind}. Se detuvo la IA para no repetir el error.`,
+        // Todas las explicaciones menos la que falló, más el plan.
+        `Quedaron sin hacer ${selectForAi(report).length - 1 + 1} consulta(s) (explicaciones y plan).`,
+      ]);
+    }
+  });
+
+  it('con consultas en paralelo, las que ya estaban en marcha no repiten el error', async () => {
+    const { report, readText } = await demo();
+    let n = 0;
+    const provider = {
+      ...fakeProvider(reply, 'cloud'),
+      complete: async () => {
+        n++;
+        await new Promise((r) => setTimeout(r, 5));
+        throw new ProviderError('Clave revocada.', 'auth', 'falso');
+      },
+    };
+    const ai = await runAi(report, { provider, model: 'm', privacy: 'metadatos', readText, cacheDir: null, concurrency: 4 });
+    expect(ai.errors.filter((e) => e.message.includes('Clave revocada'))).toHaveLength(1);
+    expect(ai.errors).toHaveLength(2);
+    expect(n).toBeLessThanOrEqual(4);
+  });
+
+  it('un error que afecta a una sola consulta no detiene las demás', async () => {
+    const { report, readText } = await demo();
+    let first = true;
+    const base = fakeProvider(reply, 'cloud');
+    const provider = {
+      ...base,
+      complete: async (req: Parameters<typeof base.complete>[0]) => {
+        if (first && !req.system.includes('planifica')) {
+          first = false;
+          throw new ProviderError('Petición rechazada.', 'invalid-request', 'falso');
+        }
+        return base.complete(req);
+      },
+    };
+    const ai = await runAi(report, { provider, model: 'm', privacy: 'metadatos', readText, cacheDir: null, concurrency: 1 });
+    expect(ai.errors).toHaveLength(1);
+    expect(ai.explanations).toHaveLength(selectForAi(report).length - 1);
+    expect(ai.plan).toBeDefined();
+  });
+
   it('los avisos de la comprobación previa llegan al informe', async () => {
     const { report, readText } = await demo();
     let plan: { models: string[]; requests: number } | undefined;

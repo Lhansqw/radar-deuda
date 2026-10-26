@@ -58,7 +58,11 @@ export async function askJson<T>(deps: RunnerDeps, o: AskOptions<T>): Promise<{ 
     const release = tracker.reserve(ref, estimated, o.maxOutputTokens);
     let result;
     try {
-      result = await limit(() => provider.complete({ model: o.model, system: o.system, messages, maxOutputTokens: o.maxOutputTokens, jsonSchema: o.schema, ...(signal ? { signal } : {}) }));
+      result = await limit(() => {
+        // Una tarea que esperaba turno no debe enviarse si mientras tanto se detuvo el análisis.
+        signal?.throwIfAborted();
+        return provider.complete({ model: o.model, system: o.system, messages, maxOutputTokens: o.maxOutputTokens, jsonSchema: o.schema, ...(signal ? { signal } : {}) });
+      });
       tracker.record(ref, result.usage, estimated, result.latencyMs, result.costUsd);
     } finally {
       release();
