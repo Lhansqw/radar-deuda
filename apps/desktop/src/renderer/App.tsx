@@ -9,6 +9,7 @@ import { useProjectData, useRadar } from './state.js';
 import { EMPTY_FILTER, type FindingFilter } from './lib/findings.js';
 import { Findings } from './views/Findings.js';
 import { NotAnalyzed } from './views/NotAnalyzed.js';
+import { Panel } from './views/Panel.js';
 import { Welcome } from './views/Welcome.js';
 
 /** Vistas del proyecto que existen en esta versión de la interfaz. */
@@ -105,12 +106,15 @@ export function App() {
                     onSelect={(id) => setSelectedFinding((all) => ({ ...all, [project.id]: id }))}
                   />
                 ) : (
-                  <div className="empty">
-                    <h2>
-                      {data.report.score.score}/100, calificación {data.report.score.rating}
-                    </h2>
-                    <p>{data.report.findings.length} hallazgos en el último análisis.</p>
-                  </div>
+                  <Panel
+                    report={data.report}
+                    analyses={data.analyses}
+                    analysisId={data.analysisId}
+                    onOpenFinding={(id) => {
+                      setSelectedFinding((all) => ({ ...all, [project.id]: id }));
+                      setView('hallazgos');
+                    }}
+                  />
                 )
               ) : data.loading ? null : (
                 <NotAnalyzed running={job?.status === 'running'} onAnalyze={analyze} />
