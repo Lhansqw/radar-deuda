@@ -35,6 +35,14 @@ export interface CompletionResult {
   usage: { inputTokens: number; outputTokens: number } | null;
   latencyMs: number;
   requestId?: string;
+  /** Coste real cobrado, si el proveedor lo informa (USD). Tiene prioridad sobre la tabla de precios. */
+  costUsd?: number;
+}
+
+/** Precio en USD por millón de tokens. */
+export interface ModelPrice {
+  inputPerMTok: number;
+  outputPerMTok: number;
 }
 
 /** Dónde se ejecuta el modelo: decide qué permite la política de privacidad. */
@@ -48,6 +56,8 @@ export interface LlmProvider {
   complete(request: CompletionRequest): Promise<CompletionResult>;
   /** Modelos disponibles (en un servidor local, los cargados). */
   listModels?(signal?: AbortSignal): Promise<string[]>;
+  /** Precio publicado del modelo, si el proveedor lo ofrece (para aplicar el presupuesto antes de enviar). */
+  price?(model: string, signal?: AbortSignal): Promise<ModelPrice | null>;
 }
 
 export type ProviderErrorKind = 'auth' | 'rate-limit' | 'overloaded' | 'quota' | 'context-length' | 'unavailable' | 'invalid-request' | 'unknown';

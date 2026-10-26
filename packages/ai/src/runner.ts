@@ -59,7 +59,7 @@ export async function askJson<T>(deps: RunnerDeps, o: AskOptions<T>): Promise<{ 
     let result;
     try {
       result = await limit(() => provider.complete({ model: o.model, system: o.system, messages, maxOutputTokens: o.maxOutputTokens, jsonSchema: o.schema, ...(signal ? { signal } : {}) }));
-      tracker.record(ref, result.usage, estimated, result.latencyMs);
+      tracker.record(ref, result.usage, estimated, result.latencyMs, result.costUsd);
     } finally {
       release();
     }

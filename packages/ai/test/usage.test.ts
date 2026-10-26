@@ -44,6 +44,15 @@ describe('UsageTracker', () => {
     expect(() => t.reserve(unknown, 1_000_000, 1_000_000)).not.toThrow();
   });
 
+  it('usa el coste informado por el proveedor y los precios dinámicos para el presupuesto', () => {
+    const t = new UsageTracker({ maxCostUsd: 0.01 });
+    const ref = { providerId: 'openrouter', locality: 'cloud' as const, model: 'x/y' };
+    t.setPrice(ref, { inputPerMTok: 1000, outputPerMTok: 1000 }); // muy caro: 0,001 USD por token
+    expect(() => t.reserve(ref, 100, 100)).toThrow(BudgetExceededError); // 0,2 USD > 0,01
+    t.record(ref, { inputTokens: 10, outputTokens: 10 }, 10, 1, 0.0042);
+    expect(t.summary().costUsd).toBe(0.0042); // el informado, no el calculado (0,02)
+  });
+
   it('limita el número de peticiones', () => {
     const t = new UsageTracker({ maxRequests: 1 });
     t.reserve(local, 1, 1);

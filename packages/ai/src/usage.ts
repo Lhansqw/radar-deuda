@@ -68,6 +68,8 @@ export interface ModelRef {
  * con el peor caso (entrada estimada + salida máxima), así nunca se supera.
  */
 export class UsageTracker {
+  /** Precios obtenidos del propio proveedor (p. ej. la API de modelos de OpenRouter). */
+  private readonly dynamicPrices = new Map<string, Price>();
   private requests = 0;
   private cacheHits = 0;
   private inputTokens = 0;
@@ -81,10 +83,18 @@ export class UsageTracker {
 
   constructor(private readonly budget: Budget = {}) {}
 
+  setPrice(ref: ModelRef, price: Price): void {
+    this.dynamicPrices.set(`${ref.providerId}\u0000${ref.model}`, price);
+  }
+
+  private priceOf(ref: ModelRef): Price | null {
+    return this.dynamicPrices.get(`${ref.providerId}\u0000${ref.model}`) ?? priceFor(ref.providerId, ref.locality, ref.model);
+  }
+
   /** Reserva capacidad para una petición; lanza BudgetExceededError si no cabe. */
   reserve(ref: ModelRef, estimatedInput: number, maxOutput: number): () => void {
     const b = this.budget;
-    const price = priceFor(ref.providerId, ref.locality, ref.model);
+    const price = this.priceOf(ref);
     const worstCost = price ? costOf(price, estimatedInput, maxOutput) : 0;
     const req = this.requests + this.reserved.requests + 1;
     const inp = this.inputTokens + this.reserved.input + estimatedInput;
@@ -110,15 +120,19 @@ export class UsageTracker {
     };
   }
 
-  /** Registra el consumo real (o la estimación si el proveedor no lo informa). */
-  record(ref: ModelRef, usage: { inputTokens: number; outputTokens: number } | null, estimatedInput: number, latencyMs: number): void {
+  /**
+   * Registra el consumo real (o la estimación si el proveedor no lo informa).
+   * Si el proveedor informa del coste cobrado, se usa ese en lugar de la tabla.
+   */
+  record(ref: ModelRef, usage: { inputTokens: number; outputTokens: number } | null, estimatedInput: number, latencyMs: number, reportedCostUsd?: number): void {
     const input = usage?.inputTokens ?? estimatedInput;
     const output = usage?.outputTokens ?? 0;
     this.requests++;
     this.inputTokens += input;
     this.outputTokens += output;
-    const price = priceFor(ref.providerId, ref.locality, ref.model);
-    if (price) this.cost += costOf(price, input, output);
+    const price = this.priceOf(ref);
+    if (reportedCostUsd !== undefined && Number.isFinite(reportedCostUsd)) this.cost += reportedCostUsd;
+    else if (price) this.cost += costOf(price, input, output);
     else this.costUnknown = true;
     this.latencyTotal += latencyMs;
     this.latencyMax = Math.max(this.latencyMax, latencyMs);
