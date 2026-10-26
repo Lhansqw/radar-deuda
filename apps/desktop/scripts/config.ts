@@ -9,7 +9,7 @@ const repoDir = path.resolve(appDir, '../..');
 const pkg = (name: string): string => path.join(repoDir, 'packages', name, 'src', 'index.ts');
 
 /**
- * Procesos de Node (principal, preload y, más adelante, el de análisis). Se
+ * Procesos de Node (principal, preload y el de análisis). Se
  * empaqueta todo salvo Electron: los paquetes del monorepo desde su código
  * fuente y sus dependencias (typescript, ignore, semver), para que la
  * aplicación no dependa de node_modules en tiempo de ejecución.
@@ -20,6 +20,7 @@ export function nodeBuildOptions(dev: boolean): BuildOptions {
     entryPoints: {
       main: path.join(appDir, 'src/main/main.ts'),
       preload: path.join(appDir, 'src/preload/preload.ts'),
+      worker: path.join(appDir, 'src/worker/analysis-worker.ts'),
     },
     outdir: distDir,
     outExtension: { '.js': '.cjs' },

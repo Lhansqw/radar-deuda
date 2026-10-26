@@ -5,6 +5,7 @@
  * proceso principal si algo falla.
  */
 import type { ArgsOf, Channel, ResultOf } from './ipc.js';
+import type { JobState } from './jobs.js';
 
 type Fn<C extends Channel> = (...args: ArgsOf<C>) => Promise<ResultOf<C>>;
 
@@ -14,4 +15,11 @@ export interface RadarApi {
   analyses: { list: Fn<'analyses:list'>; report: Fn<'analyses:report'> };
   settings: { get: Fn<'settings:get'>; set: Fn<'settings:set'> };
   secrets: { status: Fn<'secrets:status'>; set: Fn<'secrets:set'>; delete: Fn<'secrets:delete'> };
+  jobs: {
+    start: Fn<'jobs:start'>;
+    cancel: Fn<'jobs:cancel'>;
+    list: Fn<'jobs:list'>;
+    /** Avisa de cada cambio de estado de un análisis. Devuelve la función para dejar de escuchar. */
+    onEvent: (cb: (state: JobState) => void) => () => void;
+  };
 }

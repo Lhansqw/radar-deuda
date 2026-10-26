@@ -63,6 +63,14 @@ export const VALIDATORS: Validators = {
     return [secretName(a[0]), text(a[1], 'Credencial no válida.', 1000)];
   },
   'secrets:delete': (a) => (count(a, 1), [secretName(a[0])]),
+  'jobs:start': (a) => (count(a, 1), [id(a[0], 'Proyecto no válido.')]),
+  'jobs:cancel': (a) => {
+    count(a, 1);
+    const jobId = text(a[0], 'Análisis no válido.', 36);
+    if (!/^[0-9a-f-]{36}$/.test(jobId)) throw new IpcValidationError('Análisis no válido.');
+    return [jobId];
+  },
+  'jobs:list': (a) => (count(a, 0), []),
 };
 
 function secretName(v: unknown): SecretName {
