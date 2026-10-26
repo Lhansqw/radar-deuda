@@ -1,4 +1,4 @@
-import { HttpError, requestJson } from '@radar/sources';
+import { HttpError, requestJson, type HttpOptions } from '@radar/sources';
 import { checkApiKey, KEY_RULES, ProviderError, type CompletionRequest, type CompletionResult, type ModelPrice, type PreflightPlan } from '../provider.js';
 import { OpenAiCompatibleProvider, type OpenAiCompatibleOptions } from './openai-compatible.js';
 
@@ -56,6 +56,18 @@ export function planReasoning(model: OpenRouterModel | null, preference: Reasoni
   if (effort === 'none') return { reasoning: { effort: 'none' }, effort, headroom: 0 };
   // El texto del razonamiento no se usa: exclude evita recibirlo (se sigue cobrando como salida).
   return { reasoning: { effort, exclude: true }, effort, headroom: REASONING_HEADROOM[effort] ?? REASONING_HEADROOM['medium'] as number };
+}
+
+export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1';
+
+/**
+ * Descarga e interpreta el catálogo de modelos. No necesita clave: si se
+ * indican cabeceras (con la clave), se envían. Lanza HttpError si falla.
+ */
+export async function fetchOpenRouterModels(options: HttpOptions & { baseUrl?: string; headers?: Record<string, string> } = {}): Promise<OpenRouterModel[]> {
+  const { baseUrl = OPENROUTER_BASE_URL, headers = { 'user-agent': 'radar-deuda' }, ...http } = options;
+  const { data } = await requestJson<ModelsResponse>(`${baseUrl.replace(/\/$/, '')}/models`, { headers }, { retries: 1, timeoutMs: 20_000, maxBytes: 64 * 1024 * 1024, ...http });
+  return (data.data ?? []).map(toModel).filter((m): m is OpenRouterModel => m !== null);
 }
 
 /** Margen para un modelo al que no se le indica el razonamiento: razona según su configuración por defecto. */
@@ -159,7 +171,7 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
   private catalog: Promise<Map<string, OpenRouterModel>> | null = null;
 
   constructor(options: OpenRouterOptions) {
-    const { apiKey, baseUrl = 'https://openrouter.ai/api/v1', allowDataCollection = false, zeroDataRetention = false, reasoning = 'auto', fallbackModels = [], ...rest } = options;
+    const { apiKey, baseUrl = OPENROUTER_BASE_URL, allowDataCollection = false, zeroDataRetention = false, reasoning = 'auto', fallbackModels = [], ...rest } = options;
     checkApiKey(apiKey, KEY_RULES.openrouter, 'openrouter');
     super({
       ...rest,
@@ -235,8 +247,8 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
   }
 
   private loadCatalog(signal?: AbortSignal): Promise<Map<string, OpenRouterModel>> {
-    this.catalog ??= requestJson<ModelsResponse>(`${this.baseUrl}/models`, { headers: this.headers() }, { ...this.http, retries: 1, timeoutMs: 20_000, maxBytes: 64 * 1024 * 1024, ...(signal ? { signal } : {}) })
-      .then(({ data }) => new Map((data.data ?? []).map(toModel).filter((m): m is OpenRouterModel => m !== null).map((m) => [m.id, m])))
+    this.catalog ??= fetchOpenRouterModels({ ...this.http, baseUrl: this.baseUrl, headers: this.headers(), retries: 1, timeoutMs: 20_000, ...(signal ? { signal } : {}) })
+      .then((list) => new Map(list.map((m) => [m.id, m])))
       .catch((err: unknown) => {
         this.catalog = null;
         throw this.explain(err);
