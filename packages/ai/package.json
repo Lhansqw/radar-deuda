@@ -4,6 +4,7 @@
   "private": true,
   "description": "Capa de IA independiente del proveedor: explica y prioriza hallazgos del motor sin inventar evidencia.",
   "type": "module",
+  "sideEffects": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
