@@ -85,7 +85,7 @@ gh repo create radar-deuda --private --source . --push
 | Fase | Credencial | Permisos mínimos |
 |---|---|---|
 | 6 | Token *fine-grained* de GitHub, solo para repositorios privados ([cómo crearlo y usarlo](FUENTES.md#token-de-github-solo-para-repositorios-privados)) | Solo los repositorios elegidos · *Contents: Read-only* · *Metadata: Read-only* |
-| 7 | Clave de API de un proveedor en la nube (opcional) | Una clave dedicada a esta aplicación, con límite de gasto |
+| 7 | Ninguna con LM Studio u Ollama. Opcional: clave de Anthropic u OpenAI ([cómo usarla](IA.md#qué-necesitas-para-usarla)) | Una clave dedicada a esta aplicación, con límite de gasto |
 
 Nunca pegues credenciales en archivos del repositorio: la aplicación las guardará cifradas
 con `safeStorage` (DPAPI de Windows).
