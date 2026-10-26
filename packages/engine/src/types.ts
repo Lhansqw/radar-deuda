@@ -339,6 +339,24 @@ export interface AnalyzerError {
   message: string;
 }
 
+/** Una línea de una diferencia, con su número en la versión original y en la nueva. */
+export interface DiffLine {
+  kind: 'context' | 'removed' | 'added';
+  text: string;
+  oldLine: number | null;
+  newLine: number | null;
+}
+
+/** Bloque de una diferencia unificada (las mismas cifras que su cabecera @@ -a,b +c,d @@). */
+export interface DiffHunk {
+  file: string;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: DiffLine[];
+}
+
 /** Diferencias entre dos informes del mismo repositorio (deuda nueva, resuelta y que cambió de severidad). */
 export interface ReportComparison {
   /** Hallazgos que no existían en el informe de referencia. */
