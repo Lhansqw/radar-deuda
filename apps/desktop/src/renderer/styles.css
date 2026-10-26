@@ -1,12 +1,628 @@
+@import '@fontsource-variable/instrument-sans/wght.css';
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+
+/*
+ * Radar de Deuda Técnica — sistema visual.
+ * Un plano técnico sobre pizarra: superficies azul pizarra, líneas finas y la
+ * tiza como color de acción. La personalidad se concentra en el radar del
+ * panel; todo lo demás es sobrio. Contrastes comprobados (WCAG):
+ * tinta 13,3:1, tinta-2 7,6:1, apagado ≥ 4,5:1 sobre el plano.
+ */
 :root {
   color-scheme: dark;
-  --bg: #0f1217;
-  --text: #e6e9ef;
-  --muted: #8b93a3;
-  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+
+  --pizarra: #131b26;
+  --plano: #192331;
+  --elevado: #212d3e;
+  --linea: #2b3a4d;
+  --linea-fuerte: #3a4b61;
+
+  --tinta: #e6ecf3;
+  --tinta-2: #a9b5c5;
+  --apagado: #8a96a9;
+  --tiza: #e9eff7;
+  --enlace: #8cc2ff;
+  --seleccion: #23344b;
+
+  /* Severidad: paleta de estado; siempre acompañada de forma y texto. */
+  --sev-critical: #d03b3b;
+  --sev-high: #ec835a;
+  --sev-medium: #fab219;
+  --sev-low: #8ea7c6;
+  --sev-info: #6f7b8d;
+  --bien: #2fb344;
+  --error-texto: #ff9b95;
+
+  --font-ui: 'Instrument Sans Variable', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-code: 'JetBrains Mono Variable', 'Cascadia Code', Consolas, monospace;
+
+  /* Escala tipográfica (≈ 1,25) */
+  --t-xs: 0.75rem;
+  --t-s: 0.8125rem;
+  --t-m: 0.875rem;
+  --t-l: 1rem;
+  --t-xl: 1.25rem;
+  --t-2xl: 1.625rem;
+  --t-hero: 4rem;
+
+  --r: 4px;
+  --sidebar: 15.75rem;
 }
-html, body, #root { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--text); }
-.splash { display: grid; place-content: center; height: 100%; text-align: center; }
-.splash h1 { font-weight: 600; letter-spacing: -0.01em; margin: 0 0 0.5rem; }
-.splash p { color: var(--muted); margin: 0; }
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--pizarra);
+  color: var(--tinta);
+  font: 400 var(--t-m) / 1.5 var(--font-ui);
+  font-feature-settings: 'ss01';
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--enlace);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+code,
+.mono {
+  font-family: var(--font-code);
+  font-size: 0.92em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── Estructura ─────────────────────────────────────────────────────────── */
+
+.app {
+  display: grid;
+  grid-template-columns: var(--sidebar) 1fr;
+  height: 100%;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--linea);
+  background: var(--pizarra);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 1.125rem 1.125rem 1rem;
+  font-weight: 600;
+  font-size: var(--t-l);
+  letter-spacing: -0.01em;
+}
+
+.brand svg {
+  flex: none;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0.625rem 1rem;
+}
+
+.sidebar-heading {
+  margin: 1rem 0.5rem 0.375rem;
+  color: var(--apagado);
+  font-size: var(--t-xs);
+  font-weight: 600;
+}
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.4375rem 0.5rem;
+  border: 0;
+  border-radius: var(--r);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-item:hover {
+  background: var(--elevado);
+}
+
+.project-item[aria-current='true'] {
+  background: var(--seleccion);
+}
+
+.project-item .name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.project-item .kind {
+  color: var(--apagado);
+}
+
+.rating {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.375rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 3px;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--tinta-2);
+}
+
+.rating[data-rating='A'],
+.rating[data-rating='B'] {
+  color: var(--tinta);
+}
+
+.rating[data-rating='D'],
+.rating[data-rating='E'] {
+  border-color: color-mix(in srgb, var(--sev-high) 55%, var(--linea-fuerte));
+}
+
+.rating-empty {
+  color: var(--apagado);
+  font-size: var(--t-xs);
+}
+
+.sidebar-actions {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.nav {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.4375rem 0.5rem;
+  border: 0;
+  border-radius: var(--r);
+  background: none;
+  color: var(--tinta-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--elevado);
+  color: var(--tinta);
+}
+
+.nav-item[aria-current='page'] {
+  background: var(--seleccion);
+  color: var(--tinta);
+}
+
+.nav-item .count {
+  margin-left: auto;
+  color: var(--apagado);
+  font-size: var(--t-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-footer {
+  padding: 0.625rem;
+  border-top: 1px solid var(--linea);
+}
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--plano);
+}
+
+.workspace-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ── Cabecera del proyecto ──────────────────────────────────────────────── */
+
+.project-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 1.5rem;
+  padding: 1.5rem 2rem 1.25rem;
+  border-bottom: 1px solid var(--linea);
+}
+
+.project-header h1 {
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.project-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin-top: 0.5rem;
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+}
+
+.project-meta .mono {
+  color: var(--apagado);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Controles ──────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 2.125rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--tinta);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--elevado);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  border-color: var(--tiza);
+  background: var(--tiza);
+  color: var(--pizarra);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #ffffff;
+}
+
+.btn-quiet {
+  border-color: transparent;
+  color: var(--tinta-2);
+}
+
+.btn-quiet:hover {
+  color: var(--tinta);
+}
+
+.btn-small {
+  height: 1.75rem;
+  padding: 0 0.625rem;
+  font-size: var(--t-s);
+}
+
+.btn-block {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.btn-danger {
+  border-color: color-mix(in srgb, var(--sev-critical) 60%, var(--linea-fuerte));
+  color: var(--error-texto);
+}
+
+.field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.field label,
+.field .label {
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+  font-weight: 500;
+}
+
+.field .hint {
+  color: var(--apagado);
+  font-size: var(--t-xs);
+}
+
+.input,
+.select {
+  height: 2.125rem;
+  padding: 0 0.625rem;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: var(--r);
+  background: var(--pizarra);
+}
+
+.input::placeholder {
+  color: var(--apagado);
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--enlace);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  cursor: pointer;
+}
+
+.check input {
+  margin: 0.25rem 0 0;
+  accent-color: var(--enlace);
+}
+
+/* ── Avisos ─────────────────────────────────────────────────────────────── */
+
+.notice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.75rem 2rem;
+  border-bottom: 1px solid var(--linea);
+  font-size: var(--t-s);
+}
+
+/* Una barra de 3 px a la izquierda marca el tono; el icono y el texto lo dicen. */
+.notice[data-tone='error'] {
+  box-shadow: inset 3px 0 0 var(--sev-critical);
+}
+
+.notice[data-tone='error'] > svg {
+  color: var(--error-texto);
+}
+
+.notice[data-tone='warn'] {
+  box-shadow: inset 3px 0 0 var(--sev-medium);
+}
+
+.notice[data-tone='warn'] > svg {
+  color: var(--sev-medium);
+}
+
+.notice[data-tone='ok'] {
+  box-shadow: inset 3px 0 0 var(--bien);
+}
+
+.notice[data-tone='ok'] > svg {
+  color: var(--bien);
+}
+
+.notice .title {
+  font-weight: 600;
+}
+
+.notice p + p {
+  margin-top: 0.25rem;
+  color: var(--tinta-2);
+}
+
+/* Progreso del análisis */
+.job {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.875rem 2rem 1rem;
+  border-bottom: 1px solid var(--linea);
+}
+
+.job-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  font-size: var(--t-s);
+}
+
+.job-line .phase {
+  font-weight: 600;
+}
+
+.job-line .detail {
+  overflow: hidden;
+  color: var(--apagado);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.job-line .btn {
+  margin-left: auto;
+}
+
+.progress {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--linea);
+}
+
+.progress > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--tiza);
+  transition: width 0.2s ease-out;
+}
+
+.progress[data-indeterminate='true'] > span {
+  width: 30%;
+  animation: barrido 1.4s ease-in-out infinite;
+}
+
+@keyframes barrido {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+/* ── Estados vacíos y diálogos ─────────────────────────────────────────── */
+
+.empty {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 1rem;
+  max-width: 34rem;
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+.empty h2 {
+  font-size: var(--t-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.empty p {
+  color: var(--tinta-2);
+}
+
+.empty .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(8 12 18 / 0.66);
+}
+
+.dialog {
+  display: grid;
+  gap: 1.125rem;
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 6px;
+  background: var(--plano);
+  box-shadow: 0 24px 48px rgb(0 0 0 / 0.45);
+}
+
+.dialog h2 {
+  font-size: var(--t-xl);
+  font-weight: 600;
+}
+
+.dialog .buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.form-error {
+  color: var(--error-texto);
+  font-size: var(--t-s);
+}
+
+/* ── Severidad ──────────────────────────────────────────────────────────── */
+
+.sev {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.sev svg {
+  flex: none;
+}
+
+.form-hint {
+  max-width: 22rem;
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+  text-align: right;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
