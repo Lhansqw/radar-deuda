@@ -71,7 +71,27 @@ export const VALIDATORS: Validators = {
     return [jobId];
   },
   'jobs:list': (a) => (count(a, 0), []),
+  'files:snippet': (a) => {
+    count(a, 4);
+    const start = line(a[2]);
+    const end = line(a[3]);
+    if (end < start) throw new IpcValidationError('Rango de líneas no válido.');
+    return [id(a[0], 'Análisis no válido.'), relPath(a[1]), start, end];
+  },
+  'files:reveal': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), relPath(a[1])]),
 };
+
+function line(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 1 || v > 10_000_000) throw new IpcValidationError('Número de línea no válido.');
+  return v;
+}
+
+/** Ruta relativa del proyecto con barras normales, sin unidad ni "..". */
+function relPath(v: unknown): string {
+  const p = text(v, 'Ruta no válida.', 1000);
+  if (p.includes('\0') || p.includes('\\') || p.startsWith('/') || /^[a-z]:/i.test(p) || p.split('/').includes('..')) throw new IpcValidationError('Ruta no válida.');
+  return p;
+}
 
 function secretName(v: unknown): SecretName {
   if (typeof v !== 'string' || !(SECRET_NAMES as readonly string[]).includes(v)) throw new IpcValidationError('Credencial desconocida.');

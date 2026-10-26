@@ -1,9 +1,11 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
+import type { AnalysisReport } from '@radar/engine';
 import type { AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
 import type { CredentialStore } from './credentials.js';
 import type { JobManager } from './jobs.js';
+import { readSnippet, resolveReportFile } from './snippets.js';
 import type { Store } from './store.js';
 
 /** Lo que los manejadores necesitan del exterior; se inyecta para probarlos sin Electron. */
@@ -15,6 +17,8 @@ export interface HandlerDeps {
   /** Selector de carpetas del sistema. */
   chooseFolder: () => Promise<string | null>;
   openExternal: (url: string) => Promise<boolean>;
+  /** Muestra un archivo en el explorador del sistema. */
+  reveal: (absPath: string) => void;
 }
 
 export type Handlers = { [C in Channel]: (...args: ArgsOf<C>) => Promise<ResultOf<C>> | ResultOf<C> };
@@ -30,6 +34,12 @@ export class NotFoundError extends Error {
     super(message);
     this.name = 'NotFoundError';
   }
+}
+
+function report(d: HandlerDeps, analysisId: number): AnalysisReport {
+  const r = d.store.getReport(analysisId);
+  if (!r) throw new NotFoundError('Ese análisis ya no existe.');
+  return r;
 }
 
 export function createHandlers(d: HandlerDeps): Handlers {
@@ -53,11 +63,7 @@ export function createHandlers(d: HandlerDeps): Handlers {
     },
 
     'analyses:list': (projectId) => d.store.listAnalyses(projectId),
-    'analyses:report': (analysisId) => {
-      const report = d.store.getReport(analysisId);
-      if (!report) throw new NotFoundError('Ese análisis ya no existe.');
-      return report;
-    },
+    'analyses:report': (analysisId) => report(d, analysisId),
 
     'settings:get': () => loadSettings(d.store),
     'settings:set': (settings) => {
@@ -81,5 +87,11 @@ export function createHandlers(d: HandlerDeps): Handlers {
       return null;
     },
     'jobs:list': () => d.jobs.list(),
+
+    'files:snippet': (analysisId, file, start, end) => readSnippet(report(d, analysisId), file, start, end),
+    'files:reveal': async (analysisId, file) => {
+      d.reveal(await resolveReportFile(report(d, analysisId), file));
+      return null;
+    },
   };
 }
