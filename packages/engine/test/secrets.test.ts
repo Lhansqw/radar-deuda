@@ -58,8 +58,18 @@ describe('asignaciones genéricas', () => {
     'password: "changeme"',
     'const secret = "aaaaaaaaaaaa";', // entropía baja
     'const token = config.token;',
+    // Nombres con "token" cuyo valor es otro nombre, no una credencial (falso positivo real en este repositorio).
+    "  maxTokensParam: 'max_completion_tokens',",
+    "const { maxTokensParam = 'max_tokens' } = options;",
+    'grant_type: "client_credentials",',
+    "const tokenType = 'bearer-token';",
   ])('ignora: %s', (line) => {
     expect(scan(line)).toEqual([]);
+  });
+
+  it('un valor con mayúsculas, cifras o símbolos sigue contando aunque tenga guiones', () => {
+    expect(scan('const token = "live_Xk9mP2vL8q-R4nT7";')).toHaveLength(1);
+    expect(scan('const apiKey = "abcd_efgh_ijkl_2024";')).toHaveLength(1);
   });
 
   it('en código solo cuentan literales entre comillas; en .env no hacen falta', () => {
