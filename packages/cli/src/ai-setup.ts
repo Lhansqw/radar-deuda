@@ -4,6 +4,8 @@ import { safeJoin, type AiSection, type AnalysisReport } from '@radar/engine';
 import {
   ANTHROPIC_MODELS,
   AnthropicProvider,
+  checkApiKey,
+  KEY_RULES,
   OpenAiCompatibleProvider,
   OpenRouterProvider,
   PRESETS,
@@ -102,26 +104,28 @@ export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
 }
 
 export function createProvider(o: AiCliOptions, env: NodeJS.ProcessEnv = process.env): LlmProvider {
+  // Los espacios y saltos de línea al principio o al final son el error de pegado más común.
+  const key = (name: string): string => (env[name] ?? '').trim();
   switch (o.provider) {
     case 'lmstudio':
       return new OpenAiCompatibleProvider({ ...PRESETS.lmstudio, ...(o.url ? { baseUrl: o.url } : {}) });
     case 'ollama':
       return new OpenAiCompatibleProvider({ ...PRESETS.ollama, ...(o.url ? { baseUrl: o.url } : {}) });
     case 'anthropic':
-      return new AnthropicProvider({ apiKey: env['RADAR_ANTHROPIC_API_KEY'] ?? '' });
+      return new AnthropicProvider({ apiKey: key('RADAR_ANTHROPIC_API_KEY') });
     case 'openrouter':
       return new OpenRouterProvider({
-        apiKey: env['RADAR_OPENROUTER_API_KEY'] ?? '',
+        apiKey: key('RADAR_OPENROUTER_API_KEY'),
         ...(o.zeroDataRetention ? { zeroDataRetention: true } : {}),
         ...(o.allowDataCollection ? { allowDataCollection: true } : {}),
       });
     case 'openai': {
-      const apiKey = env['RADAR_OPENAI_API_KEY'];
-      if (!apiKey) throw new Error('Falta la clave de OpenAI: define RADAR_OPENAI_API_KEY.');
+      const apiKey = key('RADAR_OPENAI_API_KEY');
+      checkApiKey(apiKey, KEY_RULES.openai, 'openai');
       return new OpenAiCompatibleProvider({ ...PRESETS.openai, apiKey });
     }
     case 'url': {
-      const apiKey = env['RADAR_OPENAI_API_KEY'];
+      const apiKey = key('RADAR_OPENAI_API_KEY');
       return new OpenAiCompatibleProvider({ id: 'personalizado', label: `Servidor ${o.url}`, baseUrl: o.url as string, ...(apiKey ? { apiKey } : {}) });
     }
   }

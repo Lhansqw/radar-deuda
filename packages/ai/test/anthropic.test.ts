@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AnthropicProvider, ANTHROPIC_API_VERSION } from '../src/providers/anthropic.js';
+import { FAKE_KEYS } from './helpers/keys.js';
 import { fakeFetch, json, noSleep } from './helpers/fake-fetch.js';
 
 const req = { model: 'claude-haiku-5-5', system: 'sistema', messages: [{ role: 'user' as const, content: 'hola' }], maxOutputTokens: 200 };
@@ -16,14 +17,14 @@ const okBody = {
 describe('AnthropicProvider', () => {
   it('usa la versión fijada, x-api-key y output_config; nunca envía temperature', async () => {
     const fetch = fakeFetch(() => json(okBody, 200, { 'request-id': 'req_1' }));
-    const p = new AnthropicProvider({ apiKey: 'clave', fetch });
+    const p = new AnthropicProvider({ apiKey: FAKE_KEYS.anthropic, fetch });
     const r = await p.complete({ ...req, jsonSchema: { name: 'x', schema: { type: 'object', additionalProperties: false } } });
     const call = fetch.calls[0];
     const headers = call?.init?.headers as Record<string, string>;
     const body = JSON.parse(String(call?.init?.body)) as Record<string, unknown>;
     expect(call?.url).toBe('https://api.anthropic.com/v1/messages');
     expect(headers['anthropic-version']).toBe(ANTHROPIC_API_VERSION);
-    expect(headers['x-api-key']).toBe('clave');
+    expect(headers['x-api-key']).toBe(FAKE_KEYS.anthropic);
     expect(body).toEqual({
       model: 'claude-haiku-5-5',
       max_tokens: 200,
@@ -40,7 +41,7 @@ describe('AnthropicProvider', () => {
     ['refusal', 'refusal'],
     ['pause_turn', 'other'], // valores nuevos: se toleran
   ])('stop_reason %s → %s', async (stop, finish) => {
-    const p = new AnthropicProvider({ apiKey: 'k', fetch: fakeFetch(() => json({ ...okBody, stop_reason: stop })) });
+    const p = new AnthropicProvider({ apiKey: FAKE_KEYS.anthropic, fetch: fakeFetch(() => json({ ...okBody, stop_reason: stop })) });
     expect((await p.complete(req)).finishReason).toBe(finish);
   });
 
@@ -57,22 +58,22 @@ describe('AnthropicProvider', () => {
       [err(400, 'invalid_request_error'), 'invalid-request', /invalid_request_error/],
     ];
     for (const [res, kind, message] of cases) {
-      const p = new AnthropicProvider({ apiKey: 'VALOR-SECRETO-123', fetch: fakeFetch(() => res.clone()), retries: 0, sleep: noSleep });
+      const p = new AnthropicProvider({ apiKey: FAKE_KEYS.anthropic, fetch: fakeFetch(() => res.clone()), retries: 0, sleep: noSleep });
       const e = await p.complete(req).then(() => null, (x: unknown) => x as Error & { kind: string });
       expect(e?.kind).toBe(kind);
       expect(e?.message).toMatch(message);
       expect(e?.message).toMatch(/req_X/);
-      expect(e?.message).not.toContain('VALOR-SECRETO-123');
+      expect(e?.message).not.toContain(FAKE_KEYS.anthropic);
     }
   });
 
   it('reintenta 529 y 429 con Retry-After, pero no el 429 de tope de gasto', async () => {
     let n = 0;
     const flaky = fakeFetch(() => (++n === 1 ? json({ error: { type: 'overloaded_error' } }, 529) : json(okBody)));
-    await new AnthropicProvider({ apiKey: 'k', fetch: flaky, sleep: noSleep }).complete(req);
+    await new AnthropicProvider({ apiKey: FAKE_KEYS.anthropic, fetch: flaky, sleep: noSleep }).complete(req);
     expect(flaky.calls).toHaveLength(2);
     const cap = fakeFetch(() => json({ error: { type: 'rate_limit_error' } }, 429));
-    await expect(new AnthropicProvider({ apiKey: 'k', fetch: cap, sleep: noSleep }).complete(req)).rejects.toMatchObject({ kind: 'quota' });
+    await expect(new AnthropicProvider({ apiKey: FAKE_KEYS.anthropic, fetch: cap, sleep: noSleep }).complete(req)).rejects.toMatchObject({ kind: 'quota' });
     expect(cap.calls).toHaveLength(1);
   });
 

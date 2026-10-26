@@ -1,5 +1,5 @@
 import { HttpError, requestJson } from '@radar/sources';
-import { ProviderError, type ModelPrice } from '../provider.js';
+import { checkApiKey, KEY_RULES, ProviderError, type ModelPrice } from '../provider.js';
 import { OpenAiCompatibleProvider, type OpenAiCompatibleOptions } from './openai-compatible.js';
 
 /**
@@ -36,7 +36,7 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
 
   constructor(options: OpenRouterOptions) {
     const { apiKey, baseUrl = 'https://openrouter.ai/api/v1', allowDataCollection = false, zeroDataRetention = false, ...rest } = options;
-    if (!apiKey) throw new ProviderError('Falta la clave de OpenRouter (RADAR_OPENROUTER_API_KEY).', 'auth', 'openrouter');
+    checkApiKey(apiKey, KEY_RULES.openrouter, 'openrouter');
     super({
       ...rest,
       id: 'openrouter',
