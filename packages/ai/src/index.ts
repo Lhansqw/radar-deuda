@@ -5,3 +5,5 @@
 export * from './provider.js';
 export { OpenAiCompatibleProvider, PRESETS, type OpenAiCompatibleOptions } from './providers/openai-compatible.js';
 export { AnthropicProvider, ANTHROPIC_API_VERSION, ANTHROPIC_MODELS, anthropicRetryable, type AnthropicOptions } from './providers/anthropic.js';
+export { UsageTracker, BudgetExceededError, createLimiter, estimateTokens, priceFor, costOf, ANTHROPIC_PRICES, PRICES_CHECKED_AT, type Budget, type ModelRef, type Price } from './usage.js';
+export { AiResponseCache } from './cache.js';
