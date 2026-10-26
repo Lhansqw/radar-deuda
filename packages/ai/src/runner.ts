@@ -73,7 +73,7 @@ export async function askJson<T>(deps: RunnerDeps, o: AskOptions<T>): Promise<{ 
     if (result.finishReason === 'length') {
       // Pedir una "corrección" de una respuesta cortada no sirve: el modelo necesita más margen.
       // Se repite la misma consulta con el doble de tokens de salida.
-      lastError = truncationMessage(result.usage, maxOutputTokens);
+      lastError = truncationMessage(result.usage);
       maxOutputTokens *= 2;
       continue;
     }
@@ -93,11 +93,16 @@ export async function askJson<T>(deps: RunnerDeps, o: AskOptions<T>): Promise<{ 
   throw new ValidationError(`Respuesta no válida tras un reintento: ${lastError}`);
 }
 
-/** Explica un corte por longitud; si casi todo fue razonamiento interno, lo dice. */
-function truncationMessage(usage: { outputTokens: number; reasoningTokens?: number } | null, limit: number): string {
-  const reasoning = usage?.reasoningTokens ?? 0;
-  if (usage && reasoning > 0 && reasoning >= usage.outputTokens / 2) {
-    return `La respuesta se cortó por el límite de longitud (${limit} tokens): el modelo dedicó ${reasoning} a razonar. Usa un modelo sin razonamiento o reduce su esfuerzo de razonamiento.`;
+/**
+ * Explica un corte por longitud con lo que informa el proveedor (el límite real
+ * puede ser mayor que el pedido si el proveedor añade margen para razonar). Si
+ * casi todo fue razonamiento interno, lo dice.
+ */
+function truncationMessage(usage: { outputTokens: number; reasoningTokens?: number } | null): string {
+  if (!usage) return 'La respuesta se cortó por el límite de longitud.';
+  const reasoning = usage.reasoningTokens ?? 0;
+  if (reasoning > 0 && reasoning >= usage.outputTokens / 2) {
+    return `La respuesta se cortó por el límite de longitud: de ${usage.outputTokens} tokens de salida, el modelo dedicó ${reasoning} a razonar. Usa un modelo sin razonamiento o reduce su esfuerzo de razonamiento.`;
   }
-  return `La respuesta se cortó por el límite de longitud (${limit} tokens).`;
+  return `La respuesta se cortó por el límite de longitud tras ${usage.outputTokens} tokens de salida.`;
 }
