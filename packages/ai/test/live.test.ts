@@ -8,9 +8,10 @@ import { OpenRouterProvider } from '../src/providers/openrouter.js';
 import { runAi } from '../src/tasks.js';
 
 /**
- * Pruebas en vivo contra modelos reales. No se ejecutan por defecto:
+ * Pruebas en vivo contra modelos reales. Solo se ejecutan con npm run test:live
+ * (npm test y npm run check anulan RADAR_LIVE_LLM):
  *   $env:RADAR_LIVE_LLM = "lmstudio"   (o "ollama")
- *   npx vitest run packages/ai/test/live.test.ts
+ *   npm run test:live -- packages/ai/test/live.test.ts
  * OpenRouter (envía solo metadatos; coste de fracciones de céntimo o gratis):
  *   $env:RADAR_LIVE_LLM = "openrouter"; $env:RADAR_LIVE_MODEL = "proveedor/modelo"
  *   (con RADAR_OPENROUTER_API_KEY definida). Opcionales:
