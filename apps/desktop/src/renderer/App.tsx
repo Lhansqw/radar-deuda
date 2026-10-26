@@ -7,13 +7,14 @@ import { ProjectHeader } from './components/ProjectHeader.js';
 import { Sidebar, type View } from './components/Sidebar.js';
 import { useProjectData, useRadar } from './state.js';
 import { EMPTY_FILTER, type FindingFilter } from './lib/findings.js';
+import { Files } from './views/Files.js';
 import { Findings } from './views/Findings.js';
 import { NotAnalyzed } from './views/NotAnalyzed.js';
 import { Panel } from './views/Panel.js';
 import { Welcome } from './views/Welcome.js';
 
 /** Vistas del proyecto que existen en esta versión de la interfaz. */
-const PROJECT_VIEWS = ['panel', 'hallazgos'] as const;
+const PROJECT_VIEWS = ['panel', 'hallazgos', 'archivos'] as const;
 
 export function App() {
   const { projects, jobs, revisions, reloadProjects } = useRadar();
@@ -96,7 +97,17 @@ export function App() {
             {job && !dismissed.has(job.jobId) ? <JobStatus job={job} onDismiss={() => setDismissed((d) => new Set(d).add(job.jobId))} /> : null}
             <div className="workspace-body" data-view={view}>
               {data.report && data.analysisId !== null ? (
-                view === 'hallazgos' ? (
+                view === 'archivos' ? (
+                  <Files
+                    key={data.analysisId}
+                    report={data.report}
+                    onOpenPath={(path) => {
+                      setFilters((all) => ({ ...all, [project.id]: { ...(all[project.id] ?? EMPTY_FILTER), path } }));
+                      setSelectedFinding((all) => ({ ...all, [project.id]: null }));
+                      setView('hallazgos');
+                    }}
+                  />
+                ) : view === 'hallazgos' ? (
                   <Findings
                     report={data.report}
                     analysisId={data.analysisId}
@@ -114,6 +125,7 @@ export function App() {
                       setSelectedFinding((all) => ({ ...all, [project.id]: id }));
                       setView('hallazgos');
                     }}
+                    onOpenFiles={() => setView('archivos')}
                   />
                 )
               ) : data.loading ? null : (
