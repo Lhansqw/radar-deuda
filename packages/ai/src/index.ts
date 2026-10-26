@@ -14,4 +14,5 @@ export { runAi, selectForAi, projectSummary, type AiRunOptions, type TriageOptio
 export { askJson, RefusalError, type AskOptions, type RunnerDeps } from './runner.js';
 export { EXPLAIN_PROMPT_VERSION, PLAN_PROMPT_VERSION } from './prompts.js';
 export { formatAiSection } from './format.js';
+export { applyEdits, buildHunks, diffOps, EditError, formatPatch, joinLines, splitLines, type FilePatch, type LineEdit, type TextLines } from './diff.js';
 export { OpenRouterProvider, fetchOpenRouterModels, OPENROUTER_BASE_URL, planReasoning, REASONING_PREFERENCES, type OpenRouterOptions, type OpenRouterModel, type OpenRouterKeyStatus, type ReasoningPreference, type ReasoningPlan } from './providers/openrouter.js';
