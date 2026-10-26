@@ -245,6 +245,15 @@ describe('runAi', () => {
     expect(ai.errors[0]?.message).toMatch(/límite de longitud: de 2400 tokens de salida, el modelo dedicó 2390 a razonar/);
   });
 
+  it('explica exactamente los hallazgos pedidos, en su orden, e ignora los que no existen', async () => {
+    const { report, readText } = await demo();
+    const [a, b] = report.findings;
+    const provider = fakeProvider(reply);
+    const ai = await runAi(report, { provider, model: 'm', privacy: 'local', readText, cacheDir: null, plan: false, findingIds: [b?.id ?? '', 'no-existe', a?.id ?? ''] });
+    expect(ai.explanations.map((e) => e.findingId)).toEqual([b?.id, a?.id]);
+    expect(ai.plan).toBeUndefined();
+  });
+
   it('respeta el presupuesto y lo declara', async () => {
     const { report, readText } = await demo();
     const provider = fakeProvider(reply);
