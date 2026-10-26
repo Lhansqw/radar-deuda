@@ -86,6 +86,14 @@ export const VALIDATORS: Validators = {
     return [id(a[0], 'Análisis no válido.'), relPath(a[1]), start, end];
   },
   'files:reveal': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), relPath(a[1])]),
+  'ai:explain': (a) => {
+    count(a, 2);
+    const findingId = text(a[1], 'Hallazgo no válido.', 128);
+    if (!/^[\w:.-]+$/.test(findingId)) throw new IpcValidationError('Hallazgo no válido.');
+    return [id(a[0], 'Análisis no válido.'), findingId];
+  },
+  'ai:models': (a) => (count(a, 0), []),
+  'ai:checkKey': (a) => (count(a, 0), []),
 };
 
 function line(v: unknown): number {

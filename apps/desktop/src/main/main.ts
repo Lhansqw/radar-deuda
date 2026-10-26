@@ -2,6 +2,7 @@ import path from 'node:path';
 import { app, BrowserWindow, dialog, nativeTheme, safeStorage, shell } from 'electron';
 import { JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
+import { AiService } from './ai-service.js';
 import { CredentialStore } from './credentials.js';
 import { createHandlers, loadSettings } from './handlers.js';
 import { registerIpc } from './ipc.js';
@@ -96,6 +97,7 @@ function start(): void {
       store,
       credentials,
       jobs,
+      ai: new AiService({ store, credentials, settings: () => loadSettings(store) }),
       info: () => ({ versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node }, dataDir }),
       chooseFolder: async () => {
         const options = { title: 'Elige la carpeta del proyecto', properties: ['openDirectory' as const] };

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { compareReports, type AnalysisReport } from '@radar/engine';
 import type { AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
+import type { AiService } from './ai-service.js';
 import type { CredentialStore } from './credentials.js';
 import type { JobManager } from './jobs.js';
 import { readSnippet, resolveReportFile } from './snippets.js';
@@ -13,6 +14,7 @@ export interface HandlerDeps {
   store: Store;
   credentials: CredentialStore;
   jobs: Pick<JobManager, 'start' | 'cancel' | 'list'>;
+  ai: Pick<AiService, 'explain' | 'openRouterModels' | 'checkOpenRouterKey'>;
   info: () => AppInfo;
   /** Selector de carpetas del sistema. */
   chooseFolder: () => Promise<string | null>;
@@ -99,5 +101,9 @@ export function createHandlers(d: HandlerDeps): Handlers {
       d.reveal(await resolveReportFile(report(d, analysisId), file));
       return null;
     },
+
+    'ai:explain': (analysisId, findingId) => d.ai.explain(analysisId, findingId),
+    'ai:models': () => d.ai.openRouterModels(),
+    'ai:checkKey': () => d.ai.checkOpenRouterKey(),
   };
 }

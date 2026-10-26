@@ -48,3 +48,23 @@ export interface CodeSnippet {
   /** El archivo cambió después del análisis: las líneas pueden no coincidir. */
   changedSinceAnalysis: boolean;
 }
+
+/** Modelo del catálogo de OpenRouter, para elegirlo en la configuración. */
+export interface CatalogModel {
+  id: string;
+  name: string;
+  free: boolean;
+  /** USD por millón de tokens; null si no se publica. */
+  inputPerMTok: number | null;
+  outputPerMTok: number | null;
+  contextLength: number | null;
+  structuredOutputs: boolean;
+  reasoning: 'no' | 'desactivable' | 'obligatorio' | 'no ajustable';
+}
+
+/** Estado de la clave de OpenRouter según el propio servicio. */
+export interface OpenRouterKeyCheck {
+  limitRemaining: number | null;
+  usage: number | null;
+  freeDaily: { used: number; limit: number; remaining: number } | null;
+}

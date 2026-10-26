@@ -16,6 +16,7 @@ export interface RadarApi {
   settings: { get: Fn<'settings:get'>; set: Fn<'settings:set'> };
   secrets: { status: Fn<'secrets:status'>; set: Fn<'secrets:set'>; delete: Fn<'secrets:delete'> };
   files: { snippet: Fn<'files:snippet'>; reveal: Fn<'files:reveal'> };
+  ai: { explain: Fn<'ai:explain'>; models: Fn<'ai:models'>; checkKey: Fn<'ai:checkKey'> };
   jobs: {
     start: Fn<'jobs:start'>;
     cancel: Fn<'jobs:cancel'>;

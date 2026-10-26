@@ -6,7 +6,7 @@
  */
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { JobState } from './jobs.js';
-import type { AnalysisSummary, CodeSnippet, Project } from './model.js';
+import type { AnalysisSummary, CatalogModel, CodeSnippet, OpenRouterKeyCheck, Project } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
 
@@ -42,6 +42,12 @@ export interface IpcContract {
   'files:snippet': { args: [analysisId: number, file: string, startLine: number, endLine: number]; result: CodeSnippet };
   /** Muestra el archivo en el explorador de archivos del sistema (sin abrirlo ni ejecutarlo). */
   'files:reveal': { args: [analysisId: number, file: string]; result: null };
+  /** Explica un hallazgo con la IA configurada; devuelve el informe con la explicación añadida. */
+  'ai:explain': { args: [analysisId: number, findingId: string]; result: AnalysisReport };
+  /** Catálogo de modelos de OpenRouter. */
+  'ai:models': { args: []; result: CatalogModel[] };
+  /** Comprueba la clave de OpenRouter guardada (validez, crédito y cuota gratuita). */
+  'ai:checkKey': { args: []; result: OpenRouterKeyCheck };
 }
 
 /** Canal de avisos del proceso principal a la interfaz (estado de los análisis). */
@@ -71,6 +77,9 @@ export const CHANNELS = [
   'jobs:list',
   'files:snippet',
   'files:reveal',
+  'ai:explain',
+  'ai:models',
+  'ai:checkKey',
 ] as const satisfies readonly Channel[];
 
 /**
