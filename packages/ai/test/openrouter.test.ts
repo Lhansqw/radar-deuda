@@ -101,4 +101,35 @@ describe('OpenRouterProvider', () => {
     }
     expect(fetch.calls).toHaveLength(0);
   });
+
+  describe('comprobación previa de la clave', () => {
+    const models = { data: [{ id: 'pago/modelo', pricing: { prompt: '0.000001', completion: '0.000002' } }, { id: 'gratis/modelo', pricing: { prompt: '0', completion: '0' } }] };
+    const keyInfo = (data: object) => json({ data: { label: 'x', limit: null, limit_remaining: null, is_free_tier: true, free_model_daily_requests: { used: 0, limit: 50, remaining: 50 }, ...data } });
+    const provider = (key: Response | (() => Response)) =>
+      new OpenRouterProvider({ apiKey: KEY, retries: 0, sleep: noSleep, fetch: fakeFetch((url) => (url.endsWith('/models') ? json(models) : typeof key === 'function' ? key() : key.clone())) });
+
+    it('una clave revocada da un único error claro', async () => {
+      await expect(provider(json({ error: { code: 401, message: 'User not found.' } }, 401)).preflight({ models: ['pago/modelo'], requests: 9 })).rejects.toMatchObject({
+        kind: 'auth',
+        message: expect.stringMatching(/no es válida o fue revocada.*settings\/keys/) as unknown,
+      });
+    });
+
+    it('detecta el límite de crédito agotado de la clave', async () => {
+      await expect(provider(keyInfo({ limit: 1, limit_remaining: 0 })).preflight({ models: ['pago/modelo'], requests: 1 })).rejects.toMatchObject({ kind: 'quota' });
+    });
+
+    it('con modelos gratuitos, avisa si la cuota diaria no alcanza y para si está agotada', async () => {
+      const low = keyInfo({ free_model_daily_requests: { used: 47, limit: 50, remaining: 3 } });
+      expect(await provider(low).preflight({ models: ['otro/modelo:free'], requests: 9 })).toEqual([expect.stringMatching(/Quedan 3 peticiones gratuitas hoy.*prevé 9/)]);
+      expect(await provider(low).preflight({ models: ['gratis/modelo'], requests: 9 })).toHaveLength(1); // precio 0 sin sufijo :free
+      expect(await provider(low).preflight({ models: ['pago/modelo'], requests: 9 })).toEqual([]); // la cuota gratuita no afecta a modelos de pago
+      const none = keyInfo({ free_model_daily_requests: { used: 50, limit: 50, remaining: 0 } });
+      await expect(provider(none).preflight({ models: ['otro/modelo:free'], requests: 1 })).rejects.toMatchObject({ kind: 'rate-limit', message: expect.stringMatching(/\(50\).*00:00 UTC/) as unknown });
+    });
+
+    it('si el servicio no responde, no bloquea el análisis', async () => {
+      expect(await provider(() => json({ error: 'caído' }, 503)).preflight({ models: ['pago/modelo'], requests: 3 })).toEqual([]);
+    });
+  });
 });

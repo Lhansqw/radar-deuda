@@ -102,6 +102,17 @@ export async function runAi(report: AnalysisReport, o: AiRunOptions): Promise<Ai
   }
   const summary = await projectSummary(report, o.readText);
   const selected = selectForAi(report, o.limit !== undefined ? { limit: o.limit } : {});
+  // Clave, saldo y cuota antes de empezar: un problema general da un solo error, no uno por hallazgo.
+  let notes: string[] = [];
+  if (o.provider.preflight) {
+    try {
+      notes = await o.provider.preflight({ models: [...new Set([o.model, o.planModel ?? o.model])], requests: selected.length + (o.plan === false ? 0 : 1) }, o.signal);
+    } catch (err) {
+      if (o.signal?.aborted) throw err;
+      // El análisis del motor sigue siendo válido: se informa del problema una sola vez.
+      return { privacy: o.privacy, explanations: [], usage: tracker.summary(), errors: [{ message: err instanceof Error ? err.message : String(err) }] };
+    }
+  }
 
   let budgetHit = false;
   let done = 0;
@@ -162,7 +173,7 @@ export async function runAi(report: AnalysisReport, o: AiRunOptions): Promise<Ai
 
   const order = new Map(selected.map((f, i) => [f.id, i]));
   explanations.sort((a, b) => (order.get(a.findingId) ?? 0) - (order.get(b.findingId) ?? 0));
-  return { privacy: o.privacy, explanations, ...(plan ? { plan } : {}), usage: tracker.summary(), errors };
+  return { privacy: o.privacy, explanations, ...(plan ? { plan } : {}), usage: tracker.summary(), errors, ...(notes.length > 0 ? { notes } : {}) };
 }
 
 /** El plan solo usa metadatos (nunca código), así que es válido con cualquier privacidad. */

@@ -1,5 +1,5 @@
 import { HttpError, requestJson } from '@radar/sources';
-import { checkApiKey, KEY_RULES, ProviderError, type ModelPrice } from '../provider.js';
+import { checkApiKey, KEY_RULES, ProviderError, type ModelPrice, type PreflightPlan } from '../provider.js';
 import { OpenAiCompatibleProvider, type OpenAiCompatibleOptions } from './openai-compatible.js';
 
 /**
@@ -25,6 +25,15 @@ export interface OpenRouterOptions extends Omit<OpenAiCompatibleOptions, 'id' | 
 
 interface ModelsResponse {
   data?: Array<{ id?: string; pricing?: { prompt?: string; completion?: string } }>;
+}
+
+/** Respuesta de GET /api/v1/key (solo los campos que se usan). */
+interface KeyResponse {
+  data?: {
+    limit_remaining?: number | null;
+    is_free_tier?: boolean;
+    free_model_daily_requests?: { used?: number; limit?: number; remaining?: number } | null;
+  };
 }
 
 /** Ids de OpenRouter: "proveedor/modelo", opcionalmente con variante (":free"). */
@@ -72,6 +81,52 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
       }
     }
     return this.prices.get(model) ?? null;
+  }
+
+  /** Un modelo es gratuito si es una variante ":free" o su precio publicado es cero. */
+  async isFree(model: string, signal?: AbortSignal): Promise<boolean> {
+    if (model.endsWith(':free')) return true;
+    const p = await this.price(model, signal).catch(() => null);
+    return p !== null && p.inputPerMTok === 0 && p.outputPerMTok === 0;
+  }
+
+  /**
+   * Consulta GET /api/v1/key antes del análisis: una clave revocada se detecta
+   * con una sola petición (y un solo mensaje), y se avisa si el saldo o la cuota
+   * diaria de modelos gratuitos no alcanzan para lo previsto.
+   * Referencia: /docs/api/api-reference/api-keys/get-current-api-key, /docs/api_reference/limits.
+   */
+  async preflight(plan: PreflightPlan, signal?: AbortSignal): Promise<string[]> {
+    let data: KeyResponse['data'];
+    try {
+      ({ data: { data } } = await requestJson<KeyResponse>(`${this.baseUrl}/key`, { headers: this.headers() }, { ...this.http, retries: 1, timeoutMs: 15_000, ...(signal ? { signal } : {}) }));
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 401) {
+        throw new ProviderError('OpenRouter rechazó la clave: no es válida o fue revocada. Crea una nueva en https://openrouter.ai/settings/keys.', 'auth', this.id, { cause: err });
+      }
+      if (signal?.aborted) throw err;
+      return []; // Comprobación opcional: si no responde, las peticiones informarán del problema.
+    }
+    const notes: string[] = [];
+    if (typeof data?.limit_remaining === 'number' && data.limit_remaining <= 0) {
+      throw new ProviderError('La clave de OpenRouter agotó su límite de crédito. Amplíalo en https://openrouter.ai/settings/keys o usa otra clave.', 'quota', this.id);
+    }
+    const free = await Promise.all(plan.models.map((m) => this.isFree(m, signal)));
+    const daily = data?.free_model_daily_requests;
+    if (free.some(Boolean) && typeof daily?.remaining === 'number') {
+      if (daily.remaining <= 0) {
+        const total = typeof daily.limit === 'number' ? ` (${daily.limit})` : '';
+        throw new ProviderError(
+          `Agotaste las peticiones diarias a modelos gratuitos de OpenRouter${total}. Se renuevan cada día a las 00:00 UTC; con 10 USD o más de crédito comprado el límite sube.`,
+          'rate-limit',
+          this.id,
+        );
+      }
+      if (daily.remaining < plan.requests) {
+        notes.push(`Quedan ${daily.remaining} peticiones gratuitas hoy y este análisis prevé ${plan.requests} (más los reintentos): puede quedar incompleto. Explica menos hallazgos (--ai-limit en la CLI) o espera a mañana.`);
+      }
+    }
+    return notes;
   }
 
   protected override explain(err: unknown): ProviderError {
