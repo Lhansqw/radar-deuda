@@ -29,6 +29,7 @@ const api: RadarApi = {
   analyses: {
     list: (projectId) => invoke('analyses:list', projectId),
     report: (analysisId) => invoke('analyses:report', analysisId),
+    compare: (beforeId, afterId) => invoke('analyses:compare', beforeId, afterId),
   },
   settings: {
     get: () => invoke('settings:get'),

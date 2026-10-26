@@ -50,6 +50,13 @@ export const VALIDATORS: Validators = {
   'projects:remove': (a) => (count(a, 1), [id(a[0], 'Proyecto no válido.')]),
   'analyses:list': (a) => (count(a, 1), [id(a[0], 'Proyecto no válido.')]),
   'analyses:report': (a) => (count(a, 1), [id(a[0], 'Análisis no válido.')]),
+  'analyses:compare': (a) => {
+    count(a, 2);
+    const before = id(a[0], 'Análisis no válido.');
+    const after = id(a[1], 'Análisis no válido.');
+    if (before === after) throw new IpcValidationError('Elige dos análisis distintos.');
+    return [before, after];
+  },
   'settings:get': (a) => (count(a, 0), []),
   'settings:set': (a) => {
     count(a, 1);

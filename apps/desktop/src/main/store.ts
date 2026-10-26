@@ -212,6 +212,11 @@ export class Store {
     });
   }
 
+  getAnalysis(analysisId: number): AnalysisSummary | null {
+    const r = this.db.prepare(`SELECT ${SUMMARY_COLUMNS} FROM analyses WHERE id = ?`).get(analysisId) as Row | undefined;
+    return r ? toSummary(r) : null;
+  }
+
   /** Del más reciente al más antiguo. */
   listAnalyses(projectId: number, limit = HISTORY_LIMIT): AnalysisSummary[] {
     const rows = this.db.prepare(`SELECT ${SUMMARY_COLUMNS} FROM analyses WHERE project_id = ? ORDER BY finished_at DESC, id DESC LIMIT ?`).all(projectId, limit) as Row[];

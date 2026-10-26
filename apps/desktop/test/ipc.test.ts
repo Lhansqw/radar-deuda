@@ -103,6 +103,31 @@ describe('contrato IPC', () => {
     expect(await call('secrets:set', 'openrouter', 'abcd')).toMatchObject({ ok: false, error: expect.stringMatching(/tiene 4 caracteres/) as unknown });
   });
 
+  it('compara dos análisis del mismo proyecto y nunca de proyectos distintos', async () => {
+    const { call, store } = setup();
+    const base = {
+      schemaVersion: 1,
+      engineVersion: '0.1.0',
+      root: '/r',
+      config: {},
+      summary: { bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 }, byCategory: {} },
+      coverage: [],
+      errors: [],
+      stats: { durationMs: 1, filesDiscovered: 1, filesAnalyzed: 1, cacheHits: 0, skipped: [], cpuUserMs: 1, cpuSystemMs: 1, peakRssMb: 1 },
+    };
+    const f = (id: string) => ({ id, severity: 'high', title: id, locations: [] });
+    const r = (score: number, ids: string[]) => ({ ...base, generatedAt: new Date().toISOString(), score: { score, rating: 'C', debtRatio: 0.1, remediationMinutes: score, developmentMinutes: 1, codeLines: 1 }, findings: ids.map(f) }) as never;
+    const p1 = store.addProject({ name: 'a', kind: 'local', location: '/a' });
+    const p2 = store.addProject({ name: 'b', kind: 'local', location: '/b' });
+    const a1 = store.saveAnalysis(p1.id, r(60, ['x', 'y']), { startedAt: '', durationMs: 1 });
+    const a2 = store.saveAnalysis(p1.id, r(70, ['y', 'z']), { startedAt: '', durationMs: 1 });
+    const b1 = store.saveAnalysis(p2.id, r(50, []), { startedAt: '', durationMs: 1 });
+    const c = await call('analyses:compare', a1.id, a2.id);
+    expect(c.ok && c.value).toMatchObject({ scoreDelta: 10, persisting: 1, added: [{ id: 'z' }], resolved: [{ id: 'x' }] });
+    expect(await call('analyses:compare', a1.id, b1.id)).toEqual({ ok: false, error: 'Solo se pueden comparar análisis del mismo proyecto.' });
+    expect(await call('analyses:compare', a1.id, a1.id)).toEqual({ ok: false, error: 'Elige dos análisis distintos.' });
+  });
+
   it('un análisis inexistente da un mensaje claro', async () => {
     const { call } = setup();
     expect(await call('analyses:report', 7)).toEqual({ ok: false, error: 'Ese análisis ya no existe.' });
