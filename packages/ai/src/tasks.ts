@@ -78,6 +78,8 @@ export interface AiRunOptions {
   concurrency?: number;
   /** Generar el plan de reducción (por defecto sí). */
   plan?: boolean;
+  /** Explicar exactamente estos hallazgos (en este orden) en lugar de seleccionarlos. */
+  findingIds?: string[];
   contextLimits?: Partial<ContextLimits>;
   signal?: AbortSignal;
   onProgress?: (done: number, total: number) => void;
@@ -130,7 +132,10 @@ export async function runAi(report: AnalysisReport, o: AiRunOptions): Promise<Ai
     }
   }
   const summary = await projectSummary(report, o.readText);
-  const selected = selectForAi(report, o.limit !== undefined ? { limit: o.limit } : {});
+  // Hallazgos concretos (p. ej. "explicar este" desde la aplicación) o la selección habitual.
+  const selected = o.findingIds
+    ? o.findingIds.map((id) => report.findings.find((f) => f.id === id)).filter((f): f is Finding => f !== undefined)
+    : selectForAi(report, o.limit !== undefined ? { limit: o.limit } : {});
   // Clave, saldo y cuota antes de empezar: un problema general da un solo error, no uno por hallazgo.
   let notes: string[] = [];
   if (o.provider.preflight) {

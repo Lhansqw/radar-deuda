@@ -35,6 +35,8 @@ export interface AiOptions {
   allowDataCollection?: boolean;
   reasoning?: ReasoningPreference;
   fallbackModels?: string[];
+  /** Explicar exactamente estos hallazgos (sin plan) en lugar de seleccionarlos. */
+  findingIds?: string[];
 }
 
 /** Claves de API. Se pasan explícitamente: este paquete no lee variables de entorno ni archivos. */
@@ -180,7 +182,8 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
     cacheDir: cacheBase ? path.join(cacheBase, 'ai') : null,
     budget,
     limit: o.limit,
-    plan: o.plan,
+    plan: o.findingIds ? false : o.plan,
+    ...(o.findingIds ? { findingIds: o.findingIds } : {}),
     signal,
     onProgress: (done, total) => hooks.progress?.({ phase: 'ai', done, total }),
   });

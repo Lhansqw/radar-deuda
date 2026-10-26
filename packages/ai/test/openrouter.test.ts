@@ -257,6 +257,13 @@ describe('OpenRouterProvider', () => {
       await expect(provider(none).preflight({ models: ['otro/modelo:free'], requests: 1 })).rejects.toMatchObject({ kind: 'rate-limit', message: expect.stringMatching(/\(50\).*00:00 UTC/) as unknown });
     });
 
+    it('informa del estado de la clave para mostrarlo al configurarla', async () => {
+      const status = await provider(keyInfo({ limit: 5, limit_remaining: 4.5, usage: 0.5, free_model_daily_requests: { used: 7, limit: 50, remaining: 43 } })).keyStatus();
+      expect(status).toEqual({ limitRemaining: 4.5, usage: 0.5, freeDaily: { used: 7, limit: 50, remaining: 43 } });
+      await expect(provider(json({ error: { code: 401 } }, 401)).keyStatus()).rejects.toMatchObject({ kind: 'auth' });
+      await expect(provider(() => json({}, 503)).keyStatus()).rejects.toMatchObject({ kind: 'unavailable' });
+    });
+
     it('si el servicio no responde, no bloquea el análisis', async () => {
       expect(await provider(() => json({ error: 'caído' }, 503)).preflight({ models: ['pago/modelo'], requests: 3 })).toEqual([]);
     });

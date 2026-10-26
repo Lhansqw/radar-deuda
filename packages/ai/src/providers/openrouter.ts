@@ -155,10 +155,23 @@ function toModel(m: NonNullable<ModelsResponse['data']>[number]): OpenRouterMode
 /** Respuesta de GET /api/v1/key (solo los campos que se usan). */
 interface KeyResponse {
   data?: {
+    label?: string;
+    limit?: number | null;
     limit_remaining?: number | null;
+    usage?: number;
     is_free_tier?: boolean;
     free_model_daily_requests?: { used?: number; limit?: number; remaining?: number } | null;
   };
+}
+
+/** Estado de una clave de OpenRouter, para mostrarlo al configurarla. */
+export interface OpenRouterKeyStatus {
+  /** Crédito que le queda a la clave (USD); null si la clave no tiene límite. */
+  limitRemaining: number | null;
+  /** Gasto acumulado de la clave (USD). */
+  usage: number | null;
+  /** Peticiones a modelos gratuitos usadas y disponibles hoy (UTC). */
+  freeDaily: { used: number; limit: number; remaining: number } | null;
 }
 
 /** Ids de OpenRouter: "proveedor/modelo", opcionalmente con variante (":free"). */
@@ -279,6 +292,29 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
    * diaria de modelos gratuitos no alcanzan para lo previsto.
    * Referencia: /docs/api/api-reference/api-keys/get-current-api-key, /docs/api_reference/limits.
    */
+  /**
+   * Comprueba la clave con OpenRouter y devuelve su estado. Lanza un
+   * ProviderError si la clave no es válida o el servicio no responde.
+   */
+  async keyStatus(signal?: AbortSignal): Promise<OpenRouterKeyStatus> {
+    try {
+      const { data } = await requestJson<KeyResponse>(`${this.baseUrl}/key`, { headers: this.headers() }, { ...this.http, retries: 1, timeoutMs: 15_000, ...(signal ? { signal } : {}) });
+      const d = data.data;
+      const daily = d?.free_model_daily_requests;
+      return {
+        limitRemaining: typeof d?.limit_remaining === 'number' ? d.limit_remaining : null,
+        usage: typeof d?.usage === 'number' ? d.usage : null,
+        freeDaily:
+          daily && typeof daily.used === 'number' && typeof daily.limit === 'number' && typeof daily.remaining === 'number' ? { used: daily.used, limit: daily.limit, remaining: daily.remaining } : null,
+      };
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 401) {
+        throw new ProviderError('OpenRouter rechazó la clave: no es válida o fue revocada. Crea una nueva en https://openrouter.ai/settings/keys.', 'auth', this.id, { cause: err });
+      }
+      throw this.explain(err);
+    }
+  }
+
   async preflight(plan: PreflightPlan, signal?: AbortSignal): Promise<string[]> {
     let data: KeyResponse['data'];
     try {
