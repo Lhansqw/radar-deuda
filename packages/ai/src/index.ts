@@ -10,3 +10,6 @@ export { AiResponseCache } from './cache.js';
 export { buildFindingContext, assertProviderAllowed, sanitizeLine, sendsCode, numbersIn, PrivacyError, DEFAULT_LIMITS, type PrivacyMode, type FindingContext, type SnippetRange, type ContextLimits, type BuildContextOptions } from './context.js';
 export { EXPLANATION_SCHEMA, PLAN_SCHEMA, type RawExplanation, type RawPlan, type RawClaim } from './schemas.js';
 export { validateExplanation, validatePlan, extractJson, ValidationError, type ValidatedExplanation, type ValidatedPlan } from './validate.js';
+export { runAi, selectForAi, projectSummary, type AiRunOptions, type TriageOptions } from './tasks.js';
+export { askJson, RefusalError, type AskOptions, type RunnerDeps } from './runner.js';
+export { EXPLAIN_PROMPT_VERSION, PLAN_PROMPT_VERSION } from './prompts.js';
