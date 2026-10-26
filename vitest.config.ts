@@ -6,7 +6,7 @@ const src = (pkg: string): string => fileURLToPath(new URL(`./packages/${pkg}/sr
 export default defineConfig({
   resolve: {
     // Igual que los "paths" de tsconfig.json: en pruebas se usa el código fuente.
-    alias: { '@radar/engine': src('engine'), '@radar/sources': src('sources') },
+    alias: { '@radar/engine': src('engine'), '@radar/sources': src('sources'), '@radar/ai': src('ai') },
   },
   test: {
     include: ['packages/**/test/**/*.test.ts'],
