@@ -100,8 +100,10 @@ npm run analyze -- C:\ruta\a\otro\repo --ai openrouter --ai-model proveedor/mode
 Todas las opciones: `npm run analyze -- --help`. `Ctrl+C` cancela. Detalles de GitHub, el
 token y qué datos salen del equipo en [docs/FUENTES.md](docs/FUENTES.md).
 
-La caché se guarda en `%LOCALAPPDATA%\radar-deuda\cache`, nunca dentro del repositorio
-analizado. El motor solo **lee** archivos: no ejecuta código, no instala dependencias y no
+La caché se guarda en `%LOCALAPPDATA%\radar-deuda\cache` (y los clones de GitHub en
+`%LOCALAPPDATA%\radar-deuda\repos`), nunca dentro del repositorio analizado. La variable
+`RADAR_CACHE_DIR` cambia esa carpeta (los clones van entonces en su subcarpeta `repos`);
+la CLI y la aplicación de escritorio la comparten. El motor solo **lee** archivos: no ejecuta código, no instala dependencias y no
 hace peticiones de red. Solo `--online` y los repositorios de GitHub usan la red, y nunca
 se envía código.
 

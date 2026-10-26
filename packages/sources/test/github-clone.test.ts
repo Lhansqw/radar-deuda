@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { authEnv, cloneInternal, cloneOrUpdate } from '../src/github/clone.js';
+import { authEnv, cloneInternal, cloneOrUpdate, defaultReposDir } from '../src/github/clone.js';
 import { runGit } from '../src/git/run.js';
 import { createGitRepo, type TestRepo } from './helpers/git-repo.js';
 
@@ -23,6 +23,14 @@ const tmp = async (): Promise<string> => {
 /** Las pruebas usan un "remoto" local: hay que permitir el protocolo file solo aquí. */
 const LOCAL = ['protocol.file.allow=always'];
 const ref = { owner: 'Prueba', repo: 'Demo' };
+
+describe('defaultReposDir', () => {
+  it('con RADAR_CACHE_DIR, los clones van en su subcarpeta repos', () => {
+    const custom = path.resolve('cache-radar');
+    expect(defaultReposDir({ RADAR_CACHE_DIR: custom })).toBe(path.join(custom, 'repos'));
+    expect(defaultReposDir({ LOCALAPPDATA: path.resolve('local'), XDG_CACHE_HOME: path.resolve('xdg') })).toMatch(/radar-deuda[\\/]repos$/);
+  });
+});
 
 describe('authEnv', () => {
   it('pasa el token como cabecera en variables de entorno, nunca como argumento', () => {
