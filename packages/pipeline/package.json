@@ -4,6 +4,7 @@
   "private": true,
   "description": "Orquestación de un análisis completo (origen local o de GitHub, motor, historial de Git, dependencias en línea e IA). La usan la CLI y la aplicación de escritorio.",
   "type": "module",
+  "sideEffects": false,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
