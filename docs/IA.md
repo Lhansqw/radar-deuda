@@ -6,7 +6,8 @@ código, la vista comparativa y el chat llegan en la fase 9 sobre esta misma cap
 
 ## Qué necesitas para usarla
 
-Elige **una** opción. El análisis funciona igual sin IA.
+Elige **una** opción. El análisis funciona igual sin IA. Las claves se leen solo de
+variables de entorno con prefijo `RADAR_` y nunca se escriben en disco.
 
 ### Opción A — Modelo local con LM Studio (recomendada: nada sale del equipo)
 
@@ -58,7 +59,30 @@ Coste orientativo con los precios de octubre de 2026 (8 explicaciones de ~4 000 
 entrada y ~600 de salida, más un plan de ~6 000 / 1 500): **unos 0,03 USD por análisis**. El
 presupuesto por defecto es 0,50 USD (`--ai-budget`) y el informe muestra el coste real.
 
+### Opción C — OpenRouter (muchos modelos con una sola clave)
+
+1. Crea una clave en https://openrouter.ai/settings/keys con un **límite de crédito** bajo.
+2. Elige un modelo en https://openrouter.ai/models. Conviene filtrar por **Structured
+   Outputs**, porque los demás también funcionan, pero con más reintentos. Copia su id, con
+   el formato `proveedor/modelo`.
+3. Define la clave para la sesión, igual que en la opción B, pero en
+   `RADAR_OPENROUTER_API_KEY`.
+4. Analiza:
+   ```powershell
+   npm run analyze -- C:\dev\mi-proyecto --ai openrouter --ai-model proveedor/modelo
+   ```
+
+Privacidad específica de OpenRouter: reenvía cada petición a uno de los proveedores del
+modelo, así que la aplicación pide por defecto **solo proveedores que no guardan ni
+entrenan con los datos**. Con `--ai-zdr` se exige retención cero. `--ai-allow-data-collection`
+relaja la restricción si un modelo no tiene ningún proveedor que la cumpla. El coste que
+aparece en el informe es el que OpenRouter informa en cada respuesta.
+
 OpenAI también está soportado (`--ai openai --ai-model <id>`, clave en `RADAR_OPENAI_API_KEY`).
+
+> **Si una clave se expone** (pegada en un chat, en un archivo o en una captura), revócala
+> en el panel del proveedor y crea otra. Para revisar la actividad, consulta el registro de
+> uso del proveedor.
 
 ### Comprobar que funciona en tu equipo
 
@@ -136,6 +160,7 @@ flowchart LR
 | `provider.ts` | Interfaz `LlmProvider` y errores clasificados |
 | `providers/openai-compatible.ts` | OpenAI, LM Studio, Ollama, llama.cpp |
 | `providers/anthropic.ts` | API de Messages (versión `2026-10-21`, salida estructurada) |
+| `providers/openrouter.ts` | OpenRouter: enrutado sin retención de datos, coste real y precios publicados |
 | `context.ts` | Privacidad, fragmentos, redacción, delimitadores |
 | `schemas.ts` · `validate.ts` | Esquemas de salida y validación contra la evidencia |
 | `usage.ts` · `cache.ts` | Presupuesto, precios, concurrencia, caché |
@@ -152,5 +177,6 @@ Añadir un proveedor = implementar `LlmProvider` (`complete` y, opcionalmente,
 - Los modelos locales pequeños pueden producir JSON incompleto; el reintento correctivo lo
   mitiga, y si falla el hallazgo aparece en "Sin completar".
 - El plan considera como mucho los 40 primeros hallazgos (por severidad).
-- Los precios de la tabla son los publicados el 2026-10-25; si cambian, el coste informado
-  será aproximado (los límites de tokens siguen aplicándose).
+- Los precios de la tabla de Anthropic son los publicados el 2026-10-25; si cambian, el
+  coste será aproximado (los límites de tokens siguen aplicándose). Con OpenRouter se usan
+  el precio publicado en el momento y el coste real de cada respuesta.
