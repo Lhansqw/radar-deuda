@@ -13,3 +13,4 @@ export { validateExplanation, validatePlan, extractJson, ValidationError, type V
 export { runAi, selectForAi, projectSummary, type AiRunOptions, type TriageOptions } from './tasks.js';
 export { askJson, RefusalError, type AskOptions, type RunnerDeps } from './runner.js';
 export { EXPLAIN_PROMPT_VERSION, PLAN_PROMPT_VERSION } from './prompts.js';
+export { formatAiSection } from './format.js';

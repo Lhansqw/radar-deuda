@@ -34,6 +34,8 @@ import {
   tokenFromEnv,
   vulnerabilityAnalyzer,
 } from '@radar/sources';
+import { formatAiSection } from '@radar/ai';
+import { AI_ARGS, AI_HELP, parseAiOptions, runAiFromCli, type AiCliOptions } from './ai-setup.js';
 
 export const HELP = `
 Uso: radar-deuda <carpeta | owner/repo | URL de GitHub> [opciones]
@@ -68,6 +70,8 @@ Salida:
 Códigos de salida: 0 correcto · 1 umbral superado · 2 error · 130 cancelado
 `;
 
+export const FULL_HELP = HELP.trimEnd() + '\n' + AI_HELP;
+
 export interface CliOptions {
   target: string;
   json?: string;
@@ -83,6 +87,7 @@ export interface CliOptions {
   top: number;
   failOn?: Severity;
   failOnNew?: Severity;
+  ai?: AiCliOptions;
 }
 
 type Parsed = { kind: 'run'; options: CliOptions } | { kind: 'help' } | { kind: 'error'; message: string };
@@ -113,6 +118,7 @@ export function parseCli(argv: string[]): Parsed {
         'fail-on-new': { type: 'string' },
         quiet: { type: 'boolean', default: false },
         help: { type: 'boolean', short: 'h', default: false },
+        ...AI_ARGS,
       },
     });
   } catch (err) {
@@ -127,6 +133,8 @@ export function parseCli(argv: string[]): Parsed {
   if (failOnNew instanceof Error) return { kind: 'error', message: failOnNew.message };
   if (failOnNew && !v.baseline) return { kind: 'error', message: '--fail-on-new requiere --baseline.' };
   if (v.since !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(v.since)) return { kind: 'error', message: `Fecha no válida para --since: ${v.since} (usa AAAA-MM-DD).` };
+  const ai = parseAiOptions(v);
+  if (ai instanceof Error) return { kind: 'error', message: ai.message };
   const top = v.top !== undefined ? Number(v.top) : 15;
   const options: CliOptions = {
     target: positionals[0] as string,
@@ -143,6 +151,7 @@ export function parseCli(argv: string[]): Parsed {
     ...(v.concurrency !== undefined ? { concurrency: Number(v.concurrency) } : {}),
     ...(failOn ? { failOn } : {}),
     ...(failOnNew ? { failOnNew } : {}),
+    ...(ai ? { ai } : {}),
   };
   return { kind: 'run', options };
 }
@@ -242,7 +251,14 @@ export async function run(o: CliOptions, io: Io, signal: AbortSignal): Promise<n
       : {}),
   });
   await addGitContext(report, o, io, signal);
+  let aiLabel = '';
+  if (o.ai) {
+    const r = await runAiFromCli(report, o.ai, io, signal, o.noCache ? null : defaultCacheDir());
+    report.ai = r.section;
+    aiLabel = r.label;
+  }
   console.log(formatReport(report, o.top));
+  if (report.ai) console.log(formatAiSection(report.ai, report, aiLabel));
 
   let comparison = null;
   if (o.baseline) {
