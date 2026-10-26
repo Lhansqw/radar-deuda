@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { app, BrowserWindow, dialog, nativeTheme, safeStorage } from 'electron';
+import { app, BrowserWindow, dialog, nativeTheme, safeStorage, shell } from 'electron';
 import { JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { CredentialStore } from './credentials.js';
@@ -103,6 +103,8 @@ function start(): void {
         return r.canceled ? null : (r.filePaths[0] ?? null);
       },
       openExternal,
+      // Solo se muestra en el explorador: abrir el archivo con su programa asociado podría ejecutarlo (.js, .bat…).
+      reveal: (abs) => shell.showItemInFolder(abs),
     }),
     devServerUrl,
   );

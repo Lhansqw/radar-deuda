@@ -27,6 +27,7 @@ function setup(over: Partial<HandlerDeps> = {}) {
     info: () => ({ versions: { app: '0.1.0', electron: '44', chrome: '152', node: '24' }, dataDir: '/datos' }),
     chooseFolder: async () => null,
     openExternal: async () => true,
+    reveal: () => undefined,
     ...over,
   });
   const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, handlers, null);

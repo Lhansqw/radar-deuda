@@ -39,6 +39,10 @@ const api: RadarApi = {
     set: (name, value) => invoke('secrets:set', name, value),
     delete: (name) => invoke('secrets:delete', name),
   },
+  files: {
+    snippet: (analysisId, file, start, end) => invoke('files:snippet', analysisId, file, start, end),
+    reveal: (analysisId, file) => invoke('files:reveal', analysisId, file),
+  },
   jobs: {
     start: (projectId) => invoke('jobs:start', projectId),
     cancel: (jobId) => invoke('jobs:cancel', jobId),

@@ -35,3 +35,16 @@ export interface AnalysisSummary {
   branch: string | null;
   withAi: boolean;
 }
+
+/** Líneas de un archivo del proyecto, para el detalle de un hallazgo. */
+export interface CodeSnippet {
+  file: string;
+  startLine: number;
+  endLine: number;
+  totalLines: number;
+  lines: string[];
+  /** Líneas en las que se ocultó un posible secreto. */
+  redactedLines: number[];
+  /** El archivo cambió después del análisis: las líneas pueden no coincidir. */
+  changedSinceAnalysis: boolean;
+}
