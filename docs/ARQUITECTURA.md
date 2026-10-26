@@ -101,7 +101,7 @@ flowchart LR
 | `packages/ai` | Proveedores de IA intercambiables, contexto, privacidad y validación | `engine`, `sources` (HTTP) |
 | `packages/pipeline` | Análisis completo: origen, motor, contexto de Git, dependencias en línea e IA (añadido en la fase 8) | `engine`, `sources`, `ai` |
 | `packages/cli` | Comando `radar-deuda`: opciones de la terminal e impresión | `pipeline` |
-| `apps/desktop` (fase 8) | Electron + React + SQLite | `pipeline` y los demás |
+| `apps/desktop` (fase 8) | Electron + React + SQLite; detalle en [ESCRITORIO.md](ESCRITORIO.md) | `pipeline` y los demás |
 
 El motor no conoce la interfaz ni la IA. Esto permite usarlo desde la terminal y en CI, y
 probarlo de forma aislada.

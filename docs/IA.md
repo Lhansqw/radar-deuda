@@ -6,8 +6,10 @@ código, la vista comparativa y el chat llegan en la fase 9 sobre esta misma cap
 
 ## Qué necesitas para usarla
 
-Elige **una** opción. El análisis funciona igual sin IA. Las claves se leen solo de
-variables de entorno con prefijo `RADAR_` y nunca se escriben en disco.
+Elige **una** opción. El análisis funciona igual sin IA. En la CLI, las claves se leen
+solo de variables de entorno con prefijo `RADAR_` y nunca se escriben en disco. En la
+aplicación de escritorio todo se elige en Configuración y las claves se guardan cifradas
+con el sistema ([ESCRITORIO.md](ESCRITORIO.md)); lo que sigue usa la CLI.
 
 ### Opción A — Modelo local con LM Studio (recomendada: nada sale del equipo)
 
