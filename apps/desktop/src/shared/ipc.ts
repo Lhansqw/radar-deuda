@@ -4,7 +4,7 @@
  * los argumentos en tiempo de ejecución (main/ipc-validation.ts) porque la
  * interfaz se trata como no confiable.
  */
-import type { AnalysisReport } from '@radar/engine';
+import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { JobState } from './jobs.js';
 import type { AnalysisSummary, CodeSnippet, Project } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
@@ -26,6 +26,8 @@ export interface IpcContract {
   'projects:remove': { args: [projectId: number]; result: null };
   'analyses:list': { args: [projectId: number]; result: AnalysisSummary[] };
   'analyses:report': { args: [analysisId: number]; result: AnalysisReport };
+  /** Deuda nueva, resuelta y con otra severidad entre dos análisis del mismo proyecto. */
+  'analyses:compare': { args: [beforeId: number, afterId: number]; result: ReportComparison };
   'settings:get': { args: []; result: AppSettings };
   'settings:set': { args: [settings: AppSettings]; result: AppSettings };
   'secrets:status': { args: []; result: SecretsStatus };
@@ -58,6 +60,7 @@ export const CHANNELS = [
   'projects:remove',
   'analyses:list',
   'analyses:report',
+  'analyses:compare',
   'settings:get',
   'settings:set',
   'secrets:status',

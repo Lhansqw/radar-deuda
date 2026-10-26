@@ -15,11 +15,12 @@ interface Props {
   analysisId: number;
   onOpenFinding: (id: string) => void;
   onOpenFiles?: () => void;
+  onShowLatest?: () => void;
 }
 
 const HORIZON: Record<'inmediato' | 'corto' | 'medio', string> = { inmediato: 'Ya', corto: 'Pronto', medio: 'Más adelante' };
 
-export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles }: Props) {
+export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest }: Props) {
   const s = report.score;
   const latest = analyses[0]?.id === analysisId;
   const byId = useMemo(() => new Map(report.findings.map((f) => [f.id, f])), [report.findings]);
@@ -30,7 +31,16 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
 
   return (
     <div className="panel">
-      {!latest ? <p className="panel-banner">Estás viendo el análisis del {formatDateTime(report.generatedAt)}, no el más reciente.</p> : null}
+      {!latest ? (
+        <div className="panel-banner">
+          <p>Estás viendo el análisis del {formatDateTime(report.generatedAt)}, no el más reciente.</p>
+          {onShowLatest ? (
+            <button type="button" className="btn btn-small" onClick={onShowLatest}>
+              Ver el más reciente
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <section className="panel-top">
         <div className="panel-radar">

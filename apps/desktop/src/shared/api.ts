@@ -12,7 +12,7 @@ type Fn<C extends Channel> = (...args: ArgsOf<C>) => Promise<ResultOf<C>>;
 export interface RadarApi {
   app: { info: Fn<'app:info'>; openExternal: Fn<'app:openExternal'> };
   projects: { list: Fn<'projects:list'>; addFolder: Fn<'projects:addFolder'>; addGithub: Fn<'projects:addGithub'>; remove: Fn<'projects:remove'> };
-  analyses: { list: Fn<'analyses:list'>; report: Fn<'analyses:report'> };
+  analyses: { list: Fn<'analyses:list'>; report: Fn<'analyses:report'>; compare: Fn<'analyses:compare'> };
   settings: { get: Fn<'settings:get'>; set: Fn<'settings:set'> };
   secrets: { status: Fn<'secrets:status'>; set: Fn<'secrets:set'>; delete: Fn<'secrets:delete'> };
   files: { snippet: Fn<'files:snippet'>; reveal: Fn<'files:reveal'> };

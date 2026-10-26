@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { AnalysisReport } from '@radar/engine';
+import { compareReports, type AnalysisReport } from '@radar/engine';
 import type { AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
 import type { CredentialStore } from './credentials.js';
@@ -64,6 +64,12 @@ export function createHandlers(d: HandlerDeps): Handlers {
 
     'analyses:list': (projectId) => d.store.listAnalyses(projectId),
     'analyses:report': (analysisId) => report(d, analysisId),
+    'analyses:compare': (beforeId, afterId) => {
+      const [a, b] = [d.store.getAnalysis(beforeId), d.store.getAnalysis(afterId)];
+      if (!a || !b) throw new NotFoundError('Ese análisis ya no existe.');
+      if (a.projectId !== b.projectId) throw new NotFoundError('Solo se pueden comparar análisis del mismo proyecto.');
+      return compareReports(report(d, beforeId), report(d, afterId));
+    },
 
     'settings:get': () => loadSettings(d.store),
     'settings:set': (settings) => {
