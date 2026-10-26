@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { app, BrowserWindow, dialog, safeStorage } from 'electron';
+import { app, BrowserWindow, dialog, nativeTheme, safeStorage } from 'electron';
 import { JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { CredentialStore } from './credentials.js';
@@ -51,7 +51,7 @@ function createWindow(): BrowserWindow {
     minHeight: 640,
     show: false,
     title: 'Radar de Deuda Técnica',
-    backgroundColor: '#0f1217',
+    backgroundColor: '#131b26',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(distDir, 'preload.cjs'),
@@ -71,6 +71,8 @@ function createWindow(): BrowserWindow {
 }
 
 function start(): void {
+  // La interfaz es oscura: la barra de título y los controles nativos también.
+  nativeTheme.themeSource = 'dark';
   hardenApp(devServerUrl);
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 

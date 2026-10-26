@@ -1,18 +1,121 @@
-import { useEffect, useState } from 'react';
-import type { AppInfo } from '../shared/ipc.js';
+import { useCallback, useState } from 'react';
 import type { Project } from '../shared/model.js';
+import { AddGithubDialog } from './components/AddGithubDialog.js';
+import { Icon } from './components/Icon.js';
+import { JobStatus } from './components/JobStatus.js';
+import { ProjectHeader } from './components/ProjectHeader.js';
+import { Sidebar, type View } from './components/Sidebar.js';
+import { useProjectData, useRadar } from './state.js';
+import { NotAnalyzed } from './views/NotAnalyzed.js';
+import { Welcome } from './views/Welcome.js';
+
+/** Vistas del proyecto que existen en esta versión de la interfaz. */
+const PROJECT_VIEWS = ['panel'] as const;
 
 export function App() {
-  const [info, setInfo] = useState<AppInfo | null>(null);
-  const [projects, setProjects] = useState<Project[]>([]);
-  useEffect(() => {
-    void window.radar.app.info().then(setInfo);
-    void window.radar.projects.list().then(setProjects);
+  const { projects, jobs, revisions, reloadProjects } = useRadar();
+  const [chosenId, setSelectedId] = useState<number | null>(null);
+  const [view, setView] = useState<View>('panel');
+  const [addingGithub, setAddingGithub] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  // Al abrir, o si el proyecto elegido desaparece, se muestra el primero.
+  const project = projects?.find((p) => p.id === chosenId) ?? projects?.[0] ?? null;
+  const selectedId = project?.id ?? null;
+  const job = project ? jobs[project.id] : undefined;
+  const data = useProjectData(project?.id ?? null, project ? (revisions[project.id] ?? 0) : 0, null);
+
+  const run = useCallback(async (fn: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
   }, []);
+
+  const added = useCallback(
+    async (p: Project | null) => {
+      if (!p) return;
+      await reloadProjects();
+      setSelectedId(p.id);
+      setView('panel');
+    },
+    [reloadProjects],
+  );
+
+  const addFolder = (): void => void run(async () => added(await window.radar.projects.addFolder()));
+  const analyze = (): void => void run(async () => project && window.radar.jobs.start(project.id));
+
+  if (!projects) return <div className="app" />;
+
   return (
-    <main className="splash">
-      <h1>Radar de Deuda Técnica</h1>
-      <p>{info ? `v${info.versions.app} · Electron ${info.versions.electron} · ${projects.length} proyecto(s)` : 'Cargando…'}</p>
-    </main>
+    <div className="app">
+      <Sidebar
+        projects={projects}
+        selectedId={selectedId}
+        view={view}
+        jobs={jobs}
+        views={PROJECT_VIEWS}
+        counts={{}}
+        onSelect={(id) => {
+          setSelectedId(id);
+          if (view === 'ajustes') setView('panel');
+        }}
+        onView={setView}
+        onAddFolder={addFolder}
+        onAddGithub={() => setAddingGithub(true)}
+        settingsAvailable={false}
+      />
+      <main className="workspace">
+        {error ? (
+          <div className="notice" data-tone="error" role="alert">
+            <Icon name="alert" size={16} />
+            <p>{error}</p>
+            <button type="button" className="btn btn-quiet btn-small" onClick={() => setError(null)} aria-label="Cerrar aviso">
+              <Icon name="close" size={14} />
+            </button>
+          </div>
+        ) : null}
+        {project ? (
+          <>
+            <ProjectHeader
+              project={project}
+              job={job}
+              onAnalyze={analyze}
+              onCancel={(jobId) => void run(() => window.radar.jobs.cancel(jobId))}
+              onRemove={() => void run(async () => (await window.radar.projects.remove(project.id), reloadProjects()))}
+            />
+            {job && !dismissed.has(job.jobId) ? <JobStatus job={job} onDismiss={() => setDismissed((d) => new Set(d).add(job.jobId))} /> : null}
+            <div className="workspace-body">
+              {data.report ? (
+                <div className="empty">
+                  <h2>
+                    {data.report.score.score}/100, calificación {data.report.score.rating}
+                  </h2>
+                  <p>{data.report.findings.length} hallazgos en el último análisis.</p>
+                </div>
+              ) : data.loading ? null : (
+                <NotAnalyzed running={job?.status === 'running'} onAnalyze={analyze} />
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="workspace-body">
+            <Welcome onAddFolder={addFolder} onAddGithub={() => setAddingGithub(true)} />
+          </div>
+        )}
+      </main>
+      {addingGithub ? (
+        <AddGithubDialog
+          onClose={() => setAddingGithub(false)}
+          onAdded={(p) => {
+            setAddingGithub(false);
+            void added(p);
+          }}
+        />
+      ) : null}
+    </div>
   );
 }

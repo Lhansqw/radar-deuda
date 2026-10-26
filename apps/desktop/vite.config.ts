@@ -16,6 +16,8 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'chrome140',
     sourcemap: true,
+    // Nada en línea como data: (la CSP no lo permite para fuentes): todo como archivo.
+    assetsInlineLimit: 0,
     // Sin módulos precargados en línea: la CSP de producción no permite scripts en línea.
     modulePreload: { polyfill: false },
   },
