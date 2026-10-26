@@ -58,6 +58,18 @@ export interface LlmProvider {
   listModels?(signal?: AbortSignal): Promise<string[]>;
   /** Precio publicado del modelo, si el proveedor lo ofrece (para aplicar el presupuesto antes de enviar). */
   price?(model: string, signal?: AbortSignal): Promise<ModelPrice | null>;
+  /**
+   * Comprobación previa a un análisis (clave válida, saldo, cuota). Lanza un
+   * ProviderError si el análisis no puede salir bien; devuelve avisos si puede
+   * salir solo en parte. Si el servicio no responde, no bloquea: devuelve [].
+   */
+  preflight?(plan: PreflightPlan, signal?: AbortSignal): Promise<string[]>;
+}
+
+export interface PreflightPlan {
+  models: string[];
+  /** Peticiones previstas sin contar reintentos. */
+  requests: number;
 }
 
 export type ProviderErrorKind = 'auth' | 'rate-limit' | 'overloaded' | 'quota' | 'context-length' | 'unavailable' | 'invalid-request' | 'unknown';

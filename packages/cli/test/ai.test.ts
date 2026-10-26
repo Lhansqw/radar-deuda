@@ -77,6 +77,7 @@ describe('--ai openrouter', () => {
     const chats: Array<Record<string, unknown>> = [];
     vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
       if (url.endsWith('/models')) return Response.json({ data: [{ id: 'qwen/qwen3-coder', pricing: { prompt: '0.0000002', completion: '0.0000008' } }] });
+      if (url.endsWith('/key')) return Response.json({ data: { limit_remaining: null, free_model_daily_requests: { used: 0, limit: 50, remaining: 50 } } });
       const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
       chats.push(body);
       const isPlan = body.messages[0]?.content.includes('planifica') ?? false;
@@ -92,6 +93,7 @@ describe('--ai openrouter', () => {
     expect(chats.every((c) => (c['provider'] as { data_collection: string }).data_collection === 'deny')).toBe(true);
     expect(JSON.stringify(chats)).not.toContain('for (const x of a)');
     expect(report.ai?.usage.costUsd).toBeCloseTo(0.0003 * chats.length, 8);
+    expect(report.ai?.errors).toEqual([]);
     vi.unstubAllEnvs();
   });
 });
@@ -155,6 +157,24 @@ describe('--ai anthropic', () => {
     expect(bodies.map((b) => b['model'])).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5']);
     // haiku: 1000×0,10 + 200×0,50 = 0,0002 USD · sonnet: 1000×2 + 200×10 = 0,004 USD
     expect(report.ai?.usage.costUsd).toBeCloseTo(0.0042, 6);
+    vi.unstubAllEnvs();
+  });
+
+  it('una clave revocada da un solo error y el informe del motor sigue completo', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(url);
+      return url.endsWith('/key') ? Response.json({ error: { code: 401, message: 'User not found.' } }, { status: 401 }) : Response.json({ data: [] });
+    });
+    vi.stubEnv('RADAR_OPENROUTER_API_KEY', ['sk', 'or', 'v1', 'x'.repeat(64)].join('-'));
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const json = path.join(await tmp(), 'r.json');
+    const o: CliOptions = { target: await repo(), noCache: true, online: false, history: false, quiet: true, top: 5, json, ai: { provider: 'openrouter', model: 'a/b', limit: 5, budgetUsd: 0.5, plan: true } };
+    expect(await run(o, io, new AbortController().signal)).toBe(0);
+    const report = JSON.parse(await readFile(json, 'utf8')) as AnalysisReport;
+    expect(report.findings.length).toBeGreaterThan(0);
+    expect(report.ai?.errors).toEqual([{ message: expect.stringMatching(/revocada/) as unknown }]);
+    expect(urls.some((u) => u.endsWith('/chat/completions'))).toBe(false);
     vi.unstubAllEnvs();
   });
 

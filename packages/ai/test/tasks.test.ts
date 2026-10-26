@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { analyzeRepository, type AnalysisReport } from '@radar/engine';
 import { PrivacyError } from '../src/context.js';
+import { ProviderError } from '../src/provider.js';
 import { runAi, selectForAi } from '../src/tasks.js';
 import { fakeProvider, goodExplanation, goodPlan } from './helpers/fake-provider.js';
 import { finding } from './helpers/findings.js';
@@ -125,6 +126,33 @@ describe('runAi', () => {
     expect(bad.explanations).toHaveLength(0);
     expect(bad.errors[0]?.message).toMatch(/tras un reintento/);
     expect(broken.calls).toHaveLength(2);
+  });
+
+  it('un problema general detectado antes de empezar se informa una vez y no se envía nada', async () => {
+    const { report, readText } = await demo();
+    const provider = Object.assign(fakeProvider(reply, 'cloud'), {
+      preflight: async () => {
+        throw new ProviderError('Clave revocada.', 'auth', 'falso');
+      },
+    });
+    const ai = await runAi(report, { provider, model: 'm', privacy: 'metadatos', readText, cacheDir: null });
+    expect(ai.errors).toEqual([{ message: 'Clave revocada.' }]);
+    expect(ai.explanations).toEqual([]);
+    expect(provider.calls).toHaveLength(0);
+  });
+
+  it('los avisos de la comprobación previa llegan al informe', async () => {
+    const { report, readText } = await demo();
+    let plan: { models: string[]; requests: number } | undefined;
+    const provider = Object.assign(fakeProvider(reply, 'cloud'), {
+      preflight: async (p: { models: string[]; requests: number }) => {
+        plan = p;
+        return ['Quedan pocas peticiones.'];
+      },
+    });
+    const ai = await runAi(report, { provider, model: 'm', planModel: 'p', privacy: 'metadatos', readText, cacheDir: null });
+    expect(ai.notes).toEqual(['Quedan pocas peticiones.']);
+    expect(plan).toEqual({ models: ['m', 'p'], requests: selectForAi(report).length + 1 });
   });
 
   it('respeta el presupuesto y lo declara', async () => {

@@ -300,6 +300,8 @@ export interface AiSection {
   usage: AiUsage;
   /** Hallazgos que no se pudieron explicar y por qué. */
   errors: Array<{ findingId?: string; message: string }>;
+  /** Avisos sobre la ejecución (cuota restante, límites del modelo…). */
+  notes?: string[];
 }
 
 export interface VcsInfo {
