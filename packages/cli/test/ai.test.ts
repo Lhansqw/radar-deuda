@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisReport } from '@radar/engine';
-import { parseAiOptions } from '../src/ai-setup.js';
+import { parseAiOptions, type AiCliOptions } from '../src/ai-setup.js';
 import { parseCli, run, type CliOptions } from '../src/app.js';
 
 const dirs: string[] = [];
@@ -69,6 +69,10 @@ describe('opciones de IA', () => {
     expect(parseAiOptions({ ai: 'lmstudio', 'ai-zdr': true })).toBeInstanceOf(Error);
     expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-zdr': true, 'ai-allow-data-collection': true })).toBeInstanceOf(Error);
     expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'qwen/qwen3-coder', 'ai-zdr': true })).toMatchObject({ provider: 'openrouter', model: 'qwen/qwen3-coder', zeroDataRetention: true });
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-reasoning': 'low' })).toMatchObject({ reasoning: 'low' });
+    expect(parseAiOptions({ ai: 'openrouter', 'ai-model': 'a/b', 'ai-reasoning': 'mucho' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ ai: 'lmstudio', 'ai-reasoning': 'low' })).toBeInstanceOf(Error);
+    expect(parseAiOptions({ 'ai-reasoning': 'low' })).toBeInstanceOf(Error);
   });
 });
 
@@ -160,11 +164,40 @@ describe('--ai anthropic', () => {
     vi.unstubAllEnvs();
   });
 
+  it('comprueba que el modelo existe antes de consultar y explica su razonamiento', async () => {
+    const chats: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/models'))
+        return Response.json({
+          data: [
+            { id: 'nvidia/nemotron-3.5-super-vl:free', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['reasoning', 'structured_outputs'], reasoning: { mandatory: false, supported_efforts: ['high', 'low', 'none'] } },
+            { id: 'nvidia/nemotron-3.5-super-vl', pricing: { prompt: '0.0000001', completion: '0.0000004' }, supported_parameters: ['reasoning', 'structured_outputs'], reasoning: { mandatory: false } },
+          ],
+        });
+      if (url.endsWith('/key')) return Response.json({ data: { limit_remaining: null, free_model_daily_requests: { used: 0, limit: 50, remaining: 50 } } });
+      chats.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return Response.json({ choices: [{ message: { content: '{}' }, finish_reason: 'stop' }] });
+    });
+    vi.stubEnv('RADAR_OPENROUTER_API_KEY', ['sk', 'or', 'v1', 'x'.repeat(64)].join('-'));
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const infos: string[] = [];
+    const capture = { info: (m: string) => infos.push(m), warn: (m: string) => infos.push(m) };
+    const base: CliOptions = { target: await repo(), noCache: true, online: false, history: false, quiet: true, top: 5, ai: { provider: 'openrouter', model: 'nvidia/nemotron-3.5-super:free', limit: 1, budgetUsd: 0.5, plan: false } };
+    await expect(run(base, capture, new AbortController().signal)).rejects.toThrow(/no existe en OpenRouter.*¿Quisiste decir nvidia\/nemotron-3\.5-super-vl:free, nvidia\/nemotron-3\.5-super-vl\?/);
+    expect(chats).toHaveLength(0);
+
+    await run({ ...base, ai: { ...(base.ai as AiCliOptions), model: 'nvidia/nemotron-3.5-super-vl:free' } }, capture, new AbortController().signal);
+    expect(infos).toContain('Modelo nvidia/nemotron-3.5-super-vl:free (gratuito) · razona, pero se desactiva su razonamiento.');
+    expect(chats[0]?.['reasoning']).toEqual({ effort: 'none' });
+    vi.unstubAllEnvs();
+  });
+
   it('una clave revocada da un solo error y el informe del motor sigue completo', async () => {
     const urls: string[] = [];
     vi.stubGlobal('fetch', async (url: string) => {
       urls.push(url);
-      return url.endsWith('/key') ? Response.json({ error: { code: 401, message: 'User not found.' } }, { status: 401 }) : Response.json({ data: [] });
+      // Con una clave revocada, tanto el catálogo como la comprobación de la clave responden 401.
+      return Response.json({ error: { code: 401, message: 'User not found.' } }, { status: 401 });
     });
     vi.stubEnv('RADAR_OPENROUTER_API_KEY', ['sk', 'or', 'v1', 'x'.repeat(64)].join('-'));
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
