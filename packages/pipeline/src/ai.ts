@@ -1,17 +1,24 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { safeJoin, type AiSection, type AnalysisReport } from '@radar/engine';
+import { safeJoin, type AiFixProposal, type AiSection, type AnalysisReport, type ReportComparison } from '@radar/engine';
 import {
   ANTHROPIC_MODELS,
   AnthropicProvider,
+  askAboutReport,
   checkApiKey,
+  fixContext,
   KEY_RULES,
   OpenAiCompatibleProvider,
   OpenRouterProvider,
   planReasoning,
   PRESETS,
+  PrivacyError,
+  projectSummary,
+  proposeFix,
   runAi,
   type Budget,
+  type ChatAnswer,
+  type ChatTurn,
   type LlmProvider,
   type PrivacyMode,
   type ReasoningPreference,
@@ -168,10 +175,7 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
     );
   } else hooks.info(`IA local (${provider.label}, modelo ${model}): nada sale del equipo.`);
 
-  const readText = async (rel: string): Promise<string | null> => {
-    const abs = safeJoin(report.root, rel);
-    return abs ? readFile(abs, 'utf8').catch(() => null) : null;
-  };
+  const readText = reportReader(report);
   const budget: Budget = { maxRequests: o.limit * 2 + 4, maxCostUsd: o.budgetUsd };
   const section = await runAi(report, {
     provider,
@@ -188,4 +192,102 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
     onProgress: (done, total) => hooks.progress?.({ phase: 'ai', done, total }),
   });
   return { section, label: `${provider.label} · ${model}${planModel !== model ? ` (plan: ${planModel})` : ''}` };
+}
+
+/** Lee archivos del repositorio analizado sin salir de su carpeta. */
+function reportReader(report: AnalysisReport): (rel: string) => Promise<string | null> {
+  return async (rel) => {
+    const abs = safeJoin(report.root, rel);
+    return abs ? readFile(abs, 'utf8').catch(() => null) : null;
+  };
+}
+
+/** Modelo para las tareas que más razonan (plan y propuestas de código). */
+function capableModel(o: AiOptions, model: string): string {
+  return o.planModel ?? (o.provider === 'anthropic' ? ANTHROPIC_MODELS.balanced : model);
+}
+
+/**
+ * Privacidad con la que se enviaría el código para proponer una corrección:
+ * con un proveedor local, `local`; en la nube, `fragmentos` si la
+ * configuración ya lo permite o si el usuario lo confirma para esta petición.
+ * null: hace falta esa confirmación.
+ */
+export function fixPrivacy(o: AiOptions, provider: LlmProvider, consent: boolean): 'local' | 'fragmentos' | null {
+  if (provider.locality === 'local') return 'local';
+  if (o.privacy === 'local') throw new PrivacyError(`La privacidad «solo en este equipo» no permite usar ${provider.label}, que se ejecuta fuera del equipo.`);
+  return o.privacy === 'fragmentos' || consent ? 'fragmentos' : null;
+}
+
+export interface FixPreview {
+  /** Texto exacto que se enviaría al modelo (metadatos y fragmentos con los secretos ocultos). */
+  text: string;
+  snippets: Array<{ file: string; startLine: number; endLine: number }>;
+  provider: string;
+  cloud: boolean;
+  /** Hay que pedir permiso al usuario antes de enviarlo. */
+  needsConsent: boolean;
+  /** OpenRouter puede enviarlo a proveedores que guardan o entrenan con los datos. */
+  mayRetain: boolean;
+}
+
+/** Lo que se enviaría para proponer una corrección, sin enviar nada. */
+export async function previewFix(report: AnalysisReport, findingId: string, o: AiOptions, keys: ApiKeys): Promise<FixPreview> {
+  const provider = createProvider(o, keys);
+  const ctx = await fixContext(report, findingId, reportReader(report), provider.locality === 'local' ? 'local' : 'fragmentos');
+  return {
+    text: ctx.text,
+    snippets: ctx.snippets,
+    provider: provider.label,
+    cloud: provider.locality === 'cloud',
+    needsConsent: fixPrivacy(o, provider, false) === null,
+    mayRetain: o.provider === 'openrouter' && o.allowDataCollection === true,
+  };
+}
+
+export interface FixStepOptions {
+  /** El usuario confirmó enviar el fragmento para esta petición. */
+  consent: boolean;
+  cacheBase: string | null;
+  signal: AbortSignal;
+}
+
+/** Propuesta de corrección de un hallazgo con la IA configurada. */
+export async function proposeFixStep(report: AnalysisReport, findingId: string, o: AiOptions, keys: ApiKeys, s: FixStepOptions): Promise<AiFixProposal> {
+  const provider = createProvider(o, keys);
+  const privacy = fixPrivacy(o, provider, s.consent);
+  if (privacy === null) {
+    throw new PrivacyError('Para proponer una corrección hay que enviar el fragmento de código del hallazgo. Confirma el envío o elige «Fragmentos de código» en la privacidad de la IA.');
+  }
+  const model = capableModel(o, await chooseModel(o, provider, s.signal));
+  return proposeFix(report, findingId, {
+    provider,
+    model,
+    privacy,
+    readText: reportReader(report),
+    cacheDir: s.cacheBase ? path.join(s.cacheBase, 'ai') : null,
+    budget: { maxRequests: 3, maxCostUsd: o.budgetUsd },
+    signal: s.signal,
+  });
+}
+
+export interface AskStepOptions {
+  comparison?: ReportComparison | null;
+  signal: AbortSignal;
+}
+
+/** Pregunta sobre un análisis (solo se envían metadatos del informe, nunca código). */
+export async function askStep(report: AnalysisReport, history: readonly ChatTurn[], question: string, o: AiOptions, keys: ApiKeys, s: AskStepOptions): Promise<ChatAnswer> {
+  const provider = createProvider(o, keys);
+  const model = await chooseModel(o, provider, s.signal);
+  const privacy: PrivacyMode = o.privacy ?? (provider.locality === 'local' ? 'local' : 'metadatos');
+  return askAboutReport(report, history, question, {
+    provider,
+    model,
+    privacy,
+    budget: { maxRequests: 1, maxCostUsd: o.budgetUsd },
+    signal: s.signal,
+    projectSummary: await projectSummary(report, reportReader(report)),
+    ...(s.comparison ? { comparison: s.comparison } : {}),
+  });
 }
