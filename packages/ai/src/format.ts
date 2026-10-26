@@ -22,6 +22,13 @@ function wrap(text: string, indent: string, width = 96): string {
   return lines.map((l) => indent + l).join('\n');
 }
 
+/** Agrupa mensajes idénticos conservando el orden de aparición. */
+function groupMessages(messages: readonly string[]): Array<[string, number]> {
+  const counts = new Map<string, number>();
+  for (const m of messages) counts.set(m, (counts.get(m) ?? 0) + 1);
+  return [...counts.entries()];
+}
+
 /** Sección de IA para la terminal. Siempre separa evidencia, inferencia y recomendación. */
 export function formatAiSection(ai: AiSection, report: AnalysisReport, label: string): string {
   const out: string[] = [];
@@ -61,7 +68,9 @@ export function formatAiSection(ai: AiSection, report: AnalysisReport, label: st
   for (const n of ai.notes ?? []) out.push(wrap(`Aviso: ${n}`, '  '));
   if (ai.errors.length > 0) {
     out.push(`  Sin completar (${ai.errors.length}):`);
-    for (const e of ai.errors.slice(0, 8)) out.push(wrap(`- ${e.message}`, '    '));
+    const groups = groupMessages(ai.errors.map((e) => e.message));
+    for (const [message, count] of groups.slice(0, 8)) out.push(wrap(`- ${message}${count > 1 ? ` (×${count})` : ''}`, '    '));
+    if (groups.length > 8) out.push(`    … y ${groups.length - 8} motivo(s) más (ver el informe JSON).`);
   }
   out.push('');
   return out.join('\n');
