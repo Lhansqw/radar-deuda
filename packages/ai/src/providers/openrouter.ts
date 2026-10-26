@@ -351,7 +351,7 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
   protected override explain(err: unknown): ProviderError {
     if (err instanceof HttpError && err.status === 404 && /endpoint|provider|parameters/i.test(err.body)) {
       return new ProviderError(
-        'OpenRouter: ningún proveedor de este modelo cumple las restricciones (no guardar datos y salida estructurada). Prueba otro modelo o, si lo aceptas, --ai-allow-data-collection.',
+        'OpenRouter: ningún proveedor de este modelo cumple las restricciones (no guardar datos y salida estructurada). Prueba otro modelo o, si lo aceptas, permite proveedores que guardan datos (--ai-allow-data-collection en la CLI).',
         'invalid-request',
         this.id,
         { cause: err },

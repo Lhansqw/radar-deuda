@@ -44,6 +44,11 @@ const api: RadarApi = {
     snippet: (analysisId, file, start, end) => invoke('files:snippet', analysisId, file, start, end),
     reveal: (analysisId, file) => invoke('files:reveal', analysisId, file),
   },
+  ai: {
+    explain: (analysisId, findingId) => invoke('ai:explain', analysisId, findingId),
+    models: () => invoke('ai:models'),
+    checkKey: () => invoke('ai:checkKey'),
+  },
   jobs: {
     start: (projectId) => invoke('jobs:start', projectId),
     cancel: (jobId) => invoke('jobs:cancel', jobId),

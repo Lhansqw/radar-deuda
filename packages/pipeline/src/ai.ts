@@ -94,10 +94,10 @@ async function chooseModel(o: AiOptions, provider: LlmProvider, signal: AbortSig
   if (o.provider === 'anthropic') return ANTHROPIC_MODELS.fast;
   if (provider.locality === 'local' && provider.listModels) {
     const models = (await provider.listModels(signal)).filter((m) => !/embed/i.test(m));
-    if (models.length === 0) throw new Error(`${provider.label} no tiene ningún modelo cargado. Carga uno (LM Studio: pestaña Developer, o \`lms load <modelo>\`) o indica --ai-model.`);
+    if (models.length === 0) throw new Error(`${provider.label} no tiene ningún modelo cargado. Carga uno (LM Studio: pestaña Developer, o \`lms load <modelo>\`) o indica el modelo (--ai-model en la CLI).`);
     return models[0] as string;
   }
-  throw new Error(`Indica el modelo con --ai-model para ${provider.label}.`);
+  throw new Error(`Falta el modelo para ${provider.label}: elígelo en Configuración (--ai-model en la CLI).`);
 }
 
 const EFFORT: Record<string, string> = { minimal: 'mínimo', low: 'bajo', medium: 'medio', high: 'alto', xhigh: 'muy alto', max: 'máximo', desconocido: 'el del modelo (no se puede ajustar)' };
@@ -126,7 +126,7 @@ async function describeOpenRouterModels(provider: OpenRouterProvider, models: st
       const base = id.replace(/:[a-z]+$/i, '');
       const similar = catalog.filter((c) => c.id.startsWith(`${base.split('/')[0]}/`) && c.id.includes(base.split('/')[1]?.split(/[-.]/)[0] ?? '')).slice(0, 3);
       throw new Error(
-        `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${similar.map((c) => c.id).join(', ')}?` : ''} Lista los disponibles con: npm run models`,
+        `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${similar.map((c) => c.id).join(', ')}?` : ''} Elige uno de la lista en Configuración (en la CLI: npm run models).`,
       );
     }
     const plan = planReasoning(m, reasoning);
@@ -152,7 +152,7 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
   if (o.provider === 'openrouter') {
     hooks.info(
       o.allowDataCollection
-        ? 'OpenRouter: se permiten proveedores que pueden guardar o entrenar con los datos (--ai-allow-data-collection).'
+        ? 'OpenRouter: se permiten proveedores que pueden guardar o entrenar con los datos.'
         : `OpenRouter: solo proveedores que no guardan ni entrenan con los datos${o.zeroDataRetention ? ', con retención cero' : ''}.`,
     );
   }
