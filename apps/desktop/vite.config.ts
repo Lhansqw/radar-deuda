@@ -9,6 +9,8 @@ export default defineConfig({
   root: here('./src/renderer'),
   base: './',
   plugins: [react()],
+  // La interfaz solo puede usar los tipos y constantes del motor (módulo puro, sin Node).
+  resolve: { alias: { '@radar/engine': here('../../packages/engine/src/types.ts') } },
   build: {
     outDir: here('./dist/renderer'),
     emptyOutDir: true,

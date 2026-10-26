@@ -85,3 +85,23 @@ encadena tipos, lint y pruebas, y es lo que debe pasar antes de cada commit.
 Interfaces propias en TypeScript; los SDK de proveedores solo dentro de sus adaptadores.
 El adaptador compatible con OpenAI cubre también modelos locales (LM Studio, Ollama,
 llama.cpp), así que el soporte local no requiere código específico.
+
+## D10. SQLite integrado en Node (`node:sqlite`) en lugar de `better-sqlite3` (fase 8)
+
+Sustituye la elección de biblioteca de D6; el resto de D6 (SQLite en el proceso principal,
+caché del motor en JSON) se mantiene.
+
+| Criterio | `better-sqlite3` | `node:sqlite` |
+|---|---|---|
+| Instalación | Módulo nativo: hay que recompilarlo para la versión de Electron (`@electron/rebuild`) o descargar binarios precompilados; si no los hay, exige Visual Studio Build Tools y Python en Windows | Incluido en Node 24 y, por tanto, en Electron 44 (SQLite 3.53) |
+| API | Síncrona, muy completa | Síncrona (`DatabaseSync`), suficiente: sentencias preparadas, transacciones con `BEGIN`/`COMMIT`, BLOB |
+| Estabilidad | Madura | Marcada aún como experimental en Node; la API usada es la básica |
+| Empaquetado (fase 12) | Hay que desempaquetar el `.node` del asar | Nada que empaquetar |
+
+**Decisión: `node:sqlite`.** Elimina el único módulo nativo previsto y, con él, el paso de
+compilación más frágil en Windows. Comprobado en Electron 44.9.3 (proceso principal) y en
+Node 22 y 24 (pruebas). Si la API cambiara, el acceso está concentrado en
+`apps/desktop/src/main/store.ts`.
+
+**Consecuencias:** las pruebas de la base de datos necesitan Node ≥ 22.13 (ya exigido en
+`engines`), y Node 22 muestra un aviso de función experimental al usarla.
