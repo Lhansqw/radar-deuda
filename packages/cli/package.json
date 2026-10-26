@@ -5,7 +5,8 @@
   "description": "Línea de comandos de Radar de Deuda Técnica: orquesta el motor y las fuentes (Git, GitHub, dependencias en línea).",
   "type": "module",
   "bin": {
-    "radar-deuda": "dist/cli.js"
+    "radar-deuda": "dist/cli.js",
+    "radar-deuda-modelos": "dist/models-cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json"
