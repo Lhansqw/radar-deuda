@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { defaultCacheDir } from '@radar/engine';
+import { defaultReposDir } from '@radar/sources';
 import { app, BrowserWindow, dialog, nativeTheme, safeStorage, shell } from 'electron';
 import { JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
@@ -98,7 +100,7 @@ function start(): void {
       credentials,
       jobs,
       ai: new AiService({ store, credentials, settings: () => loadSettings(store) }),
-      info: () => ({ versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node }, dataDir }),
+      info: () => ({ versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node }, dataDir, cacheDir: defaultCacheDir(), reposDir: defaultReposDir() }),
       chooseFolder: async () => {
         const options = { title: 'Elige la carpeta del proyecto', properties: ['openDirectory' as const] };
         const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
