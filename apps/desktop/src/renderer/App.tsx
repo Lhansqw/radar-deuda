@@ -12,6 +12,7 @@ import { Findings } from './views/Findings.js';
 import { History } from './views/History.js';
 import { NotAnalyzed } from './views/NotAnalyzed.js';
 import { Panel } from './views/Panel.js';
+import { Settings } from './views/Settings.js';
 import { Welcome } from './views/Welcome.js';
 
 /** Vistas del proyecto que existen en esta versión de la interfaz. */
@@ -35,6 +36,7 @@ export function App() {
   const selectedId = project?.id ?? null;
   const job = project ? jobs[project.id] : undefined;
   const data = useProjectData(project?.id ?? null, project ? (revisions[project.id] ?? 0) : 0, project ? (chosenAnalysis[project.id] ?? null) : null);
+  const settingsOpen = view === 'ajustes';
 
   const run = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -76,7 +78,7 @@ export function App() {
         onView={setView}
         onAddFolder={addFolder}
         onAddGithub={() => setAddingGithub(true)}
-        settingsAvailable={false}
+        settingsAvailable
       />
       <main className="workspace">
         {error ? (
@@ -88,7 +90,11 @@ export function App() {
             </button>
           </div>
         ) : null}
-        {project ? (
+        {settingsOpen ? (
+          <div className="workspace-body">
+            <Settings />
+          </div>
+        ) : project ? (
           <>
             <ProjectHeader
               project={project}
