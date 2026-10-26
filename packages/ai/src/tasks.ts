@@ -93,6 +93,13 @@ export async function runAi(report: AnalysisReport, o: AiRunOptions): Promise<Ai
     ...(o.signal ? { signal: o.signal } : {}),
   };
   const errors: AiSection['errors'] = [];
+  // Precio publicado por el propio proveedor (si lo ofrece), para que el presupuesto se aplique antes de enviar.
+  if (o.provider.price) {
+    for (const model of new Set([o.model, o.planModel ?? o.model])) {
+      const price = await o.provider.price(model, o.signal).catch(() => null);
+      if (price) tracker.setPrice({ providerId: o.provider.id, locality: o.provider.locality, model }, price);
+    }
+  }
   const summary = await projectSummary(report, o.readText);
   const selected = selectForAi(report, o.limit !== undefined ? { limit: o.limit } : {});
 
