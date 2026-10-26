@@ -8,6 +8,7 @@
     "packages/engine",
     "packages/sources",
     "packages/ai",
+    "packages/pipeline",
     "packages/cli"
   ],
   "engines": {

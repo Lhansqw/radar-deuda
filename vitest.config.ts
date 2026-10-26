@@ -5,7 +5,7 @@ const src = (pkg: string): string => fileURLToPath(new URL(`./packages/${pkg}/sr
 
 /** Igual que los "paths" de tsconfig.json: en pruebas se usa el código fuente. */
 export const resolve: ViteUserConfig['resolve'] = {
-  alias: { '@radar/engine': src('engine'), '@radar/sources': src('sources'), '@radar/ai': src('ai') },
+  alias: { '@radar/engine': src('engine'), '@radar/sources': src('sources'), '@radar/ai': src('ai'), '@radar/pipeline': src('pipeline') },
 };
 
 export const baseTest = {
