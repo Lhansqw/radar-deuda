@@ -242,7 +242,7 @@ describe('runAi', () => {
       req.system.includes('planifica') ? goodPlan(req) : { text: '', finishReason: 'length', usage: { inputTokens: 100, outputTokens: req.maxOutputTokens, reasoningTokens: req.maxOutputTokens - 10 } },
     );
     const ai = await runAi(report, { provider, model: 'm', privacy: 'local', readText, cacheDir: null, limit: 1, plan: false });
-    expect(ai.errors[0]?.message).toMatch(/límite de longitud \(2400 tokens\): el modelo dedicó 2390 a razonar/);
+    expect(ai.errors[0]?.message).toMatch(/límite de longitud: de 2400 tokens de salida, el modelo dedicó 2390 a razonar/);
   });
 
   it('respeta el presupuesto y lo declara', async () => {
