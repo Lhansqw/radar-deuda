@@ -25,6 +25,12 @@ describe('OpenRouterProvider', () => {
     expect(p.locality).toBe('cloud');
   });
 
+  it('informa de los tokens dedicados a razonar', async () => {
+    const fetch = fakeFetch(() => ok({ usage: { prompt_tokens: 50, completion_tokens: 900, completion_tokens_details: { reasoning_tokens: 850 } } }));
+    const r = await new OpenRouterProvider({ apiKey: KEY, fetch }).complete(req);
+    expect(r.usage).toEqual({ inputTokens: 50, outputTokens: 900, reasoningTokens: 850 });
+  });
+
   it('opcionalmente solo endpoints de retención cero, o permitiendo retención si el usuario lo acepta', async () => {
     const fetch = fakeFetch(() => ok());
     await new OpenRouterProvider({ apiKey: KEY, fetch, zeroDataRetention: true }).complete(req);

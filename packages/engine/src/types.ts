@@ -287,6 +287,8 @@ export interface AiUsage {
   cacheHits: number;
   inputTokens: number;
   outputTokens: number;
+  /** Parte de outputTokens que el modelo dedicó a razonar (no visible), si el proveedor lo informa. */
+  reasoningTokens?: number;
   /** null si el proveedor no tiene precio conocido. 0 en modelos locales. */
   costUsd: number | null;
   latencyMsTotal: number;

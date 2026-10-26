@@ -53,6 +53,16 @@ describe('UsageTracker', () => {
     expect(t.summary().costUsd).toBe(0.0042); // el informado, no el calculado (0,02)
   });
 
+  it('suma los tokens de razonamiento solo si el proveedor los informa', () => {
+    const t = new UsageTracker();
+    const ref = { providerId: 'openrouter', locality: 'cloud' as const, model: 'x/y' };
+    t.record(ref, { inputTokens: 10, outputTokens: 10 }, 10, 1);
+    expect(t.summary().reasoningTokens).toBeUndefined();
+    t.record(ref, { inputTokens: 10, outputTokens: 900, reasoningTokens: 850 }, 10, 1);
+    t.record(ref, { inputTokens: 10, outputTokens: 400, reasoningTokens: 300 }, 10, 1);
+    expect(t.summary()).toMatchObject({ outputTokens: 1310, reasoningTokens: 1150 });
+  });
+
   it('limita el número de peticiones', () => {
     const t = new UsageTracker({ maxRequests: 1 });
     t.reserve(local, 1, 1);

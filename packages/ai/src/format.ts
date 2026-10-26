@@ -63,7 +63,7 @@ export function formatAiSection(ai: AiSection, report: AnalysisReport, label: st
   const u = ai.usage;
   const cost = u.costUsd === null ? 'coste desconocido' : u.costUsd === 0 ? 'sin coste' : `~${u.costUsd.toFixed(4)} USD`;
   out.push(
-    `  Consumo de IA: ${u.requests} petición(es) · ${u.inputTokens} tokens de entrada / ${u.outputTokens} de salida · ${cost} · latencia máx. ${(u.latencyMsMax / 1000).toFixed(1)} s · ${u.cacheHits} desde caché`,
+    `  Consumo de IA: ${u.requests} petición(es) · ${u.inputTokens} tokens de entrada / ${u.outputTokens} de salida${u.reasoningTokens ? ` (${u.reasoningTokens} razonando)` : ''} · ${cost} · latencia máx. ${(u.latencyMsMax / 1000).toFixed(1)} s · ${u.cacheHits} desde caché`,
   );
   for (const n of ai.notes ?? []) out.push(wrap(`Aviso: ${n}`, '  '));
   if (ai.errors.length > 0) {

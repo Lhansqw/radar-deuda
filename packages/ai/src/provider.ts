@@ -31,8 +31,8 @@ export interface CompletionResult {
   text: string;
   model: string;
   finishReason: FinishReason;
-  /** null si el proveedor no informa del consumo. */
-  usage: { inputTokens: number; outputTokens: number } | null;
+  /** null si el proveedor no informa del consumo. outputTokens incluye los de razonamiento. */
+  usage: { inputTokens: number; outputTokens: number; reasoningTokens?: number } | null;
   latencyMs: number;
   requestId?: string;
   /** Coste real cobrado, si el proveedor lo informa (USD). Tiene prioridad sobre la tabla de precios. */
