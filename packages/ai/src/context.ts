@@ -49,7 +49,11 @@ export interface FindingContext {
   /** Fragmentos enviados: las citas de la IA solo son válidas dentro de ellos. */
   snippets: SnippetRange[];
   includesCode: boolean;
-  /** Números presentes en los datos enviados (para detectar cifras inventadas). */
+  /**
+   * Números presentes en los datos enviados (para detectar cifras inventadas).
+   * No incluye la numeración de líneas de los fragmentos: esa solo vale si la
+   * afirmación cita esas líneas.
+   */
   knownNumbers: Set<string>;
 }
 
@@ -140,5 +144,10 @@ export async function buildFindingContext(f: Finding, options: BuildContextOptio
     }
   }
   const text = parts.join('\n\n').slice(0, limits.maxChars);
-  return { text, snippets, includesCode: snippets.length > 0, knownNumbers: new Set(numbersIn(text)) };
+  // Fuera: numeración de líneas e identificadores hexadecimales (sus dígitos no son cifras del análisis).
+  const withoutLineNumbers = text
+    .replace(/^ *\d+ \| /gm, '')
+    .replace(/líneas=\d+-\d+/g, '')
+    .replace(/\b[0-9a-f]{8,}\b/gi, '');
+  return { text, snippets, includesCode: snippets.length > 0, knownNumbers: new Set(numbersIn(withoutLineNumbers)) };
 }

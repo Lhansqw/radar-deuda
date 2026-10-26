@@ -74,6 +74,15 @@ describe('validateExplanation', () => {
     expect(v.confidence).toBe('media');
   });
 
+  it('los números de línea solo son válidos si la afirmación cita esas líneas', () => {
+    const v = validateExplanation(
+      { ...base, afirmaciones: [claim('evidencia', 'El bucle de las líneas 11 a 12 anida 4 niveles.', 'src/p.ts', 11, 12), claim('evidencia', 'Hay 12 ramas.')] },
+      'f1',
+      { ...ctx, knownNumbers: new Set(['4']) },
+    );
+    expect(v.claims.map((c) => c.kind)).toEqual(['evidencia', 'inferencia']);
+  });
+
   it('normaliza mayúsculas y tildes en los enumerados', () => {
     const v = validateExplanation({ ...base, confianza: 'MEDIA', afirmaciones: [claim('Recomendación', 'Dividir la función.')] }, 'f1', ctx);
     expect(v.confidence).toBe('media');

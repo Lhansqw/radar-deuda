@@ -69,10 +69,13 @@ describe('fragmentos', () => {
     expect(ctx.text).toMatch(/\(recortado\)/);
   });
 
-  it('registra los números presentes para detectar cifras inventadas', async () => {
-    const ctx = await buildFindingContext(finding(), { readText, mode: 'metadatos' });
+  it('registra los números presentes para detectar cifras inventadas, sin la numeración de líneas', async () => {
+    const ctx = await buildFindingContext(finding(), { readText: async () => Array.from({ length: 30 }, () => 'x();').join('\n'), mode: 'fragmentos' });
     expect(ctx.knownNumbers.has('31')).toBe(true);
     expect(ctx.knownNumbers.has('999')).toBe(false);
+    expect(ctx.knownNumbers.has('17')).toBe(false); // solo aparece como número de línea
+    const hex = await buildFindingContext(finding({ id: '05967a3778c7acde' }), { readText, mode: 'metadatos' });
+    expect(hex.knownNumbers.has('3778')).toBe(false); // dígitos de un identificador
   });
 
   it('sanitizeLine deja intactas las líneas normales', () => {
