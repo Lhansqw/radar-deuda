@@ -92,7 +92,9 @@ function validateClaim(raw: RawClaim, ctx: FindingContext, notes: string[]): AiC
     }
   }
   if (kind === 'evidencia') {
-    const invented = numbersIn(text).filter((n) => !ctx.knownNumbers.has(n));
+    // Los números de las líneas citadas son válidos (p. ej. "líneas 10-14").
+    const cited = (n: string): boolean => lines !== undefined && Number(n) >= lines.startLine && Number(n) <= lines.endLine;
+    const invented = numbersIn(text).filter((n) => !ctx.knownNumbers.has(n) && !cited(n));
     if (invented.length > 0) {
       notes.push(`"Evidencia" con cifras que no están en los datos enviados (${invented.slice(0, 3).join(', ')}): tratada como inferencia.`);
       kind = 'inferencia';
@@ -108,7 +110,7 @@ function validateClaim(raw: RawClaim, ctx: FindingContext, notes: string[]): AiC
 export function validateExplanation(data: unknown, findingId: string, ctx: FindingContext): ValidatedExplanation {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) throw new ValidationError('La respuesta debe ser un objeto JSON.');
   const raw = data as Partial<RawExplanation>;
-  if (typeof raw.id_hallazgo === 'string' && raw.id_hallazgo.trim() !== findingId) {
+  if (typeof raw.id_hallazgo === 'string' && raw.id_hallazgo.trim() !== '' && raw.id_hallazgo.trim() !== findingId) {
     throw new ValidationError(`La respuesta es de otro hallazgo (${raw.id_hallazgo}).`);
   }
   const notes: string[] = [];
