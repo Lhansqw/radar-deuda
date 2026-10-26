@@ -11,9 +11,11 @@ import { runAi } from '../src/tasks.js';
  * Pruebas en vivo contra modelos reales. No se ejecutan por defecto:
  *   $env:RADAR_LIVE_LLM = "lmstudio"   (o "ollama")
  *   npx vitest run packages/ai/test/live.test.ts
- * OpenRouter (envía solo metadatos; coste de fracciones de céntimo):
+ * OpenRouter (envía solo metadatos; coste de fracciones de céntimo o gratis):
  *   $env:RADAR_LIVE_LLM = "openrouter"; $env:RADAR_LIVE_MODEL = "proveedor/modelo"
- *   (con RADAR_OPENROUTER_API_KEY definida)
+ *   (con RADAR_OPENROUTER_API_KEY definida). Opcionales:
+ *   $env:RADAR_LIVE_ALLOW_DATA_COLLECTION = "1"   (necesario con muchos modelos :free)
+ *   $env:RADAR_LIVE_FALLBACK = "a/b:free,c/d:free" (modelos de respaldo)
  */
 const which = process.env['RADAR_LIVE_LLM'];
 const DEMO = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'examples', 'demo-repo');
@@ -42,7 +44,14 @@ describe.runIf(which === 'openrouter')('en vivo con OpenRouter', () => {
   it('explica un hallazgo con solo metadatos y respeta el presupuesto', async () => {
     const model = process.env['RADAR_LIVE_MODEL'];
     expect(model, 'Define RADAR_LIVE_MODEL (proveedor/modelo)').toBeTruthy();
-    const provider = new OpenRouterProvider({ apiKey: process.env['RADAR_OPENROUTER_API_KEY'] ?? '' });
+    const fallback = (process.env['RADAR_LIVE_FALLBACK'] ?? '').split(',').map((m) => m.trim()).filter(Boolean);
+    const provider = new OpenRouterProvider({
+      apiKey: (process.env['RADAR_OPENROUTER_API_KEY'] ?? '').trim(),
+      allowDataCollection: process.env['RADAR_LIVE_ALLOW_DATA_COLLECTION'] === '1',
+      ...(fallback.length > 0 ? { fallbackModels: fallback } : {}),
+    });
+    const info = await provider.model(model as string);
+    expect(info, `El modelo ${model} no existe en OpenRouter (npm run models)`).not.toBeNull();
     const report = await analyzeRepository(DEMO, { cacheDir: null });
     const ai = await runAi(report, {
       provider,
