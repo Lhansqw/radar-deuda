@@ -14,4 +14,4 @@ export { runAi, selectForAi, projectSummary, type AiRunOptions, type TriageOptio
 export { askJson, RefusalError, type AskOptions, type RunnerDeps } from './runner.js';
 export { EXPLAIN_PROMPT_VERSION, PLAN_PROMPT_VERSION } from './prompts.js';
 export { formatAiSection } from './format.js';
-export { OpenRouterProvider, type OpenRouterOptions, type OpenRouterModel } from './providers/openrouter.js';
+export { OpenRouterProvider, planReasoning, REASONING_PREFERENCES, type OpenRouterOptions, type OpenRouterModel, type ReasoningPreference, type ReasoningPlan } from './providers/openrouter.js';
