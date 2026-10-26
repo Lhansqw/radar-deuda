@@ -85,8 +85,14 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   }
 
   async complete(req: CompletionRequest): Promise<CompletionResult> {
+    return this.send(req, {});
+  }
+
+  /** Envía la consulta con campos adicionales propios de esta petición (p. ej. el razonamiento en OpenRouter). */
+  protected async send(req: CompletionRequest, extra: Record<string, unknown>): Promise<CompletionResult> {
     const body: Record<string, unknown> = {
       ...this.extraBody,
+      ...extra,
       model: req.model,
       messages: [{ role: 'system', content: req.system }, ...req.messages],
       [this.maxTokensParam]: req.maxOutputTokens,
@@ -108,7 +114,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       // Servidor o modelo sin salida estructurada: se repite sin ella (la respuesta se valida igualmente).
       if (body['response_format'] && err instanceof HttpError && (err.status === 400 || err.status === 404) && /response_format|json_schema|grammar|structured|parameters|endpoints/i.test(err.body)) {
         this.structuredOutput = false;
-        return this.complete(req);
+        return this.send(req, extra);
       }
       throw this.explain(err);
     }
