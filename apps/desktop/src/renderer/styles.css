@@ -1032,10 +1032,14 @@ code,
   font-size: var(--t-s);
 }
 
+/* Tipo de afirmación en su propia columna: el texto largo no se mete debajo. */
+.claims li {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.5rem;
+}
+
 .claim-kind {
-  display: inline-block;
-  min-width: 7.5rem;
-  margin-right: 0.5rem;
   color: var(--apagado);
 }
 
@@ -1995,4 +1999,26 @@ code,
   .settings-section {
     grid-template-columns: 1fr;
   }
+}
+
+/* Explicación de la IA bajo demanda */
+.ai-ask {
+  display: grid;
+  justify-items: start;
+  gap: 0.625rem;
+  max-width: 68ch;
+  padding: 1rem 1.25rem;
+  border: 1px dashed var(--linea-fuerte);
+  border-radius: var(--r);
+}
+
+.ai-ask p {
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+}
+
+.ai-ask .buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }

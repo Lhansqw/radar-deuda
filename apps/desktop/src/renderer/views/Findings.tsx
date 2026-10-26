@@ -17,9 +17,12 @@ interface Props {
   onFilter: (f: FindingFilter) => void;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /** Explicar con IA un hallazgo de este análisis. */
+  onExplain: (analysisId: number, findingId: string) => Promise<void>;
+  onOpenSettings: () => void;
 }
 
-export function Findings({ report, analysisId, filter, onFilter, selectedId, onSelect }: Props) {
+export function Findings({ report, analysisId, filter, onFilter, selectedId, onSelect, onExplain, onOpenSettings }: Props) {
   const [sort, setSort] = useState<FindingSort>('severity');
   const counts = useMemo(() => countBySeverity(report.findings), [report.findings]);
   const list = useMemo(() => sortFindings(filterFindings(report.findings, filter), sort), [report.findings, filter, sort]);
@@ -74,7 +77,7 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
       <div className="findings-split">
         <FindingList findings={list} total={report.findings.length} selectedId={selected?.id ?? null} onSelect={onSelect} />
         <section className="detail-pane" aria-label="Detalle del hallazgo">
-          {selected ? <FindingDetail key={selected.id} finding={selected} report={report} analysisId={analysisId} /> : <p className="pane-empty">Ningún hallazgo coincide con los filtros.</p>}
+          {selected ? <FindingDetail key={selected.id} finding={selected} report={report} analysisId={analysisId} onExplain={(id) => onExplain(analysisId, id)} onOpenSettings={onOpenSettings} /> : <p className="pane-empty">Ningún hallazgo coincide con los filtros.</p>}
         </section>
       </div>
     </div>
