@@ -6,7 +6,7 @@ import { findingId } from '../util.js';
  * se reutilizará en la capa de IA para que ningún secreto salga del equipo.
  */
 const ID = 'secrets';
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const TOOL = `${ID}@${VERSION}`;
 
 interface SecretRule {
@@ -39,6 +39,12 @@ const EXAMPLE_HOST = /^(?:localhost|127\.0\.0\.1|0\.0\.0\.0|example\.(?:com|org)
 const INTERPOLATION = /\$\{|^\$|^%|\{\{/;
 
 const PLACEHOLDER = /^(?:x+|\*+|\.+|<[^>]*>|\$\{.*\}|\{\{.*\}\}|%[a-z_]+%|changeme|change_me|your[_-].*|example.*|placeholder|dummy|test|password|secret|null|undefined|true|false|none|todo|redacted|xxx.*)$/i;
+/**
+ * Valores que son nombres, no secretos: palabras en minúscula unidas por guiones
+ * o guiones bajos (`max_completion_tokens`, `bearer-token`, `client_credentials`).
+ * Una credencial real mezcla mayúsculas, cifras o símbolos.
+ */
+const IDENTIFIER_LIKE = /^[a-z]+(?:[_.-][a-z]+)+$/;
 const CODE_REFERENCE = /^(?:process\.env|import\.meta\.env|os\.environ|getenv|env\(|config\.|this\.|self\.|req\.|options\.|args\.|props\.)/i;
 
 export function shannonEntropy(s: string): number {
@@ -127,7 +133,7 @@ export function scanSecrets(lines: readonly string[], relPath: string): SecretMa
     // En código fuente solo cuenta un literal de cadena; en .env/.ini/YAML los valores van sin comillas.
     if (isCodeFile && !quoted) return;
     const value = (g[3] ?? '').replace(/["'`]+$/, '');
-    if (value.length < 8 || PLACEHOLDER.test(value) || CODE_REFERENCE.test(value) || INTERPOLATION.test(value)) return;
+    if (value.length < 8 || PLACEHOLDER.test(value) || CODE_REFERENCE.test(value) || INTERPOLATION.test(value) || IDENTIFIER_LIKE.test(value)) return;
     if (!quoted && /^[a-z_$][\w$]*(\.[\w$]+)*\(/i.test(value)) return; // llamada a función, no un literal
     const entropy = shannonEntropy(value);
     if (entropy < 3.0) return;
