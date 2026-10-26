@@ -19,12 +19,16 @@ export interface OpenAiCompatibleOptions extends HttpOptions {
    * modelos actuales; los servidores locales aceptan max_tokens.
    */
   maxTokensParam?: 'max_tokens' | 'max_completion_tokens';
+  /** Campos adicionales del cuerpo (p. ej. preferencias de enrutado de OpenRouter). */
+  extraBody?: Record<string, unknown>;
+  /** Cabeceras adicionales (nunca deben contener la clave: va en Authorization). */
+  extraHeaders?: Record<string, string>;
 }
 
 interface ChatCompletionResponse {
   model?: string;
   choices?: Array<{ message?: { content?: string | null; refusal?: string | null }; finish_reason?: string | null }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number | null };
 }
 
 const FINISH: Record<string, FinishReason> = { stop: 'stop', length: 'length', content_filter: 'refusal' };
@@ -39,15 +43,19 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   readonly id: string;
   readonly label: string;
   readonly locality: Locality;
-  private readonly baseUrl: string;
+  protected readonly baseUrl: string;
   private readonly apiKey: string | undefined;
   private readonly maxTokensParam: 'max_tokens' | 'max_completion_tokens';
-  private readonly http: HttpOptions;
+  protected readonly http: HttpOptions;
+  private readonly extraBody: Record<string, unknown>;
+  private readonly extraHeaders: Record<string, string>;
   /** Se desactiva si el servidor rechaza response_format (algunos modelos o versiones no lo soportan). */
   private structuredOutput = true;
 
   constructor(options: OpenAiCompatibleOptions) {
-    const { id, label, baseUrl, apiKey, locality, maxTokensParam = 'max_tokens', ...http } = options;
+    const { id, label, baseUrl, apiKey, locality, maxTokensParam = 'max_tokens', extraBody = {}, extraHeaders = {}, ...http } = options;
+    this.extraBody = extraBody;
+    this.extraHeaders = extraHeaders;
     this.id = id;
     this.label = label;
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -61,8 +69,8 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     }
   }
 
-  private headers(): Record<string, string> {
-    const h: Record<string, string> = { 'content-type': 'application/json', 'user-agent': 'radar-deuda' };
+  protected headers(): Record<string, string> {
+    const h: Record<string, string> = { 'content-type': 'application/json', 'user-agent': 'radar-deuda', ...this.extraHeaders };
     if (this.apiKey) h['authorization'] = `Bearer ${this.apiKey}`;
     return h;
   }
@@ -78,6 +86,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
 
   async complete(req: CompletionRequest): Promise<CompletionResult> {
     const body: Record<string, unknown> = {
+      ...this.extraBody,
       model: req.model,
       messages: [{ role: 'system', content: req.system }, ...req.messages],
       [this.maxTokensParam]: req.maxOutputTokens,
@@ -85,6 +94,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     if (req.jsonSchema && this.structuredOutput) {
       body['response_format'] = { type: 'json_schema', json_schema: { name: req.jsonSchema.name, strict: true, schema: req.jsonSchema.schema } };
     }
+    this.decorateBody(body, body['response_format'] !== undefined);
     const started = performance.now();
     let data: ChatCompletionResponse;
     let headers: Headers;
@@ -96,7 +106,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       ));
     } catch (err) {
       // Servidor o modelo sin salida estructurada: se repite sin ella (la respuesta se valida igualmente).
-      if (body['response_format'] && err instanceof HttpError && err.status === 400 && /response_format|json_schema|grammar|structured/i.test(err.body)) {
+      if (body['response_format'] && err instanceof HttpError && (err.status === 400 || err.status === 404) && /response_format|json_schema|grammar|structured|parameters|endpoints/i.test(err.body)) {
         this.structuredOutput = false;
         return this.complete(req);
       }
@@ -114,14 +124,20 @@ export class OpenAiCompatibleProvider implements LlmProvider {
           : null,
       latencyMs: Math.round(performance.now() - started),
       ...(headers.get('x-request-id') ? { requestId: headers.get('x-request-id') as string } : {}),
+      ...(typeof data.usage?.cost === 'number' ? { costUsd: data.usage.cost } : {}),
     };
   }
 
-  private explain(err: unknown): ProviderError {
+  /** Punto de extensión para proveedores con parámetros propios (p. ej. enrutado de OpenRouter). */
+  protected decorateBody(_body: Record<string, unknown>, _structured: boolean): void {}
+
+  protected explain(err: unknown): ProviderError {
     if (err instanceof ProviderError) return err;
     if (err instanceof HttpError) {
       const detail = err.body.slice(0, 300);
-      if (err.status === 401 || err.status === 403) return new ProviderError(`${this.label}: credenciales no válidas o sin permiso.`, 'auth', this.id, { cause: err });
+      if (err.status === 401) return new ProviderError(`${this.label}: credenciales no válidas o revocadas.`, 'auth', this.id, { cause: err });
+      if (err.status === 402) return new ProviderError(`${this.label}: créditos insuficientes en la cuenta.`, 'quota', this.id, { cause: err });
+      if (err.status === 403) return new ProviderError(`${this.label}: petición no permitida (permisos o filtros de contenido): ${detail}`, 'auth', this.id, { cause: err });
       if (err.status === 429) return new ProviderError(`${this.label}: límite de peticiones o de cuota alcanzado.`, 'rate-limit', this.id, { cause: err });
       if (err.status === 404) return new ProviderError(`${this.label}: modelo o ruta no encontrados (${detail}).`, 'invalid-request', this.id, { cause: err });
       if (err.status === 400 && /context|too long|maximum.*tokens/i.test(detail)) {
