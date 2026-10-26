@@ -4,3 +4,4 @@
  */
 export * from './provider.js';
 export { OpenAiCompatibleProvider, PRESETS, type OpenAiCompatibleOptions } from './providers/openai-compatible.js';
+export { AnthropicProvider, ANTHROPIC_API_VERSION, ANTHROPIC_MODELS, anthropicRetryable, type AnthropicOptions } from './providers/anthropic.js';
