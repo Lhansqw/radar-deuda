@@ -62,21 +62,57 @@ presupuesto por defecto es 0,50 USD (`--ai-budget`) y el informe muestra el cost
 ### Opción C — OpenRouter (muchos modelos con una sola clave)
 
 1. Crea una clave en https://openrouter.ai/settings/keys con un **límite de crédito** bajo.
-2. Elige un modelo en https://openrouter.ai/models. Conviene filtrar por **Structured
-   Outputs**, porque los demás también funcionan, pero con más reintentos. Copia su id, con
-   el formato `proveedor/modelo`.
-3. Define la clave para la sesión, igual que en la opción B, pero en
-   `RADAR_OPENROUTER_API_KEY`.
+   OpenRouter la muestra completa una sola vez: cópiala en ese momento.
+2. Defínela para la sesión. Pega con **clic derecho**: en algunas consolas `Ctrl+V` no
+   pega dentro de `Read-Host`.
+   ```powershell
+   $env:RADAR_OPENROUTER_API_KEY = (Read-Host "Pega la clave con clic derecho").Trim()
+   "Longitud: $($env:RADAR_OPENROUTER_API_KEY.Length)"   # una clave completa tiene 73
+   ```
+3. Elige un modelo compatible desde la terminal (no necesita clave):
+   ```powershell
+   npm run models                    # todos los compatibles, del más barato al más caro
+   npm run models -- --gratis        # solo los gratuitos
+   npm run models -- --buscar qwen   # filtra por nombre
+   ```
+   Al final muestra un comando listo para copiar, con el modelo y dos de respaldo.
 4. Analiza:
    ```powershell
    npm run analyze -- C:\dev\mi-proyecto --ai openrouter --ai-model proveedor/modelo
    ```
 
-Privacidad específica de OpenRouter: reenvía cada petición a uno de los proveedores del
-modelo, así que la aplicación pide por defecto **solo proveedores que no guardan ni
-entrenan con los datos**. Con `--ai-zdr` se exige retención cero. `--ai-allow-data-collection`
-relaja la restricción si un modelo no tiene ningún proveedor que la cumpla. El coste que
-aparece en el informe es el que OpenRouter informa en cada respuesta.
+Antes de enviar ninguna consulta, la aplicación comprueba el formato de la clave, que
+OpenRouter la acepta (`/api/v1/key`), el saldo, la cuota gratuita del día y que el modelo
+existe. Cualquier problema aparece **una sola vez** y el informe del motor se muestra
+completo igualmente.
+
+**Privacidad.** OpenRouter reenvía cada petición a uno de los proveedores del modelo, así
+que la aplicación pide por defecto **solo proveedores que no guardan ni entrenan con los
+datos**. Con `--ai-zdr` se exige retención cero. `--ai-allow-data-collection` relaja la
+restricción si un modelo no tiene ningún proveedor que la cumpla.
+
+**Modelos gratuitos.** Sirven para desarrollar y hacer demos, no como base de un uso serio:
+- Casi todos necesitan `--ai-allow-data-collection`. Aun así, por defecto solo se envían
+  metadatos de los hallazgos, nunca código.
+- OpenRouter los limita a 20 peticiones por minuto y a 50 al día (1000 al día si has
+  comprado al menos 10 USD de crédito). Un análisis con los valores por defecto hace unas
+  9 peticiones, más los reintentos. La aplicación avisa si la cuota del día no alcanza.
+- Aparecen, desaparecen y se saturan. Por eso conviene indicar respaldos:
+  ```powershell
+  npm run analyze -- C:\dev\mi-proyecto --ai openrouter --ai-allow-data-collection `
+    --ai-model a/modelo:free --ai-fallback b/modelo:free,c/modelo:free
+  ```
+  Si el principal falla, OpenRouter prueba los siguientes en orden. Se cobra el modelo que
+  responde, así que, para no pagar nada, todos deben ser `:free` (la CLI avisa si mezclas).
+
+**Modelos que razonan.** Gastan parte del límite de salida en un razonamiento interno que no
+se ve. Si no se controla, la respuesta llega cortada. Por defecto (`--ai-reasoning auto`) la
+aplicación desactiva el razonamiento si el modelo lo permite. Si no lo permite, usa el
+esfuerzo mínimo y amplía el límite de salida. `--ai-reasoning low|medium|high` lo fija a
+mano. El informe indica cuántos tokens se fueron en razonar.
+
+**Para una entrega o presentación**, usa un modelo de pago barato con 1–2 USD de crédito:
+no tiene límite diario ni depende de que un modelo gratuito esté disponible ese día.
 
 OpenAI también está soportado (`--ai openai --ai-model <id>`, clave en `RADAR_OPENAI_API_KEY`).
 
@@ -93,6 +129,16 @@ Remove-Item Env:RADAR_LIVE_LLM
 ```
 
 La prueba analiza `examples/demo-repo` con tu modelo e imprime las explicaciones validadas.
+
+Con OpenRouter (una sola consulta; con un modelo gratuito no cuesta nada):
+
+```powershell
+$env:RADAR_LIVE_LLM = "openrouter"
+$env:RADAR_LIVE_MODEL = "a/modelo:free"
+$env:RADAR_LIVE_ALLOW_DATA_COLLECTION = "1"        # necesario con muchos modelos gratuitos
+$env:RADAR_LIVE_FALLBACK = "b/modelo:free"         # opcional
+npx vitest run packages/ai/test/live.test.ts
+```
 
 ## Qué sale del equipo
 
@@ -148,10 +194,17 @@ flowchart LR
   instrucciones, proveedor, modelo, privacidad y el contexto exacto. Un reanálisis sin
   cambios no hace ninguna petición.
 - **Presupuesto** comprobado antes de cada petición con el peor caso (entrada estimada +
-  salida máxima): peticiones, tokens y coste.
+  salida máxima): peticiones, tokens y coste. Con modelos de respaldo, con el precio del
+  más caro. El margen extra para el razonamiento no entra en esa comprobación previa, pero
+  sí en el coste real.
+- **Errores generales** (clave rechazada, sin saldo, límite de peticiones): detienen la IA
+  al primero, sin repetir la consulta por cada hallazgo. Los errores de una sola consulta
+  no detienen las demás.
+- **Respuestas cortadas** por longitud: se repite la misma consulta con el doble de margen.
 - **Concurrencia:** 1 petición a la vez con modelos locales y 4 en la nube.
 - **Tiempos límite:** 5 min por petición local y 2 min en la nube; `Ctrl+C` cancela.
-- El informe muestra peticiones, tokens, coste, latencia máxima y aciertos de caché.
+- El informe muestra peticiones, tokens (y los dedicados a razonar), coste, latencia
+  máxima y aciertos de caché. Los errores repetidos se agrupan.
 
 ## Arquitectura
 
@@ -160,14 +213,14 @@ flowchart LR
 | `provider.ts` | Interfaz `LlmProvider` y errores clasificados |
 | `providers/openai-compatible.ts` | OpenAI, LM Studio, Ollama, llama.cpp |
 | `providers/anthropic.ts` | API de Messages (versión `2026-10-21`, salida estructurada) |
-| `providers/openrouter.ts` | OpenRouter: enrutado sin retención de datos, coste real y precios publicados |
+| `providers/openrouter.ts` | OpenRouter: catálogo de modelos, enrutado sin retención de datos, razonamiento, respaldos, comprobación de la clave y coste real |
 | `context.ts` | Privacidad, fragmentos, redacción, delimitadores |
 | `schemas.ts` · `validate.ts` | Esquemas de salida y validación contra la evidencia |
 | `usage.ts` · `cache.ts` | Presupuesto, precios, concurrencia, caché |
-| `runner.ts` · `tasks.ts` | Consulta con reintento correctivo, triaje, explicación y plan |
+| `runner.ts` · `tasks.ts` | Consulta con reintento correctivo, triaje, explicación, plan y parada ante errores generales |
 
 Añadir un proveedor = implementar `LlmProvider` (`complete` y, opcionalmente,
-`listModels`). El resto no cambia.
+`listModels`, `price` y `preflight`). El resto no cambia.
 
 ## Limitaciones conocidas
 
