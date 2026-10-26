@@ -6,12 +6,15 @@ import { runGit } from '../git/run.js';
 import { cloneUrl, type GitHubRepoRef } from './url.js';
 
 /** Carpeta donde la aplicación guarda sus clones (nunca dentro de un proyecto del usuario). */
-export function defaultReposDir(): string {
+export function defaultReposDir(env: NodeJS.ProcessEnv = process.env): string {
+  // Con RADAR_CACHE_DIR, los clones van dentro de esa carpeta (como la caché del motor).
+  const custom = (env['RADAR_CACHE_DIR'] ?? '').trim();
+  if (custom !== '') return path.join(path.resolve(custom), 'repos');
   if (process.platform === 'win32') {
-    const base = process.env['LOCALAPPDATA'] ?? path.join(os.homedir(), 'AppData', 'Local');
+    const base = env['LOCALAPPDATA'] ?? path.join(os.homedir(), 'AppData', 'Local');
     return path.join(base, 'radar-deuda', 'repos');
   }
-  return path.join(process.env['XDG_CACHE_HOME'] ?? path.join(os.homedir(), '.cache'), 'radar-deuda', 'repos');
+  return path.join(env['XDG_CACHE_HOME'] ?? path.join(os.homedir(), '.cache'), 'radar-deuda', 'repos');
 }
 
 export interface CloneOptions {

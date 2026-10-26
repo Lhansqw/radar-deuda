@@ -1,7 +1,7 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AnalysisCache } from '../src/cache.js';
+import { AnalysisCache, defaultCacheDir } from '../src/cache.js';
 import type { FileAnalysisResult, FileMeta } from '../src/types.js';
 import { createTmpRepo, type TmpRepo } from './helpers/tmp-repo.js';
 
@@ -114,5 +114,21 @@ describe('AnalysisCache', () => {
     const c = AnalysisCache.disabled('cfg');
     c.store(meta(), 'h', 'size@1.0.0', result);
     await expect(c.save()).resolves.toBeUndefined();
+  });
+});
+
+describe('defaultCacheDir', () => {
+  it('RADAR_CACHE_DIR sustituye la carpeta del sistema (ruta absoluta, sin espacios sobrantes)', () => {
+    const custom = path.join(path.parse(process.cwd()).root, 'datos', 'cache-radar');
+    expect(defaultCacheDir({ RADAR_CACHE_DIR: ` ${custom} ` })).toBe(custom);
+    expect(defaultCacheDir({ RADAR_CACHE_DIR: 'relativa' })).toBe(path.resolve('relativa'));
+  });
+
+  it('sin la variable (o vacía), la del sistema operativo', () => {
+    for (const env of [{}, { RADAR_CACHE_DIR: '  ' }]) {
+      const dir = defaultCacheDir({ ...env, LOCALAPPDATA: path.resolve('local'), XDG_CACHE_HOME: path.resolve('xdg') });
+      expect(dir).toMatch(/radar-deuda/);
+      expect(path.isAbsolute(dir)).toBe(true);
+    }
   });
 });
