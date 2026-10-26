@@ -23,7 +23,7 @@ IA (opcional; el análisis funciona sin ella):
   --ai <proveedor>        lmstudio | ollama | anthropic | openrouter | openai | url
   --ai-url <url>          Servidor compatible con OpenAI (con --ai url, o para cambiar el puerto local)
   --ai-model <id>         Modelo. Local: por defecto el primero cargado. Anthropic: ${ANTHROPIC_MODELS.fast}
-                          OpenRouter: obligatorio, p. ej. proveedor/modelo (ver openrouter.ai/models)
+                          OpenRouter: obligatorio, p. ej. proveedor/modelo (lista: npm run models)
   --ai-plan-model <id>    Modelo para el plan (Anthropic: ${ANTHROPIC_MODELS.balanced})
   --privacy <modo>        local | metadatos | fragmentos
                           Por defecto: local con proveedores locales; metadatos (sin código) en la nube.
@@ -101,7 +101,7 @@ export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
     if (bad) return new Error(`Id de modelo de respaldo no válido: ${bad} (formato proveedor/modelo).`);
   }
   if (v.ai === 'openrouter') {
-    if (!v['ai-model']) return new Error('--ai openrouter requiere --ai-model <proveedor/modelo> (elige uno en https://openrouter.ai/models).');
+    if (!v['ai-model']) return new Error('--ai openrouter requiere --ai-model <proveedor/modelo> (lista los compatibles con: npm run models).');
     for (const m of [v['ai-model'], v['ai-plan-model']]) {
       if (m !== undefined && !OpenRouterProvider.isValidModelId(m)) return new Error(`Id de modelo de OpenRouter no válido: ${m} (formato proveedor/modelo).`);
     }
@@ -194,7 +194,7 @@ async function describeOpenRouterModels(provider: OpenRouterProvider, models: st
       const base = id.replace(/:[a-z]+$/i, '');
       const similar = catalog.filter((c) => c.id.startsWith(`${base.split('/')[0]}/`) && c.id.includes(base.split('/')[1]?.split(/[-.]/)[0] ?? '')).slice(0, 3);
       throw new Error(
-        `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${similar.map((c) => c.id).join(', ')}?` : ''} Consulta los disponibles en https://openrouter.ai/models`,
+        `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${similar.map((c) => c.id).join(', ')}?` : ''} Lista los disponibles con: npm run models`,
       );
     }
     const plan = planReasoning(m, reasoning);
