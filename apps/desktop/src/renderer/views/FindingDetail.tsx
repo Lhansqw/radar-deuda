@@ -9,7 +9,16 @@ import { CATEGORY_LABEL, CONFIDENCE_LABEL } from '../lib/labels.js';
 /** Líneas de contexto alrededor de la ubicación. */
 const CONTEXT = 4;
 
-export function FindingDetail({ finding, report, analysisId }: { finding: Finding; report: AnalysisReport; analysisId: number }) {
+interface Props {
+  finding: Finding;
+  report: AnalysisReport;
+  analysisId: number;
+  /** Pide la explicación de la IA y recarga el informe al terminar. */
+  onExplain: (findingId: string) => Promise<void>;
+  onOpenSettings: () => void;
+}
+
+export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSettings }: Props) {
   const ai = report.ai?.explanations.find((e) => e.findingId === finding.id);
   const codeLocations = finding.locations.filter((l) => l.file !== '.' && l.startLine > 0);
   return (
@@ -51,7 +60,7 @@ export function FindingDetail({ finding, report, analysisId }: { finding: Findin
         <p className="muted">{finding.effort.rationale}</p>
       </section>
 
-      {ai ? <AiBlock explanation={ai} /> : null}
+      {ai ? <AiBlock explanation={ai} /> : <AiRequest onExplain={() => onExplain(finding.id)} onOpenSettings={onOpenSettings} />}
     </article>
   );
 }
@@ -137,6 +146,46 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
 
 const CLAIM_LABEL = { evidencia: 'Evidencia', inferencia: 'Inferencia', recomendacion: 'Recomendación' } as const;
 
+function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<void>; onOpenSettings: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const explain = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onExplain();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="ai-ask" aria-label="Explicación de la IA">
+      <p>
+        {busy
+          ? 'Explicando… Con los modelos gratuitos puede tardar hasta un minuto.'
+          : 'La IA puede explicar este hallazgo y proponer cómo corregirlo. Se usan el proveedor y la privacidad elegidos en Configuración.'}
+      </p>
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="buttons">
+        <button type="button" className="btn" onClick={() => void explain()} disabled={busy} aria-busy={busy || undefined}>
+          <Icon name="sparkle" size={16} /> {busy ? 'Explicando…' : error ? 'Reintentar' : 'Explicar con IA'}
+        </button>
+        {error ? (
+          <button type="button" className="btn btn-quiet" onClick={onOpenSettings}>
+            <Icon name="settings" size={16} /> Configuración
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function AiBlock({ explanation: e }: { explanation: AiExplanation }) {
   return (
     <section className="detail-section ai">
@@ -157,8 +206,10 @@ function AiBlock({ explanation: e }: { explanation: AiExplanation }) {
           {e.claims.map((c, i) => (
             <li key={i} data-kind={c.kind}>
               <span className="claim-kind">{CLAIM_LABEL[c.kind]}</span>
-              {c.text}
-              {c.lines ? <span className="mono muted"> ({c.lines.file}:{c.lines.startLine}–{c.lines.endLine})</span> : null}
+              <span>
+                {c.text}
+                {c.lines ? <span className="mono muted"> ({c.lines.file}:{c.lines.startLine}–{c.lines.endLine})</span> : null}
+              </span>
             </li>
           ))}
         </ul>

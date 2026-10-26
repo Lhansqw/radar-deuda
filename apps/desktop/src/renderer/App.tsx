@@ -19,7 +19,7 @@ import { Welcome } from './views/Welcome.js';
 const PROJECT_VIEWS = ['panel', 'hallazgos', 'archivos', 'historial'] as const;
 
 export function App() {
-  const { projects, jobs, revisions, reloadProjects } = useRadar();
+  const { projects, jobs, revisions, reloadProjects, refresh } = useRadar();
   const [chosenId, setSelectedId] = useState<number | null>(null);
   const [view, setView] = useState<View>('panel');
   const [addingGithub, setAddingGithub] = useState(false);
@@ -138,6 +138,12 @@ export function App() {
                     onFilter={(f) => setFilters((all) => ({ ...all, [project.id]: f }))}
                     selectedId={selectedFinding[project.id] ?? null}
                     onSelect={(id) => setSelectedFinding((all) => ({ ...all, [project.id]: id }))}
+                    onExplain={async (analysisId, findingId) => {
+                      await window.radar.ai.explain(analysisId, findingId);
+                      refresh(project.id);
+                      await reloadProjects();
+                    }}
+                    onOpenSettings={() => setView('ajustes')}
                   />
                 ) : (
                   <Panel

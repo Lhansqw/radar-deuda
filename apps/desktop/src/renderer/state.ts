@@ -15,6 +15,11 @@ export function useRadar() {
     setProjects(await window.radar.projects.list());
   }, []);
 
+  /** Vuelve a cargar los datos de un proyecto (p. ej. tras añadir una explicación de la IA). */
+  const refresh = useCallback((projectId: number) => {
+    setRevisions((r) => ({ ...r, [projectId]: (r[projectId] ?? 0) + 1 }));
+  }, []);
+
   useEffect(() => {
     void window.radar.projects.list().then(setProjects);
     void window.radar.jobs.list().then((list) => {
@@ -34,7 +39,7 @@ export function useRadar() {
     });
   }, [reloadProjects]);
 
-  return { projects, jobs, revisions, reloadProjects };
+  return { projects, jobs, revisions, reloadProjects, refresh };
 }
 
 export interface ProjectData {
