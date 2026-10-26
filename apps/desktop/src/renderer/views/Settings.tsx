@@ -278,8 +278,12 @@ export function Settings() {
             <dd>
               {info.versions.electron}, {info.versions.chrome} y {info.versions.node}
             </dd>
-            <dt>Datos de la aplicación</dt>
+            <dt>Proyectos, historial y ajustes</dt>
             <dd className="mono">{info.dataDir}</dd>
+            <dt>Caché (compartida con la CLI)</dt>
+            <dd className="mono">{info.cacheDir}</dd>
+            <dt>Clones de GitHub</dt>
+            <dd className="mono">{info.reposDir}</dd>
           </dl>
         </section>
       ) : null}

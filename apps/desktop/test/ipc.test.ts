@@ -25,7 +25,7 @@ function setup(over: Partial<HandlerDeps> = {}) {
     credentials: new CredentialStore(store, cipher, {}),
     jobs: { start: () => Promise.reject(new Error('no se usa')) as never, cancel: () => undefined, list: () => [] },
     ai: { explain: () => Promise.reject(new Error('no se usa')), openRouterModels: async () => [], checkOpenRouterKey: () => Promise.reject(new Error('no se usa')) },
-    info: () => ({ versions: { app: '0.1.0', electron: '44', chrome: '152', node: '24' }, dataDir: '/datos' }),
+    info: () => ({ versions: { app: '0.1.0', electron: '44', chrome: '152', node: '24' }, dataDir: '/datos', cacheDir: '/cache', reposDir: '/cache/repos' }),
     chooseFolder: async () => null,
     openExternal: async () => true,
     reveal: () => undefined,

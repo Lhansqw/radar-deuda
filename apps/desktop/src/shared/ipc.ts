@@ -12,8 +12,12 @@ import type { AppSettings } from './settings.js';
 
 export interface AppInfo {
   versions: { app: string; electron: string; chrome: string; node: string };
-  /** Carpeta de datos de la aplicación (base de datos, clones). */
+  /** Carpeta de datos de la aplicación: proyectos, historial, ajustes y credenciales cifradas. */
   dataDir: string;
+  /** Caché del análisis, de la IA y de las consultas en línea (compartida con la CLI). */
+  cacheDir: string;
+  /** Clones de los repositorios de GitHub. */
+  reposDir: string;
 }
 
 export interface IpcContract {
