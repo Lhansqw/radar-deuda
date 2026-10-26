@@ -2,8 +2,8 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { gunzipSync, gzipSync } from 'node:zlib';
-import { parseReport, type AnalysisReport } from '@radar/engine';
-import type { AnalysisSummary, Project, ProjectKind } from '../shared/model.js';
+import { parseReport, type AiFixProposal, type AnalysisReport } from '@radar/engine';
+import type { AnalysisSummary, ChatMessage, ChatMeta, Project, ProjectKind } from '../shared/model.js';
 
 /**
  * Persistencia de la aplicación en un solo archivo SQLite (node:sqlite, sin
@@ -48,7 +48,30 @@ const MIGRATIONS: readonly string[] = [
    CREATE INDEX analyses_by_project ON analyses (project_id, finished_at DESC);
    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
    CREATE TABLE secrets (name TEXT PRIMARY KEY, value BLOB NOT NULL, updated_at TEXT NOT NULL);`,
+  // Fase 9: propuestas de corrección y conversaciones sobre un análisis.
+  `CREATE TABLE fix_proposals (
+     analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+     finding_id TEXT NOT NULL,
+     created_at TEXT NOT NULL,
+     proposal TEXT NOT NULL,
+     PRIMARY KEY (analysis_id, finding_id)
+   );
+   CREATE TABLE chat_messages (
+     id INTEGER PRIMARY KEY,
+     analysis_id INTEGER NOT NULL REFERENCES analyses(id) ON DELETE CASCADE,
+     role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+     content TEXT NOT NULL,
+     meta TEXT,
+     created_at TEXT NOT NULL
+   );
+   CREATE INDEX chat_by_analysis ON chat_messages (analysis_id, id);`,
 ];
+
+/** Versión del esquema que crea esta versión de la aplicación. */
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
+/** Mensajes de una conversación que se conservan (los más antiguos se eliminan). */
+export const CHAT_LIMIT = 200;
 
 /** Análisis que se conservan por proyecto (los más antiguos se eliminan). */
 export const HISTORY_LIMIT = 100;
@@ -82,6 +105,18 @@ function toSummary(r: Row): AnalysisSummary {
     branch: r['branch'] === null ? null : String(r['branch']),
     withAi: Number(r['with_ai']) === 1,
   };
+}
+
+function toChatMessage(r: Row): ChatMessage {
+  let meta: ChatMeta | null = null;
+  if (r['meta'] !== null) {
+    try {
+      meta = JSON.parse(String(r['meta'])) as ChatMeta;
+    } catch {
+      meta = null;
+    }
+  }
+  return { id: Number(r['id']), analysisId: Number(r['analysis_id']), role: String(r['role']) as ChatMessage['role'], content: String(r['content']), createdAt: String(r['created_at']), meta };
 }
 
 export class Store {
@@ -232,6 +267,60 @@ export class Store {
   /** Sustituye el informe de un análisis (p. ej. al añadir explicaciones de IA a posteriori). */
   updateReport(analysisId: number, report: AnalysisReport): void {
     this.db.prepare('UPDATE analyses SET report = ?, with_ai = ? WHERE id = ?').run(gzipSync(JSON.stringify(report)), report.ai ? 1 : 0, analysisId);
+  }
+
+  // ── Propuestas de corrección ───────────────────────────────────────────
+
+  /** Guarda la propuesta de un hallazgo (sustituye la anterior). */
+  saveFixProposal(analysisId: number, p: AiFixProposal): void {
+    this.db
+      .prepare(
+        `INSERT INTO fix_proposals (analysis_id, finding_id, created_at, proposal) VALUES (?, ?, ?, ?)
+         ON CONFLICT (analysis_id, finding_id) DO UPDATE SET created_at = excluded.created_at, proposal = excluded.proposal`,
+      )
+      .run(analysisId, p.findingId, p.createdAt, JSON.stringify(p));
+  }
+
+  getFixProposal(analysisId: number, findingId: string): AiFixProposal | null {
+    const r = this.db.prepare('SELECT proposal FROM fix_proposals WHERE analysis_id = ? AND finding_id = ?').get(analysisId, findingId) as Row | undefined;
+    if (!r) return null;
+    try {
+      return JSON.parse(String(r['proposal'])) as AiFixProposal;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Hallazgos del análisis que tienen una propuesta guardada. */
+  fixProposalIds(analysisId: number): string[] {
+    return (this.db.prepare('SELECT finding_id FROM fix_proposals WHERE analysis_id = ? ORDER BY created_at').all(analysisId) as Row[]).map((r) => String(r['finding_id']));
+  }
+
+  deleteFixProposal(analysisId: number, findingId: string): void {
+    this.db.prepare('DELETE FROM fix_proposals WHERE analysis_id = ? AND finding_id = ?').run(analysisId, findingId);
+  }
+
+  // ── Conversación ───────────────────────────────────────────────────────
+
+  addChatMessage(analysisId: number, m: { role: ChatMessage['role']; content: string; meta?: ChatMeta | null }): ChatMessage {
+    return this.transaction(() => {
+      const { lastInsertRowid } = this.db
+        .prepare('INSERT INTO chat_messages (analysis_id, role, content, meta, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(analysisId, m.role, m.content, m.meta ? JSON.stringify(m.meta) : null, new Date().toISOString());
+      this.db
+        .prepare(`DELETE FROM chat_messages WHERE analysis_id = ? AND id NOT IN (SELECT id FROM chat_messages WHERE analysis_id = ? ORDER BY id DESC LIMIT ${CHAT_LIMIT})`)
+        .run(analysisId, analysisId);
+      return toChatMessage(this.db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(Number(lastInsertRowid)) as Row);
+    });
+  }
+
+  /** En orden de escritura. */
+  listChatMessages(analysisId: number): ChatMessage[] {
+    return (this.db.prepare('SELECT * FROM chat_messages WHERE analysis_id = ? ORDER BY id').all(analysisId) as Row[]).map(toChatMessage);
+  }
+
+  clearChat(analysisId: number): void {
+    this.db.prepare('DELETE FROM chat_messages WHERE analysis_id = ?').run(analysisId);
   }
 
   // ── Ajustes y credenciales ─────────────────────────────────────────────

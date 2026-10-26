@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AnalysisReport, Severity } from '@radar/engine';
-import { DuplicateProjectError, HISTORY_LIMIT, Store } from '../src/main/store.js';
+import type { AiFixProposal, AnalysisReport, Severity } from '@radar/engine';
+import { CHAT_LIMIT, DuplicateProjectError, HISTORY_LIMIT, SCHEMA_VERSION, Store } from '../src/main/store.js';
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -42,7 +42,7 @@ describe('Store', () => {
     dirs.push(dir);
     const file = path.join(dir, 'sub', 'radar.db');
     const a = Store.open(file);
-    expect(a.schemaVersion).toBe(1);
+    expect(a.schemaVersion).toBe(SCHEMA_VERSION);
     a.addProject({ name: 'demo', kind: 'local', location: 'C:\\dev\\demo' });
     a.close();
     const b = Store.open(file);
@@ -113,6 +113,63 @@ describe('Store', () => {
     expect([...(s.getSecret('openrouter') ?? [])]).toEqual([1, 2, 3]);
     s.deleteSecret('openrouter');
     expect(s.getSecret('openrouter')).toBeNull();
+  });
+
+  it('migra una base de datos de la versión 1 conservando sus datos', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'radar-store-'));
+    dirs.push(dir);
+    const file = path.join(dir, 'radar.db');
+    const a = Store.open(file);
+    const p = a.addProject({ name: 'demo', kind: 'local', location: '/demo' });
+    a.saveAnalysis(p.id, report(70), { startedAt: '2026-10-26T12:00:00.000Z', durationMs: 5 });
+    a.close();
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(file);
+    db.exec('DROP TABLE fix_proposals; DROP TABLE chat_messages; PRAGMA user_version = 1;');
+    db.close();
+    const b = Store.open(file);
+    stores.push(b);
+    expect(b.schemaVersion).toBe(SCHEMA_VERSION);
+    const [analysis] = b.listAnalyses(p.id);
+    expect(analysis?.score).toBe(70);
+    expect(b.listChatMessages(analysis?.id ?? 0)).toEqual([]);
+  });
+
+  it('guarda una propuesta por hallazgo, la sustituye y la borra con su análisis', () => {
+    const s = memory();
+    const p = s.addProject({ name: 'demo', kind: 'local', location: '/demo' });
+    const a = s.saveAnalysis(p.id, report(70), { startedAt: '2026-10-26T12:00:00.000Z', durationMs: 5 });
+    const proposal = (summary: string): AiFixProposal => ({ findingId: 'f1', applicable: true, summary, hunks: [], patch: '', risks: [], verification: [], validationNotes: [], baseHashes: {}, privacy: 'fragmentos', provider: 'p', model: 'm', fromCache: false, usage: { requests: 1, cacheHits: 0, inputTokens: 1, outputTokens: 1, costUsd: 0, latencyMsTotal: 1, latencyMsMax: 1 }, createdAt: '2026-10-26T12:00:00.000Z' });
+    s.saveFixProposal(a.id, proposal('primera'));
+    s.saveFixProposal(a.id, proposal('segunda'));
+    expect(s.getFixProposal(a.id, 'f1')?.summary).toBe('segunda');
+    expect(s.fixProposalIds(a.id)).toEqual(['f1']);
+    expect(s.getFixProposal(a.id, 'otro')).toBeNull();
+    s.deleteFixProposal(a.id, 'f1');
+    expect(s.getFixProposal(a.id, 'f1')).toBeNull();
+    s.saveFixProposal(a.id, proposal('tercera'));
+    s.removeProject(p.id);
+    expect(s.fixProposalIds(a.id)).toEqual([]);
+  });
+
+  it('guarda la conversación de un análisis en orden, con sus datos y acotada', () => {
+    const s = memory();
+    const p = s.addProject({ name: 'demo', kind: 'local', location: '/demo' });
+    const a = s.saveAnalysis(p.id, report(70), { startedAt: '2026-10-26T12:00:00.000Z', durationMs: 5 });
+    const q = s.addChatMessage(a.id, { role: 'user', content: '¿Por dónde empiezo?' });
+    const meta = { references: [{ alias: 'H1', findingId: 'f1' }], unknownReferences: [], truncated: false, model: 'm', costUsd: 0 };
+    s.addChatMessage(a.id, { role: 'assistant', content: 'Por [H1].', meta });
+    expect(q).toMatchObject({ analysisId: a.id, role: 'user', meta: null });
+    expect(s.listChatMessages(a.id).map((m) => [m.role, m.content, m.meta])).toEqual([
+      ['user', '¿Por dónde empiezo?', null],
+      ['assistant', 'Por [H1].', meta],
+    ]);
+    for (let i = 0; i < CHAT_LIMIT + 3; i++) s.addChatMessage(a.id, { role: 'user', content: `m${i}` });
+    const all = s.listChatMessages(a.id);
+    expect(all).toHaveLength(CHAT_LIMIT);
+    expect(all.at(-1)?.content).toBe(`m${CHAT_LIMIT + 2}`);
+    s.clearChat(a.id);
+    expect(s.listChatMessages(a.id)).toEqual([]);
   });
 
   it('rechaza una base de datos de una versión más reciente', async () => {
