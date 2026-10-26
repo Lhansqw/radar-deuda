@@ -154,6 +154,49 @@ describe('OpenRouterProvider', () => {
     });
   });
 
+  describe('modelos de respaldo', () => {
+    const catalog = [
+      { id: 'a/gratis:free', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['reasoning'], reasoning: { mandatory: false, supported_efforts: ['low', 'none'] }, top_provider: { max_completion_tokens: 16000 } },
+      { id: 'b/gratis:free', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['reasoning'], reasoning: { mandatory: false, supported_efforts: ['high', 'none'] } },
+      { id: 'c/normal', pricing: { prompt: '0.000001', completion: '0.000004' }, supported_parameters: [], top_provider: { max_completion_tokens: 3000 } },
+    ];
+
+    it('envía la cadena de modelos en orden y sin repetir', async () => {
+      const fetch = fakeFetch(route(() => ok({ model: 'b/gratis:free' }), catalog));
+      const p = new OpenRouterProvider({ apiKey: KEY, fetch, fallbackModels: ['b/gratis:free', 'a/gratis:free'] });
+      const r = await p.complete({ ...req, model: 'a/gratis:free' });
+      const b = body(chats(fetch)[0]);
+      expect(b['models']).toEqual(['a/gratis:free', 'b/gratis:free']);
+      expect(b['model']).toBe('a/gratis:free');
+      expect(b['reasoning']).toEqual({ effort: 'none' }); // los dos admiten desactivarlo
+      expect(r.model).toBe('b/gratis:free'); // el que respondió
+    });
+
+    it('si los modelos no admiten el mismo ajuste de razonamiento, no lo envía y deja el margen del peor caso', async () => {
+      const fetch = fakeFetch(route(() => ok(), catalog));
+      await new OpenRouterProvider({ apiKey: KEY, fetch, fallbackModels: ['c/normal'] }).complete({ ...req, model: 'a/gratis:free' });
+      const b = body(chats(fetch)[0]);
+      expect(b['reasoning']).toBeUndefined();
+      expect(b['max_completion_tokens']).toBe(3000); // 300 + 4000 de margen, limitado al menor máximo publicado
+    });
+
+    it('sin respaldos no envía models', async () => {
+      const fetch = fakeFetch(route(() => ok(), catalog));
+      await new OpenRouterProvider({ apiKey: KEY, fetch }).complete({ ...req, model: 'c/normal' });
+      expect(body(chats(fetch)[0])['models']).toBeUndefined();
+    });
+
+    it('el presupuesto usa el precio del modelo más caro de la cadena', async () => {
+      const p = new OpenRouterProvider({ apiKey: KEY, fetch: fakeFetch(route(() => ok(), catalog)), fallbackModels: ['c/normal'] });
+      expect(await p.price('a/gratis:free')).toEqual({ inputPerMTok: 1, outputPerMTok: 4 });
+      expect(await new OpenRouterProvider({ apiKey: KEY, fetch: fakeFetch(route(() => ok(), catalog)), fallbackModels: ['x/desconocido'] }).price('a/gratis:free')).toBeNull();
+    });
+
+    it('rechaza ids de respaldo mal formados', () => {
+      expect(() => new OpenRouterProvider({ apiKey: KEY, fallbackModels: ['sin-proveedor'] })).toThrow(/respaldo no válido/);
+    });
+  });
+
   it('valida el formato del id de modelo y exige la clave', () => {
     expect(OpenRouterProvider.isValidModelId('anthropic/claude-haiku-5.5')).toBe(true);
     expect(OpenRouterProvider.isValidModelId('qwen/qwen3-coder:free')).toBe(true);

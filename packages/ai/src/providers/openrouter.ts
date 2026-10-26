@@ -46,7 +46,8 @@ export function planReasoning(model: OpenRouterModel | null, preference: Reasoni
   const controllable = model.supportedParameters.includes('reasoning');
   if (!controllable) {
     // No se puede ajustar: si razona por defecto, al menos se deja margen.
-    return r.mandatory || r.defaultEnabled ? { effort: 'desconocido', headroom: REASONING_HEADROOM['medium'] as number } : { effort: 'none', headroom: 0 };
+    const headroom = defaultReasoningHeadroom(model);
+    return { effort: headroom > 0 ? 'desconocido' : 'none', headroom };
   }
   const allowed = (r.supportedEfforts ?? ['high', 'medium', 'low', 'minimal', 'none']).filter((e) => e !== 'none' || !r.mandatory);
   const lowest = [...allowed].reverse().find((e) => e !== 'none') ?? 'low';
@@ -57,11 +58,23 @@ export function planReasoning(model: OpenRouterModel | null, preference: Reasoni
   return { reasoning: { effort, exclude: true }, effort, headroom: REASONING_HEADROOM[effort] ?? REASONING_HEADROOM['medium'] as number };
 }
 
+/** Margen para un modelo al que no se le indica el razonamiento: razona según su configuración por defecto. */
+function defaultReasoningHeadroom(model: OpenRouterModel | null): number {
+  const r = model?.reasoning;
+  return r && (r.mandatory || r.defaultEnabled) ? (REASONING_HEADROOM['medium'] as number) : 0;
+}
+
 export interface OpenRouterOptions extends Omit<OpenAiCompatibleOptions, 'id' | 'label' | 'baseUrl' | 'apiKey' | 'locality'> {
   apiKey: string;
   baseUrl?: string;
   /** Razonamiento de los modelos que razonan (por defecto "auto"). */
   reasoning?: ReasoningPreference;
+  /**
+   * Modelos de respaldo, en orden: si el principal falla (no disponible,
+   * saturado, límite de peticiones…), OpenRouter prueba el siguiente.
+   * Se cobra el precio del modelo que finalmente responde.
+   */
+  fallbackModels?: string[];
   /** Permitir proveedores que guardan o entrenan con los datos (por defecto no). */
   allowDataCollection?: boolean;
   /** Solo endpoints de retención cero (Zero Data Retention). */
@@ -142,10 +155,11 @@ const MODEL_ID = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
 export class OpenRouterProvider extends OpenAiCompatibleProvider {
   private readonly routing: Record<string, unknown>;
   private readonly reasoningPreference: ReasoningPreference;
+  private readonly fallbackModels: readonly string[];
   private catalog: Promise<Map<string, OpenRouterModel>> | null = null;
 
   constructor(options: OpenRouterOptions) {
-    const { apiKey, baseUrl = 'https://openrouter.ai/api/v1', allowDataCollection = false, zeroDataRetention = false, reasoning = 'auto', ...rest } = options;
+    const { apiKey, baseUrl = 'https://openrouter.ai/api/v1', allowDataCollection = false, zeroDataRetention = false, reasoning = 'auto', fallbackModels = [], ...rest } = options;
     checkApiKey(apiKey, KEY_RULES.openrouter, 'openrouter');
     super({
       ...rest,
@@ -159,6 +173,15 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
     });
     this.routing = { data_collection: allowDataCollection ? 'allow' : 'deny', ...(zeroDataRetention ? { zdr: true } : {}) };
     this.reasoningPreference = reasoning;
+    for (const m of fallbackModels) {
+      if (!MODEL_ID.test(m)) throw new ProviderError(`Id de modelo de respaldo no válido: ${m} (formato proveedor/modelo).`, 'invalid-request', 'openrouter');
+    }
+    this.fallbackModels = fallbackModels;
+  }
+
+  /** El modelo pedido seguido de los de respaldo, sin repetir. */
+  chain(model: string): string[] {
+    return [...new Set([model, ...this.fallbackModels])];
   }
 
   /**
@@ -167,14 +190,26 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
    * Sin catálogo, la consulta se envía tal cual.
    */
   override async complete(req: CompletionRequest): Promise<CompletionResult> {
-    const info = await this.model(req.model, req.signal).catch((err: unknown) => {
-      if (req.signal?.aborted) throw err;
-      return null;
-    });
-    const plan = planReasoning(info, this.reasoningPreference);
-    let maxOutputTokens = req.maxOutputTokens + plan.headroom;
-    if (info?.maxCompletionTokens) maxOutputTokens = Math.min(maxOutputTokens, info.maxCompletionTokens);
-    return this.send({ ...req, maxOutputTokens }, plan.reasoning ? { reasoning: plan.reasoning } : {});
+    const chain = this.chain(req.model);
+    const infos = await Promise.all(
+      chain.map((m) =>
+        this.model(m, req.signal).catch((err: unknown) => {
+          if (req.signal?.aborted) throw err;
+          return null;
+        }),
+      ),
+    );
+    // Con respaldos, el cuerpo es el mismo para todos los modelos: el razonamiento solo
+    // se ajusta si todos admiten el mismo ajuste, y el margen es el mayor de todos.
+    const plans = infos.map((info) => planReasoning(info, this.reasoningPreference));
+    const first = JSON.stringify(plans[0]?.reasoning);
+    const shared = plans.every((p) => p.reasoning !== undefined && JSON.stringify(p.reasoning) === first) ? plans[0]?.reasoning : undefined;
+    // Sin el parámetro, cada modelo razona lo que haga por defecto.
+    const headroom = shared ? Math.max(...plans.map((p) => p.headroom)) : Math.max(...infos.map(defaultReasoningHeadroom));
+    let maxOutputTokens = req.maxOutputTokens + headroom;
+    const caps = infos.map((i) => i?.maxCompletionTokens).filter((c): c is number => typeof c === 'number' && c > 0);
+    if (caps.length > 0) maxOutputTokens = Math.min(maxOutputTokens, ...caps);
+    return this.send({ ...req, maxOutputTokens }, { ...(shared ? { reasoning: shared } : {}), ...(chain.length > 1 ? { models: chain } : {}) });
   }
 
   static isValidModelId(model: string): boolean {
@@ -209,9 +244,15 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
     return this.catalog;
   }
 
-  /** Precio publicado (la API lo da en USD por token, como texto; aquí, por millón de tokens). */
+  /**
+   * Precio publicado (la API lo da en USD por token, como texto; aquí, por
+   * millón de tokens). Con respaldos, el más caro de la cadena: el presupuesto
+   * se comprueba con el peor caso.
+   */
   async price(model: string, signal?: AbortSignal): Promise<ModelPrice | null> {
-    return (await this.model(model, signal))?.price ?? null;
+    const prices = (await Promise.all(this.chain(model).map((m) => this.model(m, signal)))).map((m) => m?.price ?? null);
+    if (prices.some((p) => p === null)) return null;
+    return (prices as ModelPrice[]).reduce((a, b) => ({ inputPerMTok: Math.max(a.inputPerMTok, b.inputPerMTok), outputPerMTok: Math.max(a.outputPerMTok, b.outputPerMTok) }));
   }
 
   /** Un modelo es gratuito si es una variante ":free" o su precio publicado es cero. */
@@ -241,7 +282,7 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
     if (typeof data?.limit_remaining === 'number' && data.limit_remaining <= 0) {
       throw new ProviderError('La clave de OpenRouter agotó su límite de crédito. Amplíalo en https://openrouter.ai/settings/keys o usa otra clave.', 'quota', this.id);
     }
-    const free = await Promise.all(plan.models.map((m) => this.isFree(m, signal)));
+    const free = await Promise.all(plan.models.flatMap((m) => this.chain(m)).map((m) => this.isFree(m, signal)));
     const daily = data?.free_model_daily_requests;
     if (free.some(Boolean) && typeof daily?.remaining === 'number') {
       if (daily.remaining <= 0) {
