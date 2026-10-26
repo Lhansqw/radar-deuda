@@ -82,6 +82,45 @@ export const PLAN_SCHEMA: JsonSchemaSpec = {
   },
 };
 
+export const FIX_SCHEMA: JsonSchemaSpec = {
+  name: 'propuesta_correccion',
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['id_hallazgo', 'aplicable', 'resumen', 'cambios', 'riesgos', 'verificacion'],
+    properties: {
+      id_hallazgo: { type: 'string' },
+      aplicable: { type: 'boolean', description: 'false si no se puede proponer un cambio seguro con el código enviado.' },
+      resumen: { type: 'string', description: 'Qué cambia y por qué, o por qué no se propone nada.' },
+      cambios: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['archivo', 'linea_inicio', 'linea_fin', 'reemplazo'],
+          properties: {
+            archivo: { type: 'string', description: 'Ruta exacta de un fragmento enviado.' },
+            linea_inicio: { type: 'integer' },
+            linea_fin: { type: 'integer' },
+            reemplazo: { type: 'string', description: 'Texto nuevo de esas líneas, sin números de línea. Vacío para borrarlas.' },
+          },
+        },
+      },
+      riesgos: { type: 'array', items: { type: 'string' } },
+      verificacion: { type: 'array', items: { type: 'string' } },
+    },
+  },
+};
+
+export interface RawFix {
+  id_hallazgo: string;
+  aplicable: boolean;
+  resumen: string;
+  cambios: Array<{ archivo: string; linea_inicio: number; linea_fin: number; reemplazo: string }>;
+  riesgos: string[];
+  verificacion: string[];
+}
+
 export interface RawPlan {
   pasos: Array<{ hallazgos: string[]; horizonte: string; titulo: string; justificacion: string }>;
   notas: string[];

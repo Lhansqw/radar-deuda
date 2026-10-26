@@ -357,6 +357,34 @@ export interface DiffHunk {
   lines: DiffLine[];
 }
 
+/**
+ * Propuesta de corrección de la IA para un hallazgo. Nunca se aplica sola: se
+ * revisa como diferencia. El parche lo calcula la aplicación a partir de los
+ * rangos de líneas que propone el modelo, validados contra el código enviado.
+ */
+export interface AiFixProposal {
+  findingId: string;
+  /** false si el modelo indica que no puede proponer un cambio seguro con el código enviado. */
+  applicable: boolean;
+  /** Qué cambia y por qué (o por qué no se propone nada). */
+  summary: string;
+  hunks: DiffHunk[];
+  /** Parche unificado relativo a la raíz del repositorio (git apply). Vacío si no hay cambios. */
+  patch: string;
+  risks: string[];
+  /** Cómo comprobar el cambio. */
+  verification: string[];
+  validationNotes: string[];
+  /** Huella sha1 de cada archivo al proponer: si cambia, el parche puede no aplicarse. */
+  baseHashes: Record<string, string>;
+  privacy: 'local' | 'fragmentos';
+  provider: string;
+  model: string;
+  fromCache: boolean;
+  usage: AiUsage;
+  createdAt: string;
+}
+
 /** Diferencias entre dos informes del mismo repositorio (deuda nueva, resuelta y que cambió de severidad). */
 export interface ReportComparison {
   /** Hallazgos que no existían en el informe de referencia. */
