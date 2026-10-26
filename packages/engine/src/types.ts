@@ -229,6 +229,77 @@ export interface AnalysisReport {
   vcs?: VcsInfo;
   /** Archivos que cambian a menudo y acumulan deuda (lo añade @radar/sources). */
   hotspots?: Hotspot[];
+  /** Anotaciones de la capa de IA (lo añade @radar/ai). Nunca modifican `findings`. */
+  ai?: AiSection;
+}
+
+/**
+ * Tipo de cada afirmación de la IA, para distinguir lo verificado de lo
+ * deducido: `evidencia` se apoya en datos de herramientas o en líneas del
+ * fragmento enviado; `inferencia` es una deducción del modelo; `recomendacion`
+ * es una propuesta de acción.
+ */
+export type ClaimKind = 'evidencia' | 'inferencia' | 'recomendacion';
+
+export interface AiClaim {
+  kind: ClaimKind;
+  text: string;
+  /** Líneas citadas del fragmento enviado (si las hay). */
+  lines?: { file: string; startLine: number; endLine: number };
+}
+
+export interface AiExplanation {
+  findingId: string;
+  /** Explicación en lenguaje natural con el contexto del proyecto. */
+  summary: string;
+  /** Causa raíz probable (siempre es una inferencia). */
+  rootCause: string;
+  recommendation: string;
+  claims: AiClaim[];
+  /** Confianza declarada por el modelo, tras la validación. */
+  confidence: 'alta' | 'media' | 'baja';
+  /** El modelo indicó que la información no basta para concluir. */
+  insufficientInformation: boolean;
+  /** Avisos de la validación (afirmaciones degradadas, citas fuera del fragmento…). */
+  validationNotes: string[];
+  provider: string;
+  model: string;
+  fromCache: boolean;
+}
+
+export interface AiPlanStep {
+  order: number;
+  findingIds: string[];
+  horizon: 'inmediato' | 'corto' | 'medio';
+  title: string;
+  rationale: string;
+}
+
+export interface AiPlan {
+  steps: AiPlanStep[];
+  notes: string[];
+  provider: string;
+  model: string;
+}
+
+export interface AiUsage {
+  requests: number;
+  cacheHits: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** null si el proveedor no tiene precio conocido. 0 en modelos locales. */
+  costUsd: number | null;
+  latencyMsTotal: number;
+  latencyMsMax: number;
+}
+
+export interface AiSection {
+  privacy: 'local' | 'metadatos' | 'fragmentos';
+  explanations: AiExplanation[];
+  plan?: AiPlan;
+  usage: AiUsage;
+  /** Hallazgos que no se pudieron explicar y por qué. */
+  errors: Array<{ findingId?: string; message: string }>;
 }
 
 export interface VcsInfo {
