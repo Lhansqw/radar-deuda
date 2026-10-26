@@ -17,7 +17,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 5 | Motor de análisis (primera versión funcional) + pruebas y benchmark | ✅ |
 | 6 | Git, GitHub, puntos críticos, vulnerabilidades (OSV) y versiones (npm) | ✅ |
 | 7 | Capa de IA con proveedores intercambiables (local y nube), privacidad y validación | ✅ |
-| 8 | Aplicación de escritorio y panel de resultados | Pendiente |
+| 8 | Aplicación de escritorio y panel de resultados (empezada: robustez de la IA con OpenRouter) | En curso |
 | 9 | Recomendaciones, propuestas de corrección y chat | Pendiente |
 | 10 | Caché, análisis incremental y optimización (parte del motor ya hecha) | Parcial |
 | 11 | Pruebas, auditorías de seguridad y rendimiento | Pendiente |
@@ -89,6 +89,8 @@ npm run analyze -- Lhansqw/radar-deuda                   # repositorio de GitHub
 npm run analyze -- C:\ruta\a\otro\repo --online          # + vulnerabilidades (OSV) y versiones (npm)
 npm run analyze -- . --baseline antes.json --fail-on-new medium   # CI: falla solo si se añade deuda
 npm run analyze -- C:\ruta\a\otro\repo --ai lmstudio          # explicaciones y plan con un modelo local
+npm run models -- --gratis                                    # modelos de OpenRouter compatibles
+npm run analyze -- C:\ruta\a\otro\repo --ai openrouter --ai-model proveedor/modelo
 ```
 
 Todas las opciones: `npm run analyze -- --help`. `Ctrl+C` cancela. Detalles de GitHub, el
@@ -112,4 +114,4 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | Puntuación, severidad, confianza y estimaciones de esfuerzo |
 | [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Objetivos, benchmark y resultados medidos |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
-| [docs/IA.md](docs/IA.md) | Fase 7: qué necesitas, proveedores, privacidad y cómo se evita que la IA invente |
+| [docs/IA.md](docs/IA.md) | Fase 7: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad y cómo se evita que la IA invente |
