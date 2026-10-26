@@ -79,3 +79,42 @@ export function localityOf(baseUrl: string): Locality {
   const host = new URL(baseUrl).hostname.replace(/^\[|\]$/g, '').toLowerCase();
   return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost') ? 'local' : 'cloud';
 }
+
+export interface ApiKeyRules {
+  /** Nombre del proveedor para los mensajes. */
+  provider: string;
+  /** Variable de entorno de la que se lee (para indicar dónde corregirla). */
+  envVar: string;
+  /** Prefijo con el que empiezan las claves de este proveedor. */
+  prefix?: string;
+  minLength: number;
+}
+
+/**
+ * Comprueba la forma de una clave de API ANTES de enviar ninguna petición, para
+ * detectar el error más habitual (pegarla incompleta o con espacios) con un
+ * mensaje útil en lugar de un 401 por cada consulta. Los mensajes nunca incluyen
+ * la clave ni parte de ella: solo su longitud.
+ */
+export function checkApiKey(key: string, rules: ApiKeyRules, providerId: string): void {
+  const { provider, envVar, prefix, minLength } = rules;
+  if (!key) throw new ProviderError(`Falta la clave de ${provider} (${envVar}).`, 'auth', providerId);
+  // eslint-disable-next-line no-control-regex
+  if (/[\s\u0000-\u001f\u007f\u200b-\u200d\ufeff]/.test(key)) {
+    throw new ProviderError(`La clave de ${provider} (${envVar}) contiene espacios o caracteres invisibles. Vuelve a pegarla.`, 'auth', providerId);
+  }
+  if (key.length < minLength || (prefix !== undefined && !key.startsWith(prefix))) {
+    const expected = prefix !== undefined ? `debería empezar por "${prefix}" y tener al menos ${minLength} caracteres` : `debería tener al menos ${minLength} caracteres`;
+    throw new ProviderError(
+      `La clave de ${provider} (${envVar}) no tiene el formato esperado: tiene ${key.length} caracteres y ${expected}. Probablemente no se pegó completa; cópiala de nuevo desde el panel del proveedor.`,
+      'auth',
+      providerId,
+    );
+  }
+}
+
+export const KEY_RULES = {
+  openrouter: { provider: 'OpenRouter', envVar: 'RADAR_OPENROUTER_API_KEY', prefix: 'sk-or-', minLength: 40 },
+  anthropic: { provider: 'Anthropic', envVar: 'RADAR_ANTHROPIC_API_KEY', prefix: 'sk-ant-', minLength: 40 },
+  openai: { provider: 'OpenAI', envVar: 'RADAR_OPENAI_API_KEY', prefix: 'sk-', minLength: 20 },
+} as const satisfies Record<string, ApiKeyRules>;

@@ -82,7 +82,7 @@ describe('--ai openrouter', () => {
       const isPlan = body.messages[0]?.content.includes('planifica') ?? false;
       return Response.json({ model: body.model, choices: [{ message: { content: answer(body.messages.map((m) => m.content).join('\n'), isPlan) }, finish_reason: 'stop' }], usage: { prompt_tokens: 800, completion_tokens: 120, cost: 0.0003 } });
     });
-    vi.stubEnv('RADAR_OPENROUTER_API_KEY', 'sk-or-de-prueba');
+    vi.stubEnv('RADAR_OPENROUTER_API_KEY', `  ${['sk', 'or', 'v1', 'x'.repeat(64)].join('-')}\r\n`); // con espacios alrededor, como al pegar
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const json = path.join(await tmp(), 'r.json');
     const o: CliOptions = { target: await repo(), noCache: true, online: false, history: false, quiet: true, top: 5, json, ai: { provider: 'openrouter', model: 'qwen/qwen3-coder', limit: 3, budgetUsd: 0.5, plan: true } };
@@ -143,7 +143,7 @@ describe('--ai anthropic', () => {
       const isPlan = body.system.includes('planifica');
       return Response.json({ model: body.model, content: [{ type: 'text', text: answer(body.messages.map((m) => m.content).join('\n'), isPlan) }], stop_reason: 'end_turn', usage: { input_tokens: 1000, output_tokens: 200 } });
     });
-    vi.stubEnv('RADAR_ANTHROPIC_API_KEY', 'clave-de-prueba');
+    vi.stubEnv('RADAR_ANTHROPIC_API_KEY', ['sk', 'ant', 'prueba', 'x'.repeat(40)].join('-'));
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const root = await repo();
     const json = path.join(await tmp(), 'r.json');
@@ -155,6 +155,20 @@ describe('--ai anthropic', () => {
     expect(bodies.map((b) => b['model'])).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5']);
     // haiku: 1000×0,10 + 200×0,50 = 0,0002 USD · sonnet: 1000×2 + 200×10 = 0,004 USD
     expect(report.ai?.usage.costUsd).toBeCloseTo(0.0042, 6);
+    vi.unstubAllEnvs();
+  });
+
+  it('una clave incompleta se detecta antes de enviar nada', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', async () => {
+      calls++;
+      return Response.json({});
+    });
+    vi.stubEnv('RADAR_OPENROUTER_API_KEY', 'abcd');
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const o: CliOptions = { target: await repo(), noCache: true, online: false, history: false, quiet: true, top: 5, ai: { provider: 'openrouter', model: 'a/b', limit: 1, budgetUsd: 0.5, plan: false } };
+    await expect(run(o, io, new AbortController().signal)).rejects.toThrow(/tiene 4 caracteres/);
+    expect(calls).toBe(0);
     vi.unstubAllEnvs();
   });
 

@@ -1,5 +1,5 @@
 import { HttpError, requestJson, type HttpOptions } from '@radar/sources';
-import { ProviderError, type CompletionRequest, type CompletionResult, type FinishReason, type LlmProvider } from '../provider.js';
+import { checkApiKey, KEY_RULES, ProviderError, type CompletionRequest, type CompletionResult, type FinishReason, type LlmProvider } from '../provider.js';
 
 /**
  * Adaptador para la API de Messages de Anthropic (Claude).
@@ -54,7 +54,7 @@ export class AnthropicProvider implements LlmProvider {
 
   constructor(options: AnthropicOptions) {
     const { apiKey, baseUrl = 'https://api.anthropic.com', ...http } = options;
-    if (!apiKey) throw new ProviderError('Falta la clave de API de Anthropic (RADAR_ANTHROPIC_API_KEY).', 'auth', this.id);
+    checkApiKey(apiKey, KEY_RULES.anthropic, this.id);
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.http = { timeoutMs: 120_000, retries: 2, retryable: anthropicRetryable, ...http };
