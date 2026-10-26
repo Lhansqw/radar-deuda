@@ -12,8 +12,9 @@ export { EXPLANATION_SCHEMA, FIX_SCHEMA, PLAN_SCHEMA, type RawExplanation, type 
 export { validateExplanation, validatePlan, extractJson, ValidationError, type ValidatedExplanation, type ValidatedPlan } from './validate.js';
 export { runAi, selectForAi, projectSummary, type AiRunOptions, type TriageOptions } from './tasks.js';
 export { askJson, RefusalError, type AskOptions, type RunnerDeps } from './runner.js';
-export { EXPLAIN_PROMPT_VERSION, FIX_PROMPT_VERSION, PLAN_PROMPT_VERSION } from './prompts.js';
+export { CHAT_PROMPT_VERSION, EXPLAIN_PROMPT_VERSION, FIX_PROMPT_VERSION, PLAN_PROMPT_VERSION } from './prompts.js';
 export { formatAiSection } from './format.js';
+export { askAboutReport, citedAliases, findingAliases, reportDigest, MAX_QUESTION_CHARS, type ChatAnswer, type ChatOptions, type ChatTurn, type ReportDigest } from './chat.js';
 export { fixContext, fixUnavailableReason, FixUnavailableError, proposeFix, validateFix, FIX_CONTEXT_LIMITS, type FixOptions, type ValidatedFix } from './fix.js';
 export { applyEdits, buildHunks, diffOps, EditError, formatPatch, joinLines, splitLines, type FilePatch, type LineEdit, type TextLines } from './diff.js';
 export { OpenRouterProvider, fetchOpenRouterModels, OPENROUTER_BASE_URL, planReasoning, REASONING_PREFERENCES, type OpenRouterOptions, type OpenRouterModel, type OpenRouterKeyStatus, type ReasoningPreference, type ReasoningPlan } from './providers/openrouter.js';
