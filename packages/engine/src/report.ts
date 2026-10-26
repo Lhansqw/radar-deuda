@@ -1,4 +1,4 @@
-import type { ReportComparison } from './compare.js';
+import type { ReportComparison } from './types.js';
 import type { AnalysisReport, Category, Confidence, Finding, Severity } from './types.js';
 
 export const SEVERITY_LABEL: Record<Severity, string> = {

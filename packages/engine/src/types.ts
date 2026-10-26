@@ -338,3 +338,17 @@ export interface AnalyzerError {
   file?: string;
   message: string;
 }
+
+/** Diferencias entre dos informes del mismo repositorio (deuda nueva, resuelta y que cambió de severidad). */
+export interface ReportComparison {
+  /** Hallazgos que no existían en el informe de referencia. */
+  added: Finding[];
+  /** Hallazgos del informe de referencia que ya no aparecen. */
+  resolved: Finding[];
+  /** Hallazgos presentes en ambos cuya severidad cambió. */
+  changed: Array<{ before: Finding; after: Finding }>;
+  persisting: number;
+  scoreDelta: number;
+  remediationDeltaMinutes: number;
+  baseline: { generatedAt: string; head: string | null };
+}

@@ -1,17 +1,6 @@
-import { SEVERITY_ORDER, type AnalysisReport, type Finding, type Severity } from './types.js';
+import { SEVERITY_ORDER, type AnalysisReport, type Finding, type ReportComparison, type Severity } from './types.js';
 
-export interface ReportComparison {
-  /** Hallazgos que no existían en el informe de referencia. */
-  added: Finding[];
-  /** Hallazgos del informe de referencia que ya no aparecen. */
-  resolved: Finding[];
-  /** Hallazgos presentes en ambos cuya severidad cambió. */
-  changed: Array<{ before: Finding; after: Finding }>;
-  persisting: number;
-  scoreDelta: number;
-  remediationDeltaMinutes: number;
-  baseline: { generatedAt: string; head: string | null };
-}
+export type { ReportComparison };
 
 /**
  * Compara dos informes por identificador de hallazgo, que es estable entre
