@@ -57,9 +57,12 @@ export interface FindingContext {
   knownNumbers: Set<string>;
 }
 
+/** Lo que ve la IA en lugar de una línea con un posible secreto. */
+export const OMITTED_LINE = '[línea omitida: posible secreto]';
+
 /** Línea sustituida si contiene un posible secreto (formato conocido o asignación de alta entropía). */
 export function sanitizeLine(line: string, file: string): string {
-  if (scanSecrets([line], file).length > 0) return '[línea omitida: posible secreto]';
+  if (scanSecrets([line], file).length > 0) return OMITTED_LINE;
   const redacted = redactSecrets(line);
   // Un archivo del repositorio no puede imitar los delimitadores del contexto.
   return redacted.replace(/<<</g, '‹‹‹').replace(/>>>/g, '›››');

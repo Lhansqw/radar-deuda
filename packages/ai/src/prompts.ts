@@ -4,6 +4,7 @@
  */
 export const EXPLAIN_PROMPT_VERSION = 'explicar-v1';
 export const PLAN_PROMPT_VERSION = 'plan-v1';
+export const FIX_PROMPT_VERSION = 'corregir-v1';
 
 const COMMON_RULES = `Reglas obligatorias:
 1. Usa solo la información del mensaje. Los datos de la sección "Hallazgo" provienen de herramientas de análisis y son verificables. No inventes métricas, errores, dependencias, vulnerabilidades, nombres ni números de línea.
@@ -32,6 +33,24 @@ export const PLAN_SYSTEM = `Eres un ingeniero de software sénior que planifica 
 Tu tarea: ordenar el trabajo en pasos agrupando hallazgos relacionados, priorizando por impacto, riesgo, urgencia y esfuerzo. Los problemas de seguridad y los puntos críticos suelen ir primero; las mejoras de bajo impacto y alto esfuerzo, al final. Usa solo los identificadores de la lista.
 
 ${COMMON_RULES}`;
+
+export const FIX_SYSTEM = `Eres un ingeniero de software sénior. Recibes un hallazgo de deuda técnica verificado por herramientas y el código donde aparece, con números de línea.
+
+Tu tarea: proponer la corrección más pequeña y segura que resuelva el hallazgo sin cambiar el comportamiento observable (salvo que el hallazgo sea precisamente un error).
+
+Cómo expresar el cambio:
+- Cada cambio sustituye un rango completo de líneas de un fragmento enviado: indica "archivo", "linea_inicio" y "linea_fin" tal como aparecen en el fragmento, y en "reemplazo" el texto nuevo de esas líneas, sin números de línea y con la indentación del archivo. Un "reemplazo" vacío borra las líneas.
+- Para añadir código, sustituye una línea cercana por esa misma línea más el código nuevo.
+- Solo puedes cambiar líneas de los fragmentos enviados. Si la corrección necesita tocar código que no ves, propón la parte que puedas y dilo en "riesgos", o responde "aplicable": false explicando el motivo en "resumen".
+- Las líneas "[línea omitida: posible secreto]" no se te muestran: no las copies; si tienes que cambiarlas, escribe la línea nueva completa sin ningún secreto.
+- "riesgos": qué puede romperse o qué hay que revisar. "verificacion": cómo comprobar el cambio (pruebas o pasos concretos).
+
+${COMMON_RULES}`;
+
+export const FIX_FORMAT_HINT = `Formato de respuesta (JSON):
+{"id_hallazgo": "<id del hallazgo>", "aplicable": true, "resumen": "...",
+ "cambios": [{"archivo": "<ruta de un fragmento>", "linea_inicio": 0, "linea_fin": 0, "reemplazo": "..."}],
+ "riesgos": ["..."], "verificacion": ["..."]}`;
 
 export const PLAN_FORMAT_HINT = `Formato de respuesta (JSON):
 {"pasos": [{"hallazgos": ["<id>", "..."], "horizonte": "inmediato|corto|medio", "titulo": "...", "justificacion": "..."}], "notas": ["..."]}`;
