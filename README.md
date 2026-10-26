@@ -16,7 +16,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 4 | Estructura del proyecto y TypeScript | ✅ |
 | 5 | Motor de análisis (primera versión funcional) + pruebas y benchmark | ✅ |
 | 6 | Git, GitHub, puntos críticos, vulnerabilidades (OSV) y versiones (npm) | ✅ |
-| 7 | Capa de IA con proveedores intercambiables | Pendiente |
+| 7 | Capa de IA con proveedores intercambiables (local y nube), privacidad y validación | ✅ |
 | 8 | Aplicación de escritorio y panel de resultados | Pendiente |
 | 9 | Recomendaciones, propuestas de corrección y chat | Pendiente |
 | 10 | Caché, análisis incremental y optimización (parte del motor ya hecha) | Parcial |
@@ -53,6 +53,7 @@ radar-deuda/
 │     ├─ test/           Pruebas unitarias y de integración (Vitest)
 │     └─ scripts/        Benchmark de rendimiento
 │  ├─ sources/           Efectos externos: Git endurecido, GitHub, OSV, registro npm
+│  ├─ ai/                IA independiente del proveedor: explica y prioriza sin inventar
 │  └─ cli/               Comando radar-deuda: orquesta el motor y las fuentes
 ├─ examples/demo-repo/   Repositorio con deuda técnica intencionada
 ├─ docs/                 Arquitectura, decisiones, entorno, metodología, rendimiento
@@ -61,7 +62,7 @@ radar-deuda/
 └─ vitest.config.ts
 ```
 
-Paquetes previstos: `packages/ai` (fase 7) y `apps/desktop` (Electron + React, fase 8).
+Paquete previsto: `apps/desktop` (Electron + React, fase 8).
 
 En desarrollo, los paquetes se importan entre sí desde su código fuente (`paths` en
 `tsconfig.json` y `alias` en `vitest.config.ts`); `npm run build` los compila en orden.
@@ -71,7 +72,7 @@ En desarrollo, los paquetes se importan entre sí desde su código fuente (`path
 ```powershell
 npm ci            # instala dependencias exactas del lockfile
 npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit)
-npm run build     # compila los paquetes en orden (engine → sources → cli) a packages/*/dist
+npm run build     # compila los paquetes en orden (engine → sources → ai → cli) a packages/*/dist
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
 ```
 
@@ -87,6 +88,7 @@ npm run analyze -- C:\ruta\a\otro\repo --fail-on high   # código 1 si hay halla
 npm run analyze -- Lhansqw/radar-deuda                   # repositorio de GitHub (se clona)
 npm run analyze -- C:\ruta\a\otro\repo --online          # + vulnerabilidades (OSV) y versiones (npm)
 npm run analyze -- . --baseline antes.json --fail-on-new medium   # CI: falla solo si se añade deuda
+npm run analyze -- C:\ruta\a\otro\repo --ai lmstudio          # explicaciones y plan con un modelo local
 ```
 
 Todas las opciones: `npm run analyze -- --help`. `Ctrl+C` cancela. Detalles de GitHub, el
@@ -110,3 +112,4 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | Puntuación, severidad, confianza y estimaciones de esfuerzo |
 | [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Objetivos, benchmark y resultados medidos |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
+| [docs/IA.md](docs/IA.md) | Fase 7: qué necesitas, proveedores, privacidad y cómo se evita que la IA invente |
