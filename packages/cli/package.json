@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@radar/engine": "0.1.0",
-    "@radar/sources": "0.1.0"
+    "@radar/sources": "0.1.0",
+    "@radar/ai": "0.1.0"
   },
   "engines": {
     "node": ">=22.13"

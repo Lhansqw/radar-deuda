@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { HELP, parseCli, run, type Io } from './app.js';
+import { FULL_HELP as HELP, parseCli, run, type Io } from './app.js';
 
 async function main(): Promise<number> {
   const parsed = parseCli(process.argv.slice(2));
