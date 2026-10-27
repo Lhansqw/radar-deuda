@@ -4,10 +4,15 @@
 
 ```powershell
 npm ci
+$env:RADAR_SUPABASE_URL = "https://<proyecto>.supabase.co"      # conexión para las cuentas
+$env:RADAR_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."      # (docs/CUENTAS.md)
 npm run dist             # instalador en apps\desktop\release\
 npm run dist -- --carpeta     # solo la aplicación empaquetada (release\win-unpacked), más rápido
 npm run dist -- --sin-prueba  # sin la comprobación del paquete
 ```
+
+Las dos variables de Supabase se incrustan en la aplicación (no son secretas; la clave
+secreta detiene la compilación). Sin ellas, la aplicación instalada no deja iniciar sesión.
 
 El resultado es `radar-deuda-<versión>-instalador-windows-x64.exe`. La integración continua
 lo genera en cada push a `main` y lo publica como artefacto (`instalador-windows`) en la
@@ -24,7 +29,7 @@ paquete. Necesita una pantalla: `xvfb-run -a npm run dist`.
 | Dónde | `%LOCALAPPDATA%\Programs\radar-deuda` (se puede cambiar durante la instalación) |
 | Accesos directos | Menú Inicio y escritorio |
 | Idioma del instalador | Español |
-| Datos | Proyectos, historial y credenciales en `%APPDATA%\radar-deuda`; caché y clones en `%LOCALAPPDATA%\radar-deuda`. Desinstalar **no** los borra |
+| Datos | Proyectos, historial y credenciales de cada cuenta en `%APPDATA%\radar-deuda\usuarios`, y la sesión cifrada en `%APPDATA%\radar-deuda\sesion.bin`; caché y clones en `%LOCALAPPDATA%\radar-deuda`. Desinstalar **no** los borra |
 | Licencias | `THIRD_PARTY_LICENSES.txt` (lo empaquetado desde npm), `LICENSE.electron.txt` y `LICENSES.chromium.html`, junto al ejecutable |
 | Actualizaciones | No hay actualizaciones automáticas: la versión nueva se instala encima de la anterior y conserva los datos |
 
