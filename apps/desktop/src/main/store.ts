@@ -129,7 +129,13 @@ export class Store {
     db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
     if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
     const store = new Store(db);
-    store.migrate();
+    try {
+      store.migrate();
+    } catch (err) {
+      // Sin cerrarla, Windows mantiene el archivo bloqueado mientras la aplicación siga abierta.
+      db.close();
+      throw err;
+    }
     return store;
   }
 
