@@ -376,56 +376,73 @@ export async function refineCandidates(
   readText: (rel: string) => Promise<string | null>,
   options: RefineOptions = {},
 ): Promise<Array<[Region, Region]>> {
-  const { hashes, store, tokenBudget = 4_000_000 } = options;
-  const seqs = new SequenceCache(files, readText, tokenBudget);
+  const seqs = new SequenceCache(files, readText, options.tokenBudget ?? 4_000_000);
   candidates.sort((x, y) => x.fa - y.fa || x.fb - y.fb || x.pA - y.pA || x.pB - y.pB);
+  const out = new PairCollector(files);
+  for (const group of byFilePair(candidates)) {
+    const { fa, fb } = group[0] as Candidate;
+    out.add(fa, fb, await refinePair(group, seqs, options));
+  }
+  return out.pairs;
+}
 
-  const out: Array<[Region, Region]> = [];
-  const seen = new Set<string>();
-  const emit = (fa: number, fb: number, r: PairRegion): void => {
-    const key = `${fa}|${fb}|${r.join(',')}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push([
-      { file: files[fa] as string, startLine: r[0], endLine: r[1], tokens: r[4] },
-      { file: files[fb] as string, startLine: r[2], endLine: r[3], tokens: r[4] },
-    ]);
-  };
-
-  for (let start = 0; start < candidates.length; ) {
-    const first = candidates[start] as Candidate;
-    let end = start;
-    while (end < candidates.length && (candidates[end] as Candidate).fa === first.fa && (candidates[end] as Candidate).fb === first.fb) end++;
-    const group = candidates.slice(start, end);
-    start = end;
-
-    const hA = hashes?.[first.fa];
-    const hB = hashes?.[first.fb];
-    const storeKey = store && hA && hB ? sha1(`${hA}|${hB}|${group.map((c) => `${c.pA},${c.pB}`).join(';')}`) : undefined;
-    if (storeKey && store) {
-      const cached = store.get(storeKey);
-      if (isPairRegions(cached)) {
-        for (const r of cached) emit(first.fa, first.fb, r);
-        continue;
-      }
+/** Candidatos consecutivos del mismo par de archivos (la lista ya está ordenada). */
+function byFilePair(candidates: readonly Candidate[]): Candidate[][] {
+  const groups: Candidate[][] = [];
+  let current: Candidate[] = [];
+  for (const c of candidates) {
+    const first = current[0];
+    if (first && (first.fa !== c.fa || first.fb !== c.fb)) {
+      groups.push(current);
+      current = [];
     }
+    current.push(c);
+  }
+  if (current.length > 0) groups.push(current);
+  return groups;
+}
 
-    const a = await seqs.get(first.fa);
-    const b = first.fa === first.fb ? a : await seqs.get(first.fb);
-    if (!a || !b) continue;
-    const regions: PairRegion[] = [];
-    for (const c of group) {
-      const r = verify(c, a, b);
-      if (r) regions.push(r);
-    }
-    for (const r of regions) emit(first.fa, first.fb, r);
+/** Regiones verificadas de un par de archivos; del almacén si ni los archivos ni los candidatos cambiaron. */
+async function refinePair(group: readonly Candidate[], seqs: SequenceCache, { hashes, store }: RefineOptions): Promise<PairRegion[]> {
+  const { fa, fb } = group[0] as Candidate;
+  const hA = hashes?.[fa];
+  const hB = hashes?.[fb];
+  const storeKey = store && hA && hB ? sha1(`${hA}|${hB}|${group.map((c) => `${c.pA},${c.pB}`).join(';')}`) : undefined;
+  if (store && storeKey) {
+    const cached = store.get(storeKey);
+    if (isPairRegions(cached)) return cached;
+  }
+  const a = await seqs.get(fa);
+  const b = fa === fb ? a : await seqs.get(fb);
+  if (!a || !b) return [];
+  const regions: PairRegion[] = [];
+  for (const c of group) {
+    const r = verify(c, a, b);
+    if (r) regions.push(r);
+  }
+  // Solo se guarda si el contenido leído es el mismo que se huelló (sin carreras con ediciones).
+  if (store && storeKey && seqs.readHashes.get(fa) === hA && seqs.readHashes.get(fb) === hB) store.set(storeKey, regions);
+  return regions;
+}
 
-    // Solo se guarda si el contenido leído es el mismo que se huelló (sin carreras con ediciones).
-    if (storeKey && store) {
-      if (seqs.readHashes.get(first.fa) === hA && seqs.readHashes.get(first.fb) === hB) store.set(storeKey, regions);
+/** Pares de regiones sin repetir, en el orden en que aparecen. */
+class PairCollector {
+  readonly pairs: Array<[Region, Region]> = [];
+  private readonly seen = new Set<string>();
+
+  constructor(private readonly files: readonly string[]) {}
+
+  add(fa: number, fb: number, regions: readonly PairRegion[]): void {
+    for (const r of regions) {
+      const key = `${fa}|${fb}|${r.join(',')}`;
+      if (this.seen.has(key)) continue;
+      this.seen.add(key);
+      this.pairs.push([
+        { file: this.files[fa] as string, startLine: r[0], endLine: r[1], tokens: r[4] },
+        { file: this.files[fb] as string, startLine: r[2], endLine: r[3], tokens: r[4] },
+      ]);
     }
   }
-  return out;
 }
 
 /** Agrupa pares en clases de clones (union-find sobre regiones idénticas). */
