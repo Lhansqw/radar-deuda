@@ -19,7 +19,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 7 | Capa de IA con proveedores intercambiables (local y nube), privacidad y validación | ✅ |
 | 8 | Aplicación de escritorio: proyectos, panel con radar, hallazgos, historial, configuración e IA bajo demanda | ✅ |
 | 9 | Propuestas de corrección como diferencias, preguntas sobre el análisis y deuda nueva entre versiones | ✅ |
-| 10 | Caché, análisis incremental y optimización (parte del motor ya hecha) | Parcial |
+| 10 | Caché del historial, carga perezosa del compilador, límite de memoria, `.radarignore` y mantenimiento de la caché | ✅ |
 | 11 | Pruebas, auditorías de seguridad y rendimiento | Pendiente |
 | 12 | Instalador para Windows | Pendiente |
 
@@ -123,7 +123,7 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/DECISIONES.md](docs/DECISIONES.md) | Fase 2: comparación de tecnologías y stack |
 | [docs/ENTORNO-WINDOWS.md](docs/ENTORNO-WINDOWS.md) | Fase 3: herramientas y preparación del entorno |
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | Puntuación, severidad, confianza y estimaciones de esfuerzo |
-| [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Objetivos, benchmark y resultados medidos |
+| [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Fase 10: objetivos, benchmark, resultados medidos, caché y memoria |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
 | [docs/IA.md](docs/IA.md) | Fases 7 y 9: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad, cómo se evita que la IA invente, propuestas de corrección y preguntas |
 | [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fases 8 y 9: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |

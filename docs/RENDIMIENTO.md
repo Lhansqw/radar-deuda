@@ -41,14 +41,46 @@ compara.
 | `test(engine): benchmark…` | Primera medición | 7,38 s | 6,17 s (84 %) ✗ |
 | `perf(engine): duplicación incremental…` | Caché de verificación por par + LRU de tokens | 1,92 s | 0,34 s (18 %) ✓ |
 
+Medición de la fase 10 (mismo contenedor, otra sesión: sus tiempos absolutos varían ±30 %
+entre sesiones, compara proporciones): pequeño 0,46 s / 17 %, mediano 2,60 s / 20 %,
+grande 9,35 s / 15 %, 460 MB de RAM pico. Todos los objetivos se cumplen.
+
+## Repositorio real
+
+`expressjs/express` (6 183 commits, historial desde 2010), con la CLI de principio a fin:
+
+| Cambio (fase 10) | Reanálisis sin cambios |
+|---|---|
+| Antes | 2,79 s |
+| Caché del historial de Git por commit (`perf(pipeline)…`) | 1,18 s |
+| Compilador de TypeScript cargado solo si hace falta (`perf(engine)…`) | 0,55 s |
+
+Con la caché caliente, el motor tarda 0,09 s en ese repositorio: el resto era leer el
+historial (`git log --numstat`, 0,77 s) y cargar el compilador de TypeScript (≈0,35 s), que
+ya no se hace si nada cambió.
+
 ## Dónde se va el tiempo
 
 - **Análisis por archivo**: parseo con la API de TypeScript (un AST por archivo, compartido
   por todos los analizadores). Con caché caliente no se lee ningún archivo.
 - **Duplicación**: el índice de huellas es lineal; la verificación token a token solo se
   repite para pares de archivos cuyo contenido cambió.
-- **Caché**: un JSON por repositorio; en el escenario grande su lectura y escritura domina
-  el reanálisis. Si crece demasiado, la alternativa es SQLite en la aplicación (fase 10).
+- **Caché**: un JSON por repositorio; en el escenario grande (20 MB) su lectura y la
+  recolección de basura que provoca son la mitad del reanálisis. Solo se reescribe si algo
+  cambió. La mitad de su tamaño son los hallazgos de complejidad completos; guardar solo
+  las métricas y reconstruir los textos es la siguiente optimización si hiciera falta.
+- **Historial de Git**: se guarda por commit en `<caché>/git` (un archivo por repositorio);
+  solo se vuelve a leer si cambia HEAD, la fecha de inicio, la carpeta o el tipo de clon.
+- **Compilador de TypeScript**: se carga la primera vez que hay que analizar un archivo o
+  verificar un par de duplicados nuevo. Un reanálisis sin cambios no lo carga.
+
+## Mantenimiento de la caché
+
+`npm run cache` muestra cuánto ocupa por partes; `-- --limpiar [días]` borra lo que no se
+usa desde hace ese tiempo (90 por defecto) y `-- --vaciar` la vacía. La aplicación hace lo
+mismo desde Configuración y limpia sola lo que lleva 90 días sin usarse. Solo se borran
+archivos con los nombres que crea la herramienta; los clones de GitHub no son caché (la
+aplicación borra el de un proyecto al quitarlo).
 
 ## Memoria
 
@@ -57,3 +89,10 @@ compara.
 - La verificación de clones mantiene como mucho ≈4 M tokens en memoria (≈56 MB).
 - Archivos > 1 MB solo se miden (líneas) y > 20 MB se ignoran; ambos límites son
   configurables.
+- **`.radarignore`** en la raíz del proyecto (sintaxis de `.gitignore`) excluye carpetas
+  generadas o de terceros; el informe lo declara en sus límites.
+- **Aplicación:** el análisis corre en un proceso con su propio límite de montículo
+  (Configuración → Análisis, 512–4096 MB; 4 GB es el máximo de un proceso de Electron).
+  Al pasar del 90 % se detiene con un aviso que dice cuánto usaba y qué hacer, en lugar de
+  morir sin explicación. El límite se pasa como opción de V8 (`--js-flags`): en un
+  `utilityProcess`, `--max-old-space-size` a secas no tiene efecto.
