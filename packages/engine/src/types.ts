@@ -132,6 +132,12 @@ export interface FileAnalyzer<A = unknown> {
   readonly version: string;
   readonly description: string;
   supports(meta: FileMeta): boolean;
+  /**
+   * Carga perezosa de lo que el analizador necesita (p. ej. el compilador de
+   * TypeScript). El motor la espera antes del primer `analyze` que no sale de
+   * la caché: con la caché caliente no se carga nada.
+   */
+  prepare?(): Promise<void>;
   analyze(input: FileInput, config: AnalysisConfig): FileAnalysisResult<A>;
   /** Para análisis entre archivos (p. ej. duplicación). Recibe artefactos, cacheados o no. */
   finalize?(artifacts: ReadonlyMap<string, A>, config: AnalysisConfig, ctx: FinalizeContext): Finding[] | Promise<Finding[]>;

@@ -242,6 +242,7 @@ async function processFile(
     else pending.push(a);
   }
   if (pending.length === 0) return { status: 'ok', results, fromCache: true };
+  await Promise.all(pending.map((a) => a.prepare?.()));
 
   let text = buf.toString('utf8');
   if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);

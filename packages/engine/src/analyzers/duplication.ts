@@ -1,7 +1,8 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { AnalysisConfig, FileAnalyzer, FinalizeStore, Finding, Location } from '../types.js';
 import { computeLineStarts, findingId, lineAt, sha1 } from '../util.js';
 import { isJsLike, languageVariantFor } from './shared.js';
+import { lazy, loadTypeScript, tsApi } from './ts-runtime.js';
 
 /**
  * Detección de código duplicado (clones de tipo 1: idénticos salvo espacios y
@@ -57,7 +58,7 @@ const BK1 = powMod(B1, K - 1, P1);
 const BK2 = powMod(B2, K - 1, P2);
 
 /** Tokens tras los que un `/` inicia una expresión regular y no una división. */
-const REGEX_CONTEXT = new Set<ts.SyntaxKind>([
+const regexContext = lazy((ts) => new Set<ts.SyntaxKind>([
   ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.OpenBracketToken, ts.SyntaxKind.OpenBraceToken, ts.SyntaxKind.CloseBraceToken,
   ts.SyntaxKind.CommaToken, ts.SyntaxKind.SemicolonToken, ts.SyntaxKind.ColonToken, ts.SyntaxKind.QuestionToken,
   ts.SyntaxKind.EqualsToken, ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken,
@@ -68,7 +69,7 @@ const REGEX_CONTEXT = new Set<ts.SyntaxKind>([
   ts.SyntaxKind.ReturnKeyword, ts.SyntaxKind.TypeOfKeyword, ts.SyntaxKind.CaseKeyword, ts.SyntaxKind.DoKeyword,
   ts.SyntaxKind.ElseKeyword, ts.SyntaxKind.InKeyword, ts.SyntaxKind.ThrowKeyword, ts.SyntaxKind.YieldKeyword,
   ts.SyntaxKind.AwaitKeyword, ts.SyntaxKind.TemplateHead, ts.SyntaxKind.TemplateMiddle,
-]);
+]));
 
 /**
  * Recorre los tokens sin construir el AST. El escáner de TypeScript necesita
@@ -76,6 +77,8 @@ const REGEX_CONTEXT = new Set<ts.SyntaxKind>([
  * sustitución en plantillas (`${…}`) y la distinción entre `/` y una regex.
  */
 export function forEachToken(scanner: ts.Scanner, cb: (kind: ts.SyntaxKind, text: string, start: number, end: number) => void): void {
+  const ts = tsApi();
+  const REGEX_CONTEXT = regexContext();
   const templateDepths: number[] = [];
   let braceDepth = 0;
   let prev: ts.SyntaxKind | undefined;
@@ -97,6 +100,7 @@ export function forEachToken(scanner: ts.Scanner, cb: (kind: ts.SyntaxKind, text
 }
 
 export function fingerprintSource(text: string, relPath: string): DuplicationArtifact {
+  const ts = tsApi();
   const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, languageVariantFor(relPath), text);
   const lineStarts = computeLineStarts(text);
   const lineOf = (pos: number): number => lineAt(lineStarts, pos);
@@ -240,16 +244,19 @@ interface TokenSeq {
   trailing: Uint8Array;
 }
 
-const NO_LEADING = new Set<ts.SyntaxKind>([
+const noLeading = lazy((ts) => new Set<ts.SyntaxKind>([
   ts.SyntaxKind.SemicolonToken, ts.SyntaxKind.CommaToken, ts.SyntaxKind.CloseParenToken,
   ts.SyntaxKind.CloseBracketToken, ts.SyntaxKind.CloseBraceToken,
-]);
-const NO_TRAILING = new Set<ts.SyntaxKind>([
+]));
+const noTrailing = lazy((ts) => new Set<ts.SyntaxKind>([
   ts.SyntaxKind.OpenParenToken, ts.SyntaxKind.OpenBracketToken, ts.SyntaxKind.OpenBraceToken,
   ts.SyntaxKind.CommaToken, ts.SyntaxKind.DotToken,
-]);
+]));
 
 export function tokenSequence(text: string, relPath: string): TokenSeq {
+  const ts = tsApi();
+  const NO_LEADING = noLeading();
+  const NO_TRAILING = noTrailing();
   const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, languageVariantFor(relPath), text);
   const lineStarts = computeLineStarts(text);
   const ids: number[] = [];
@@ -313,6 +320,8 @@ class SequenceCache {
     const file = this.files[fi] as string;
     const raw = await this.readText(file);
     this.reads++;
+    // Solo aquí (un par nuevo que verificar) hace falta el compilador si todo salió de la caché.
+    await loadTypeScript();
     const text = raw !== null && raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
     const seq = text === null ? null : tokenSequence(text, file);
     if (raw !== null) this.readHashes.set(fi, sha1(raw));
@@ -498,6 +507,9 @@ export const duplicationAnalyzer: FileAnalyzer<DuplicationArtifact> = {
   version: VERSION,
   description: 'Clones de código entre archivos y dentro del mismo archivo (tokens + winnowing).',
   supports: (meta) => isJsLike(meta),
+  prepare: async () => {
+    await loadTypeScript();
+  },
   analyze(input) {
     return { findings: [], artifact: { ...fingerprintSource(input.text, input.meta.relPath), hash: input.contentHash } };
   },

@@ -1,8 +1,9 @@
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { Evidence, FileAnalyzer, Finding, Severity, Thresholds } from '../types.js';
 import { SEVERITY_ORDER } from '../types.js';
 import { findingId } from '../util.js';
 import { isJsLike, scriptKindFor, severityByRatio, getSourceFile } from './shared.js';
+import { lazy, loadTypeScript, tsApi } from './ts-runtime.js';
 
 const ID = 'complexity';
 const VERSION = '1.1.0';
@@ -23,6 +24,7 @@ export interface FunctionMetrics {
 type FunctionNode = ts.SignatureDeclaration & { body?: ts.Node | undefined };
 
 function isFunctionWithBody(node: ts.Node): node is FunctionNode {
+  const ts = tsApi();
   return (
     (ts.isFunctionDeclaration(node) ||
       ts.isFunctionExpression(node) ||
@@ -36,6 +38,7 @@ function isFunctionWithBody(node: ts.Node): node is FunctionNode {
 }
 
 function propertyNameText(name: ts.PropertyName | ts.BindingName | undefined, sf: ts.SourceFile): string | undefined {
+  const ts = tsApi();
   if (!name) return undefined;
   if (ts.isIdentifier(name) || ts.isPrivateIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
     return name.text;
@@ -45,6 +48,7 @@ function propertyNameText(name: ts.PropertyName | ts.BindingName | undefined, sf
 
 /** Nombre legible: declaración, variable/propiedad a la que se asigna, o `<anónima>`. */
 export function functionName(node: FunctionNode, sf: ts.SourceFile): string {
+  const ts = tsApi();
   if (ts.isConstructorDeclaration(node)) {
     const cls = node.parent;
     return `${ts.isClassLike(cls) && cls.name ? cls.name.text : '<clase>'}.constructor`;
@@ -64,19 +68,13 @@ export function functionName(node: FunctionNode, sf: ts.SourceFile): string {
   return '<anónima>';
 }
 
-const LOGICAL_OPERATORS = new Set<ts.SyntaxKind>([
-  ts.SyntaxKind.AmpersandAmpersandToken,
-  ts.SyntaxKind.BarBarToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-]);
-const LOGICAL_ASSIGNMENTS = new Set<ts.SyntaxKind>([
-  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
-  ts.SyntaxKind.BarBarEqualsToken,
-  ts.SyntaxKind.QuestionQuestionEqualsToken,
-]);
+const logicalOperators = lazy((ts) => new Set<ts.SyntaxKind>([ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken]));
+const logicalAssignments = lazy(
+  (ts) => new Set<ts.SyntaxKind>([ts.SyntaxKind.AmpersandAmpersandEqualsToken, ts.SyntaxKind.BarBarEqualsToken, ts.SyntaxKind.QuestionQuestionEqualsToken]),
+);
 
 function isLogical(node: ts.Node): node is ts.BinaryExpression {
-  return ts.isBinaryExpression(node) && LOGICAL_OPERATORS.has(node.operatorToken.kind);
+  return tsApi().isBinaryExpression(node) && logicalOperators().has(node.operatorToken.kind);
 }
 
 /** Operadores de una cadena lógica en orden (a && b || c → [&&, ||]). */
@@ -89,6 +87,7 @@ function logicalSequence(node: ts.Expression, out: ts.SyntaxKind[]): void {
 }
 
 function isLoop(node: ts.Node): boolean {
+  const ts = tsApi();
   return ts.isForStatement(node) || ts.isForInStatement(node) || ts.isForOfStatement(node) || ts.isWhileStatement(node) || ts.isDoStatement(node);
 }
 
@@ -103,6 +102,7 @@ function isLoop(node: ts.Node): boolean {
  * Las funciones anidadas se miden por separado y no suman a la exterior.
  */
 export function measureFunction(fn: FunctionNode, sf: ts.SourceFile): FunctionMetrics {
+  const ts = tsApi();
   let cyclomatic = 1;
   let cognitive = 0;
   let maxNesting = 0;
@@ -158,7 +158,7 @@ export function measureFunction(fn: FunctionNode, sf: ts.SourceFile): FunctionMe
         logicalSequence(node, ops);
         cyclomatic += ops.length;
         cognitive += ops.filter((op, i) => i === 0 || op !== ops[i - 1]).length;
-      } else if (LOGICAL_ASSIGNMENTS.has(node.operatorToken.kind)) {
+      } else if (logicalAssignments().has(node.operatorToken.kind)) {
         cyclomatic++;
         cognitive++;
       }
@@ -184,6 +184,7 @@ export function measureFunction(fn: FunctionNode, sf: ts.SourceFile): FunctionMe
 }
 
 export function collectFunctionMetrics(text: string, relPath: string, sourceFile?: ts.SourceFile): FunctionMetrics[] {
+  const ts = tsApi();
   const sf = sourceFile ?? ts.createSourceFile(relPath, text, ts.ScriptTarget.Latest, true, scriptKindFor(relPath));
   const out: FunctionMetrics[] = [];
   const visit = (node: ts.Node): void => {
@@ -259,6 +260,9 @@ export const complexityAnalyzer: FileAnalyzer = {
   version: VERSION,
   description: 'Complejidad cognitiva y ciclomática, longitud, anidamiento y parámetros por función (TypeScript Compiler API).',
   supports: (meta) => isJsLike(meta),
+  prepare: async () => {
+    await loadTypeScript();
+  },
   analyze(input, config) {
     const metrics = collectFunctionMetrics(input.text, input.meta.relPath, getSourceFile(input));
     const seen = new Map<string, number>();
