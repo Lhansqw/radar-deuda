@@ -55,12 +55,14 @@ function setup(settings: AppSettings = DEFAULT_SETTINGS, env: NodeJS.ProcessEnv 
   const cipher = { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() };
   const credentials = new CredentialStore(store, cipher, env);
   const workers: Array<ReturnType<typeof fakeWorker>> = [];
+  const spawned: Array<{ memoryLimitMb: number }> = [];
   const events: JobState[] = [];
   const jobs = new JobManager({
     store,
     credentials,
     settings: () => settings,
-    spawn: () => {
+    spawn: (o) => {
+      spawned.push(o);
       const w = fakeWorker();
       workers.push(w);
       return w.handle;
@@ -70,13 +72,14 @@ function setup(settings: AppSettings = DEFAULT_SETTINGS, env: NodeJS.ProcessEnv 
     cancelGraceMs: 50,
   });
   const project = store.addProject({ name: 'demo', kind: 'local', location: '/repos/demo' });
-  return { store, credentials, jobs, workers, events, project };
+  return { store, credentials, jobs, workers, events, project, spawned };
 }
 
 describe('JobManager', () => {
   it('lanza un proceso con la petición derivada de los ajustes y guarda el análisis', () => {
-    const { jobs, workers, events, project, store } = setup({ ...DEFAULT_SETTINGS, analysis: { history: true, historyMonths: 6, online: true } });
+    const { jobs, workers, events, project, store, spawned } = setup({ ...DEFAULT_SETTINGS, analysis: { history: true, historyMonths: 6, online: true, memoryLimitMb: 2048 } });
     const job = jobs.start(project.id);
+    expect(spawned).toEqual([{ memoryLimitMb: 2048 }]);
     expect(job).toMatchObject({ projectId: project.id, status: 'running', phase: 'starting', analysisId: null });
     const w = workers[0];
     expect(w?.received[0]).toEqual({ type: 'start', request: { target: '/repos/demo', history: true, since: '2026-04-26', online: true, noCache: false } });
@@ -245,5 +248,18 @@ describe('proceso de análisis (runJob)', () => {
     const out2: FromWorker[] = [];
     await runJob({ type: 'start', request: { target: dir, history: false, online: false, noCache: true } }, (m) => out2.push(m), c.signal);
     expect(out2.at(-1)).toEqual({ type: 'error', message: 'Análisis cancelado.', cancelled: true });
+  });
+});
+
+describe('memoria del proceso de análisis', () => {
+  it('avisa antes de agotar el límite, con qué hacer', async () => {
+    const { memoryPressure } = await import('../src/worker/memory.js');
+    const MB = 1024 * 1024;
+    expect(memoryPressure({ used_heap_size: 800 * MB, heap_size_limit: 1024 * MB })).toBeNull();
+    const msg = memoryPressure({ used_heap_size: 950 * MB, heap_size_limit: 1024 * MB });
+    expect(msg).toMatch(/usaba 950 MB de un límite de 1024 MB/);
+    expect(msg).toMatch(/Configuración → Análisis/);
+    expect(msg).toMatch(/\.radarignore/);
+    expect(memoryPressure({ used_heap_size: 1, heap_size_limit: 0 })).toBeNull();
   });
 });

@@ -88,7 +88,7 @@ function start(): void {
     store,
     credentials,
     settings: () => loadSettings(store),
-    spawn: () => spawnAnalysisWorker(path.join(distDir, 'worker.cjs')),
+    spawn: ({ memoryLimitMb }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb),
     emit: (state) => {
       for (const w of BrowserWindow.getAllWindows()) w.webContents.send(JOB_EVENT_CHANNEL, state);
     },

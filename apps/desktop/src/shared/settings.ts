@@ -20,7 +20,12 @@ export interface AnalysisSettings {
   historyMonths: number;
   /** Vulnerabilidades (OSV) y versiones (npm): solo envía nombres y versiones de paquetes. */
   online: boolean;
+  /** Memoria máxima del proceso de análisis (MB). */
+  memoryLimitMb: number;
 }
+
+/** Electron usa compresión de punteros: el montículo de V8 no puede pasar de 4 GB por proceso. */
+export const MEMORY_LIMIT_RANGE = { min: 512, max: 4096 } as const;
 
 export interface AiSettings {
   /** Explicar los hallazgos con IA al terminar cada análisis. */
@@ -52,7 +57,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  analysis: { history: true, historyMonths: 12, online: false },
+  analysis: { history: true, historyMonths: 12, online: false, memoryLimitMb: 4096 },
   ai: {
     auto: false,
     provider: 'openrouter',
@@ -120,6 +125,7 @@ export function validateSettings(input: unknown): SettingsResult {
     history: bool(a, 'history', 'Historial de Git'),
     historyMonths: int(a, 'historyMonths', 1, 120, 'Meses de historial'),
     online: bool(a, 'online', 'Consultas en línea'),
+    memoryLimitMb: int(a, 'memoryLimitMb', MEMORY_LIMIT_RANGE.min, MEMORY_LIMIT_RANGE.max, 'Memoria del análisis (MB)'),
   };
   const provider = oneOf(ai, 'provider', AI_PROVIDER_NAMES, 'Proveedor de IA');
   const model = str(ai, 'model', 'Modelo');

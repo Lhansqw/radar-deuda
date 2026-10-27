@@ -19,7 +19,8 @@ export interface JobDeps {
   store: Store;
   credentials: CredentialStore;
   settings: () => AppSettings;
-  spawn: () => WorkerHandle;
+  /** Lanza el proceso de análisis con este límite de memoria (MB). */
+  spawn: (o: { memoryLimitMb: number }) => WorkerHandle;
   /** Avisa a la interfaz de cada cambio de estado. */
   emit: (state: JobState) => void;
   now?: () => Date;
@@ -114,7 +115,7 @@ export class JobManager {
       aiError: null,
     };
     const message = this.startMessage(project, settings, now);
-    const worker = this.d.spawn();
+    const worker = this.d.spawn({ memoryLimitMb: settings.analysis.memoryLimitMb });
     this.running = { state, worker, started: now.getTime(), lastEmit: 0, killTimer: null, cancelRequested: false, aiRequested: message.ai !== undefined };
     worker.onMessage((m) => this.onMessage(state.jobId, m));
     worker.onExit((code) => this.onExit(state.jobId, code));
@@ -226,7 +227,13 @@ export class JobManager {
     const r = this.running;
     if (!r || r.state.jobId !== jobId) return;
     if (r.cancelRequested) this.finish('cancelled', CANCELLED);
-    else this.finish('failed', `El proceso de análisis terminó inesperadamente (código ${code}).${r.state.analysisId !== null ? ' El análisis del motor sí se guardó.' : ''}`);
+    else
+      this.finish(
+        'failed',
+        r.state.analysisId !== null
+          ? `El proceso de análisis terminó inesperadamente (código ${code}). El análisis del motor sí se guardó.`
+          : `El proceso de análisis terminó inesperadamente (código ${code}). Si el repositorio es muy grande, puede haberse quedado sin memoria: sube el límite en Configuración → Análisis o excluye carpetas con un archivo .radarignore.`,
+      );
   }
 
   private finish(status: JobState['status'], error: string | null): void {
