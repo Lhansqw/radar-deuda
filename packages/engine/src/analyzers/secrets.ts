@@ -94,8 +94,11 @@ function downgrade(s: Severity): Severity {
 const CODE_FILE = /\.(?:[cm]?[jt]sx?|py|java|kt|go|rb|php|cs|rs|swift|scala|c|h|cc|cpp|hpp|dart|lua|vue|svelte)$/i;
 /** Sin comillas, `nombre(` o `objeto.metodo(` es una llamada a función, no un literal. */
 const FUNCTION_CALL = /^[a-z_$][\w$]*(\.[\w$]+)*\(/i;
-/** Las líneas más largas (código minificado, datos) no se examinan. */
-const MAX_LINE = 2000;
+/**
+ * Las líneas más largas (código minificado, datos) no se examinan. Quien
+ * muestre o envíe código debe tratarlas como si pudieran contener un secreto.
+ */
+export const MAX_SCANNED_LINE = 2000;
 
 interface FileTraits {
   /** En código fuente solo cuenta un literal de cadena; en .env/.ini/YAML los valores van sin comillas. */
@@ -113,7 +116,7 @@ function fileTraits(relPath: string): FileTraits {
 
 export function scanSecrets(lines: readonly string[], relPath: string): SecretMatch[] {
   const traits = fileTraits(relPath);
-  return lines.flatMap((line, i) => (line.length > MAX_LINE ? [] : scanLine(line, i + 1, traits)));
+  return lines.flatMap((line, i) => (line.length > MAX_SCANNED_LINE ? [] : scanLine(line, i + 1, traits)));
 }
 
 /** Los formatos conocidos tienen prioridad: si alguno aparece, la línea no se examina como asignación genérica. */

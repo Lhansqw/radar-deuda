@@ -52,6 +52,17 @@ describe('fragmentos de código', () => {
     expect(s.lines[2]).toMatch(/^ {4}const API_TOKEN = "Zq8v…/);
   });
 
+  it('no muestra las líneas que el detector de secretos no examina por largas', async () => {
+    const { root, report } = await project();
+    const long = `const datos = { password: "${SECRET}", relleno: "${'x'.repeat(2100)}" };`;
+    await writeFile(path.join(root, 'src/a.ts'), ['const a = 1;', long, 'const b = 2;'].join('\n'));
+    const s = await readSnippet(report, 'src/a.ts', 1, 3);
+    expect(s.lines.join('\n')).not.toContain(SECRET);
+    expect(s.lines[1]).toMatch(/^\[línea de \d+ caracteres: no se muestra/);
+    expect(s.redactedLines).toEqual([2]);
+    expect(s.lines[0]).toBe('const a = 1;');
+  });
+
   it('avisa si el archivo cambió después del análisis', async () => {
     const { root, report } = await project();
     await utimes(path.join(root, 'src/a.ts'), new Date(), new Date(Date.now() + 120_000));
