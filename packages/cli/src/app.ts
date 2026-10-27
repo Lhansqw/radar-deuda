@@ -5,10 +5,10 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { compareReports, formatComparison, formatReport, hasNewAtLeast, parseReport, SEVERITY_ORDER, type Severity } from '@radar/engine';
+import { compareReports, defaultCacheDir, findFindingByRef, findingRefs, formatComparison, formatReport, hasNewAtLeast, parseReport, SEVERITY_ORDER, type Severity } from '@radar/engine';
 import { tokenFromEnv } from '@radar/sources';
-import { formatAiSection } from '@radar/ai';
-import { keysFromEnv, runPipeline, type PipelineEvent } from '@radar/pipeline';
+import { formatAiSection, formatChatAnswer, formatFixProposal } from '@radar/ai';
+import { askStep, keysFromEnv, proposeFixStep, runPipeline, type PipelineEvent } from '@radar/pipeline';
 import { AI_ARGS, AI_HELP, parseAiOptions, type AiCliOptions } from './ai-setup.js';
 
 export const HELP = `
@@ -39,6 +39,13 @@ Salida:
   --fail-on-new <sev>     Con --baseline: código 1 solo si hay hallazgos NUEVOS de esa severidad o mayor
                           (critical | high | medium | low)
   --quiet                 Sin progreso ni avisos
+
+Con IA (requieren --ai; en lugar de explicar los hallazgos):
+  --preguntar "<texto>"   Pregunta sobre el análisis. Solo se envían datos del informe, nunca código
+                          (con --baseline, también la deuda nueva y resuelta)
+  --proponer <ref>        Propuesta de corrección de un hallazgo (H2, o su identificador) como
+                          diferencia. Necesita enviar su código: en la nube, --privacy fragmentos
+  --parche <archivo>      Con --proponer: guarda el parche para aplicarlo con git apply
   -h, --help              Muestra esta ayuda
 
 Códigos de salida: 0 correcto · 1 umbral superado · 2 error · 130 cancelado
@@ -62,6 +69,11 @@ export interface CliOptions {
   failOn?: Severity;
   failOnNew?: Severity;
   ai?: AiCliOptions;
+  /** Pregunta a la IA sobre el análisis (en lugar de explicar los hallazgos). */
+  ask?: string;
+  /** Referencia del hallazgo del que proponer una corrección. */
+  propose?: string;
+  patch?: string;
 }
 
 type Parsed = { kind: 'run'; options: CliOptions } | { kind: 'help' } | { kind: 'error'; message: string };
@@ -91,6 +103,9 @@ export function parseCli(argv: string[]): Parsed {
         'fail-on': { type: 'string' },
         'fail-on-new': { type: 'string' },
         quiet: { type: 'boolean', default: false },
+        preguntar: { type: 'string' },
+        proponer: { type: 'string' },
+        parche: { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
         ...AI_ARGS,
       },
@@ -109,6 +124,9 @@ export function parseCli(argv: string[]): Parsed {
   if (v.since !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(v.since)) return { kind: 'error', message: `Fecha no válida para --since: ${v.since} (usa AAAA-MM-DD).` };
   const ai = parseAiOptions(v);
   if (ai instanceof Error) return { kind: 'error', message: ai.message };
+  if ((v.preguntar !== undefined || v.proponer !== undefined) && !ai) return { kind: 'error', message: '--preguntar y --proponer requieren --ai.' };
+  if (v.preguntar !== undefined && (v.preguntar.trim() === '' || v.preguntar.length > 2000)) return { kind: 'error', message: '--preguntar necesita una pregunta de hasta 2000 caracteres.' };
+  if (v.parche !== undefined && v.proponer === undefined) return { kind: 'error', message: '--parche requiere --proponer.' };
   const top = v.top !== undefined ? Number(v.top) : 15;
   const options: CliOptions = {
     target: positionals[0] as string,
@@ -126,6 +144,9 @@ export function parseCli(argv: string[]): Parsed {
     ...(failOn ? { failOn } : {}),
     ...(failOnNew ? { failOnNew } : {}),
     ...(ai ? { ai } : {}),
+    ...(v.preguntar !== undefined ? { ask: v.preguntar.trim() } : {}),
+    ...(v.proponer !== undefined ? { propose: v.proponer.trim() } : {}),
+    ...(v.parche !== undefined ? { patch: v.parche } : {}),
   };
   return { kind: 'run', options };
 }
@@ -169,7 +190,8 @@ export async function run(o: CliOptions, io: Io, signal: AbortSignal): Promise<n
       ...(o.cacheDir !== undefined ? { cacheDir: o.cacheDir } : {}),
       ...(o.concurrency !== undefined ? { concurrency: o.concurrency } : {}),
       ...(token ? { githubToken: token } : {}),
-      ...(o.ai ? { ai: o.ai, keys: keysFromEnv() } : {}),
+      // Con --preguntar o --proponer, la IA se usa solo para eso (no se explican los hallazgos).
+      ...(o.ai && !o.ask && !o.propose ? { ai: o.ai, keys: keysFromEnv() } : {}),
     },
     {
       info: io.info,
@@ -193,6 +215,12 @@ export async function run(o: CliOptions, io: Io, signal: AbortSignal): Promise<n
     comparison = compareReports(parseReport(await readFile(path.resolve(o.baseline), 'utf8')), report);
     console.log(formatComparison(comparison));
   }
+  if (o.ai && o.propose) await proposeFromCli(report, o, o.ai, io, signal);
+  if (o.ai && o.ask) {
+    io.info('Preguntando a la IA…');
+    const answer = await askStep(report, [], o.ask, o.ai, keysFromEnv(), { comparison, signal });
+    console.log(formatChatAnswer(answer, report));
+  }
   if (o.json) {
     const out = path.resolve(o.json);
     await mkdir(path.dirname(out), { recursive: true });
@@ -205,4 +233,23 @@ export async function run(o: CliOptions, io: Io, signal: AbortSignal): Promise<n
   }
   if (o.failOnNew && comparison && hasNewAtLeast(comparison, o.failOnNew)) return 1;
   return 0;
+}
+
+async function proposeFromCli(report: Parameters<typeof formatReport>[0], o: CliOptions, ai: AiCliOptions, io: Io, signal: AbortSignal): Promise<void> {
+  const finding = findFindingByRef(report.findings, o.propose ?? '');
+  if (!finding) throw new Error(`No hay ningún hallazgo «${o.propose}» en este análisis. Usa su referencia de la lista (H1, H2…) o su identificador.`);
+  const ref = findingRefs(report.findings).get(finding.id) ?? finding.id;
+  io.info(`Pidiendo una propuesta de corrección para ${ref}…`);
+  const proposal = await proposeFixStep(report, finding.id, ai, keysFromEnv(), { consent: false, cacheBase: o.noCache ? null : defaultCacheDir(), signal });
+  console.log(formatFixProposal(proposal, finding, ref));
+  if (o.patch) {
+    if (proposal.patch === '') {
+      io.warn('No se guardó ningún parche: la propuesta no tiene cambios.');
+      return;
+    }
+    const out = path.resolve(o.patch);
+    await mkdir(path.dirname(out), { recursive: true });
+    await writeFile(out, proposal.patch, 'utf8');
+    console.log(`Parche guardado en ${out}. Para aplicarlo, en la carpeta del proyecto: git apply ${path.basename(out)}`);
+  }
 }

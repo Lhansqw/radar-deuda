@@ -168,7 +168,7 @@ describe('AiService: propuestas de corrección', () => {
     const preview = await service.fixPreview(analysisId, 'f1');
     expect(preview).toMatchObject({ provider: 'OpenRouter', cloud: true, needsConsent: true, mayRetain: true });
     expect(preview.text).toContain('const a3 = 3;');
-    await expect(service.proposeFix(analysisId, 'f1', false)).rejects.toThrow(/Confirma el envío/);
+    await expect(service.proposeFix(analysisId, 'f1', false)).rejects.toThrow(/confírmalo en la aplicación/);
     expect(chats).toHaveLength(0);
 
     const r = await service.proposeFix(analysisId, 'f1', true);

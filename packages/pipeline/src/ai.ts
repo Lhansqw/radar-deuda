@@ -257,7 +257,9 @@ export async function proposeFixStep(report: AnalysisReport, findingId: string, 
   const provider = createProvider(o, keys);
   const privacy = fixPrivacy(o, provider, s.consent);
   if (privacy === null) {
-    throw new PrivacyError('Para proponer una corrección hay que enviar el fragmento de código del hallazgo. Confirma el envío o elige «Fragmentos de código» en la privacidad de la IA.');
+    throw new PrivacyError(
+      'Para proponer una corrección hay que enviar el fragmento de código del hallazgo: confírmalo en la aplicación o elige la privacidad «Fragmentos de código» (en la CLI: --privacy fragmentos).',
+    );
   }
   const model = capableModel(o, await chooseModel(o, provider, s.signal));
   return proposeFix(report, findingId, {

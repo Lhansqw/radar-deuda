@@ -73,7 +73,7 @@ describe('proposeFixStep', () => {
       return JSON.stringify({ id_hallazgo: id, aplicable: true, resumen: 'Extraer la condición.', cambios: [{ archivo: 'f.ts', linea_inicio: 3, linea_fin: 3, reemplazo: '} // fin' }], riesgos: [], verificacion: ['Pruebas de f.'] });
     });
     const s = { consent: false, cacheBase: null, signal: new AbortController().signal };
-    await expect(proposeFixStep(report, findingId, BASE, KEYS, s)).rejects.toThrow(/Confirma el envío/);
+    await expect(proposeFixStep(report, findingId, BASE, KEYS, s)).rejects.toThrow(/confírmalo en la aplicación/);
     expect(calls).toHaveLength(0);
 
     const p = await proposeFixStep(report, findingId, { ...BASE, planModel: 'b/capaz' }, KEYS, { ...s, consent: true });
