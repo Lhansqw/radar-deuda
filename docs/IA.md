@@ -1,8 +1,8 @@
 # Fase 7 — Capa de IA con proveedores intercambiables
 
 La IA **explica, relaciona y prioriza** los hallazgos del motor. No los produce ni los
-modifica: la evidencia verificable siempre es la de las herramientas. Las propuestas de
-código, la vista comparativa y el chat llegan en la fase 9 sobre esta misma capa.
+modifica: la evidencia verificable siempre es la de las herramientas. La fase 9 añade sobre
+esta misma capa las [propuestas de corrección y las preguntas sobre el análisis](#fase-9--propuestas-de-corrección-y-preguntas).
 
 ## Qué necesitas para usarla
 
@@ -153,6 +153,11 @@ anulan estas variables aunque sigan definidas en la terminal, así que nunca sal
 | `metadatos` (por defecto en la nube) | Cualquiera | Regla, métricas, mensaje, rutas y símbolos. **Nunca código** |
 | `fragmentos` | Cualquiera | Lo anterior y fragmentos acotados alrededor del hallazgo |
 
+Las **propuestas de corrección** necesitan ver el código, así que en la nube solo se piden
+con `fragmentos` o, en la aplicación, con el permiso explícito para esa propuesta (se
+muestra antes el texto exacto que saldría). Las **preguntas** solo envían datos del
+informe, nunca código, con cualquier privacidad.
+
 En todos los modos:
 
 - un hallazgo de secretos **nunca** envía código, y cualquier línea con un posible secreto se
@@ -191,6 +196,57 @@ flowchart LR
    informa del fallo. Nunca se muestra una respuesta sin validar.
 5. **El plan** solo puede referirse a hallazgos existentes.
 
+## Fase 9 — Propuestas de corrección y preguntas
+
+### Propuestas de corrección
+
+```powershell
+npm run analyze -- C:\ruta\al\repo --ai openrouter --ai-model proveedor/modelo --ai-allow-data-collection `
+  --privacy fragmentos --proponer H2 --parche C:\ruta\al\repo\cambio.patch
+cd C:\ruta\al\repo; git apply cambio.patch   # si te convence, la aplicas tú
+```
+
+En la aplicación: detalle del hallazgo → **Proponer una corrección**.
+
+1. **El modelo no escribe el parche.** Devuelve qué rangos de líneas de los fragmentos
+   enviados sustituir y por qué texto (`propuesta_correccion`, instrucciones `corregir-v1`).
+2. **Se valida contra lo enviado:** cada cambio tiene que ser de un fragmento enviado y estar
+   dentro de su rango; si no, el modelo recibe el motivo y puede corregirlo una vez. Si
+   copia la numeración, se quita. Si copia sin tocar una línea oculta (posible secreto) o
+   neutralizada, se recupera la línea real y el parche no la toca; si la mueve de sitio, se
+   rechaza. Un cambio que no modifica nada también se rechaza. El modelo puede responder
+   que no hay un cambio seguro con lo que ve, y entonces explica el motivo.
+3. **La diferencia la calcula la herramienta** (subsecuencia común más larga) contra el mismo
+   texto que se envió, y el parche sale en formato unificado de Git, con los finales de
+   línea del archivo (CRLF incluidos). Se guarda la huella de cada archivo: si cambia
+   después, la aplicación avisa de que el parche puede no aplicarse.
+4. **Nunca se aplica solo.** Se copia o se guarda como `.patch` y lo aplicas con `git apply`
+   después de revisarlo. La aplicación nunca escribe en tus proyectos.
+5. **Sin propuestas** para secretos (la corrección es siempre retirarlo, revocarlo y leerlo
+   de una variable de entorno, y su código no sale del equipo) ni para hallazgos del
+   proyecto en conjunto. Se usa el modelo del plan (el más capaz) si se configuró.
+
+### Preguntas sobre el análisis
+
+```powershell
+npm run analyze -- C:\ruta\al\repo --ai openrouter --ai-model proveedor/modelo --ai-allow-data-collection `
+  --preguntar "¿Por dónde empiezo?" --baseline antes.json
+```
+
+En la aplicación: vista **Preguntar** de cada proyecto (la conversación se guarda con el
+análisis).
+
+- El modelo recibe un resumen del informe con **solo metadatos**: puntuación, hallazgos con
+  una referencia corta (`H1` es el más grave, las mismas que muestra la CLI), puntos
+  críticos, deuda nueva y resuelta respecto al análisis anterior, y el plan y las
+  explicaciones si existen. Va delimitado como dato no confiable: un título o un comentario
+  `TODO` del repositorio no puede dar instrucciones al modelo ni cerrar el bloque.
+- Las referencias citadas se comprueban: las que no existen se señalan y no enlazan a nada.
+- Se quita el razonamiento que algunos modelos devuelven dentro de la respuesta
+  (`<think>`), y una respuesta cortada se marca como tal.
+- Con `--preguntar` o `--proponer`, la CLI no explica los hallazgos ni genera el plan: la
+  IA se usa solo para eso, para no gastar cuota.
+
 ## Consumo y rendimiento
 
 - **Triaje:** por defecto 8 hallazgos (`--ai-limit`) de severidad media o superior, o de
@@ -223,6 +279,9 @@ flowchart LR
 | `schemas.ts` · `validate.ts` | Esquemas de salida y validación contra la evidencia |
 | `usage.ts` · `cache.ts` | Presupuesto, precios, concurrencia, caché |
 | `runner.ts` · `tasks.ts` | Consulta con reintento correctivo, triaje, explicación, plan y parada ante errores generales |
+| `fix.ts` · `diff.ts` | Propuestas de corrección validadas y diferencias y parches deterministas (fase 9) |
+| `chat.ts` | Resumen del informe para preguntas y comprobación de referencias (fase 9) |
+| `format.ts` | Salida de la terminal: explicaciones, plan, propuestas y respuestas |
 
 Añadir un proveedor = implementar `LlmProvider` (`complete` y, opcionalmente,
 `listModels`, `price` y `preflight`). El resto no cambia.

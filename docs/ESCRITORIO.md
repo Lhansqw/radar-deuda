@@ -1,9 +1,10 @@
-# Aplicación de escritorio (fase 8)
+# Aplicación de escritorio (fases 8 y 9)
 
 La aplicación (`apps/desktop`) reúne en una ventana lo que hace la CLI: proyectos locales
 y de GitHub, análisis con progreso y cancelación, panel con el radar de hallazgos,
 detalle con el código, deuda por carpeta, historial con comparación entre análisis,
-configuración y explicaciones de la IA bajo demanda. Usa el mismo motor y las mismas
+configuración, explicaciones de la IA bajo demanda y, desde la fase 9, propuestas de
+corrección como diferencias revisables y preguntas sobre el análisis. Usa el mismo motor y las mismas
 fuentes que la CLI (`@radar/pipeline`), así que un análisis da el mismo resultado desde
 las dos.
 
@@ -19,13 +20,17 @@ npm run desktop        # compila y abre la aplicación
 2. **Analizar**. El análisis corre en un proceso aparte: la ventana sigue respondiendo y
    se puede cancelar.
 3. **Panel**: puntuación, radar (un sector por categoría, un anillo por severidad, lo
-   crítico en el centro), evolución, por dónde empezar y puntos críticos.
-4. **Hallazgos**: filtros por severidad, categoría, texto y carpeta; el detalle muestra el
-   código citado (con los secretos ocultos), la evidencia, el esfuerzo y la explicación de
-   la IA, o el botón **Explicar con IA**.
+   crítico en el centro), qué cambió desde el análisis anterior, evolución, por dónde
+   empezar y puntos críticos.
+4. **Hallazgos**: filtros por severidad, categoría, texto, carpeta y «Solo nuevos»; el
+   detalle muestra el código citado (con los secretos ocultos), la evidencia, el esfuerzo,
+   la explicación de la IA (o **Explicar con IA**) y **Proponer una corrección**: una
+   diferencia que se copia o se guarda como parche para aplicarla con `git apply`.
 5. **Archivos**: deuda por carpeta y archivo. **Historial**: análisis anteriores y qué
    deuda es nueva, cuál se resolvió y cuál cambió de severidad.
-6. **Configuración**: opciones del análisis, proveedor y modelo de IA (con el catálogo de
+6. **Preguntar**: conversación con la IA sobre el análisis (solo recibe sus datos, nunca
+   código); las referencias de la respuesta (`H2`) llevan al hallazgo.
+7. **Configuración**: opciones del análisis, proveedor y modelo de IA (con el catálogo de
    OpenRouter y sus modelos gratuitos), privacidad, presupuesto y credenciales.
 
 La IA es opcional. Para usar OpenRouter: Configuración → Inteligencia artificial → elige
@@ -91,6 +96,9 @@ archivo, mensajes, fragmentos de código) y explicaciones de un modelo de lengua
 | Las credenciales se cifran con el sistema; la interfaz solo sabe si existen y de dónde vienen, nunca su valor | `credentials.ts` |
 | La interfaz solo puede pedir fragmentos de archivos citados por un hallazgo, dentro del proyecto, sin enlaces simbólicos, de tamaño acotado y con los secretos ocultos | `snippets.ts` |
 | «Mostrar en la carpeta» nunca abre el archivo (podría ejecutarse un `.js` o un `.bat`) | `main.ts` |
+| La aplicación nunca escribe en los proyectos: las propuestas se copian o se guardan como parche donde elija el usuario, y el contenido del parche lo genera el proceso principal (la interfaz no puede escribir contenido arbitrario en disco) | `handlers.ts`, `main.ts` |
+| Antes de enviar código para una propuesta con la privacidad «solo metadatos», se pide permiso mostrando el texto exacto que saldría | `FixConsentDialog.tsx`, `@radar/pipeline` |
+| Las respuestas de la IA se muestran como texto, nunca como HTML | `lib/answer.ts` |
 | Una sola instancia: una segunda apertura enfoca la ventana existente | `main.ts` |
 
 La prueba de extremo a extremo comprueba que la interfaz no tiene `require` ni `process`,
@@ -106,7 +114,7 @@ ASAR, firma del ejecutable y actualizaciones firmadas.
 
 | Qué | Dónde (Windows) |
 |---|---|
-| Proyectos, historial (hasta 100 análisis por proyecto, informe completo comprimido), ajustes y credenciales cifradas | `%APPDATA%\radar-deuda\radar.db` |
+| Proyectos, historial (hasta 100 análisis por proyecto, informe completo comprimido), propuestas, conversaciones (200 mensajes por análisis), ajustes y credenciales cifradas | `%APPDATA%\radar-deuda\radar.db` |
 | Caché del motor, de la IA y de OSV/npm (compartida con la CLI) | `%LOCALAPPDATA%\radar-deuda\cache` |
 | Clones de GitHub | `%LOCALAPPDATA%\radar-deuda\repos` |
 
