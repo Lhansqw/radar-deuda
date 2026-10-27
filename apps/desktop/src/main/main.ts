@@ -29,8 +29,8 @@ const distDir = __dirname;
 const smoke = process.argv.includes(SMOKE_FLAG);
 
 // Datos en %APPDATA%\radar-deuda (o la carpeta indicada, para pruebas aisladas).
-const defaultDataDir = smoke ? mkdtempSync(path.join(os.tmpdir(), 'radar-datos-')) : path.join(app.getPath('appData'), 'radar-deuda');
-app.setPath('userData', process.env['RADAR_DATA_DIR'] ?? defaultDataDir);
+const dataDirFromEnv = process.env['RADAR_DATA_DIR'];
+app.setPath('userData', dataDirFromEnv ?? (smoke ? mkdtempSync(path.join(os.tmpdir(), 'radar-datos-')) : path.join(app.getPath('appData'), 'radar-deuda')));
 
 // Ambas deben ocurrir antes de que la aplicación esté lista.
 registerAppScheme();
@@ -81,7 +81,8 @@ function createWindow(): BrowserWindow {
       devTools: !app.isPackaged,
     },
   });
-  win.once('ready-to-show', () => win.show());
+  // La prueba de arranque no muestra la ventana: la interfaz se carga y se comprueba igual.
+  if (!smoke) win.once('ready-to-show', () => win.show());
   void win.loadURL(devServerUrl ?? APP_ENTRY);
   return win;
 }
@@ -145,12 +146,23 @@ function start(): void {
   );
   win = createWindow();
   if (smoke) {
-    void runSmokeTest(win, (memoryLimitMb) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb)).then((ok) => {
-      store.close();
-      // La carpeta de datos temporal de la prueba (la de RADAR_DATA_DIR no se toca).
-      if (!process.env['RADAR_DATA_DIR']) rmSync(dataDir, { recursive: true, force: true });
-      app.exit(ok ? 0 : 1);
-    });
+    void runSmokeTest(win, (memoryLimitMb) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb))
+      .catch((err: unknown) => {
+        console.error(`Prueba de arranque: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+      })
+      .then((ok) => {
+        // Pase lo que pase, la prueba termina: limpiar es secundario.
+        try {
+          store.close();
+          // La carpeta temporal de la prueba (la de RADAR_DATA_DIR no se toca). En Windows,
+          // Chromium aún tiene abiertos sus archivos: la borra quien lanzó la prueba.
+          if (!dataDirFromEnv) rmSync(dataDir, { recursive: true, force: true });
+        } catch {
+          /* queda en la carpeta temporal del sistema */
+        }
+        app.exit(ok ? 0 : 1);
+      });
     return;
   }
   // Limpieza en segundo plano de lo que lleva 90 días sin usarse (la caché es compartida con la CLI).
