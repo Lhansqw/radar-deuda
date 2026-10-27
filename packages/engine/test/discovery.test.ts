@@ -56,6 +56,17 @@ describe('discoverFiles', () => {
     expect(files.find((f) => f.relPath === 'src/b.test.ts')?.isTest).toBe(true);
   });
 
+  it('.radarignore excluye además lo que indique, aunque no se respete .gitignore', async () => {
+    repo = await createTmpRepo({ '.radarignore': '# generado\nvendor/\n\n*.gen.ts\n', 'src/a.ts': 'x', 'src/b.gen.ts': 'x', 'vendor/lib.ts': 'x' });
+    for (const respectGitignore of [true, false]) {
+      const r = await discoverFiles(repo.root, resolveConfig({ respectGitignore }));
+      expect(r.files.map((f) => f.relPath)).toEqual(['src/a.ts']);
+      expect(r.radarignore).toBe(2);
+    }
+    repo = await createTmpRepo({ 'src/a.ts': 'x' });
+    expect((await discoverFiles(repo.root, resolveConfig())).radarignore).toBeNull();
+  });
+
   it('no respeta .gitignore si se desactiva', async () => {
     repo = await createTmpRepo({ '.gitignore': 'generado/\n', 'generado/c.ts': 'x' });
     const { files } = await discoverFiles(repo.root, resolveConfig({ respectGitignore: false }));
