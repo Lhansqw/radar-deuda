@@ -18,7 +18,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 6 | Git, GitHub, puntos críticos, vulnerabilidades (OSV) y versiones (npm) | ✅ |
 | 7 | Capa de IA con proveedores intercambiables (local y nube), privacidad y validación | ✅ |
 | 8 | Aplicación de escritorio: proyectos, panel con radar, hallazgos, historial, configuración e IA bajo demanda | ✅ |
-| 9 | Recomendaciones, propuestas de corrección y chat | Pendiente |
+| 9 | Propuestas de corrección como diferencias, preguntas sobre el análisis y deuda nueva entre versiones | ✅ |
 | 10 | Caché, análisis incremental y optimización (parte del motor ya hecha) | Parcial |
 | 11 | Pruebas, auditorías de seguridad y rendimiento | Pendiente |
 | 12 | Instalador para Windows | Pendiente |
@@ -97,6 +97,8 @@ npm run analyze -- . --baseline antes.json --fail-on-new medium   # CI: falla so
 npm run analyze -- C:\ruta\a\otro\repo --ai lmstudio          # explicaciones y plan con un modelo local
 npm run models -- --gratis                                    # modelos de OpenRouter compatibles
 npm run analyze -- C:\ruta\a\otro\repo --ai openrouter --ai-model proveedor/modelo
+npm run analyze -- C:\ruta\a\otro\repo --ai lmstudio --preguntar "¿Por dónde empiezo?"
+npm run analyze -- C:\ruta\a\otro\repo --ai lmstudio --proponer H2 --parche cambio.patch
 ```
 
 Todas las opciones: `npm run analyze -- --help`. `Ctrl+C` cancela. Detalles de GitHub, el
@@ -122,5 +124,5 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | Puntuación, severidad, confianza y estimaciones de esfuerzo |
 | [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Objetivos, benchmark y resultados medidos |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
-| [docs/IA.md](docs/IA.md) | Fase 7: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad y cómo se evita que la IA invente |
-| [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fase 8: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
+| [docs/IA.md](docs/IA.md) | Fases 7 y 9: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad, cómo se evita que la IA invente, propuestas de corrección y preguntas |
+| [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fases 8 y 9: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
