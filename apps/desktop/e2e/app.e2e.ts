@@ -25,6 +25,12 @@ const shotsDir = path.join(appDir, 'e2e', 'capturas');
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'radar-e2e-'));
 const repo = path.join(tmp, 'tienda');
 const FAKE_KEY = `sk-or-v1-${'a1'.repeat(32)}`;
+/** Supabase simulado dentro del proceso principal (ver simulate). */
+const SUPABASE_URL = 'https://prueba.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_prueba_0123456789';
+const EMAIL = 'ana@ejemplo.com';
+const PASSWORD = 'una-contraseña-larga';
+const SIGNUP_CODE = '123456';
 const SECRET_IN_DEMO = 'Xk9#mP2vL8qR4nT7';
 
 function git(...args: string[]): void {
@@ -59,13 +65,14 @@ function log(message: string): void {
 
 /**
  * Sustituye en el proceso principal el cifrado del sistema (si no hay llavero,
- * como en Linux sin escritorio) y fetch por un OpenRouter simulado.
+ * como en Linux sin escritorio) y fetch por un OpenRouter y un Supabase Auth
+ * simulados (registro con código de confirmación e inicio de sesión).
  */
 async function simulate(app: ElectronApplication): Promise<void> {
   // tsx conserva los nombres de las funciones con un ayudante __name que no viaja con el código evaluado.
   await app.evaluate('globalThis.__name = (fn) => fn');
   await app.evaluate(
-    ({ dialog, safeStorage }, folder) => {
+    ({ dialog, safeStorage }, [folder, supabaseUrl, signupCode]) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
       if (!safeStorage.isEncryptionAvailable()) {
         safeStorage.isEncryptionAvailable = () => true;
@@ -75,9 +82,41 @@ async function simulate(app: ElectronApplication): Promise<void> {
       const g = globalThis as unknown as { requests: Array<{ url: string; body: string }> };
       g.requests = [];
       const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+      // Supabase Auth: cuentas en memoria, tokens con la forma de los de verdad.
+      type FakeUser = { id: string; email: string; password: string; confirmed: boolean };
+      const users = new Map<string, FakeUser>();
+      const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+      const publicUser = (u: FakeUser) => ({ id: u.id, aud: 'authenticated', role: 'authenticated', email: u.email, email_confirmed_at: u.confirmed ? new Date().toISOString() : null, app_metadata: { provider: 'email' }, user_metadata: {}, created_at: new Date().toISOString() });
+      const session = (u: FakeUser) => {
+        const now = Math.floor(Date.now() / 1000);
+        return { access_token: `${b64({ alg: 'HS256' })}.${b64({ sub: u.id, exp: now + 3600, role: 'authenticated' })}.firma`, token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: crypto.randomUUID(), user: publicUser(u) };
+      };
+      const supabase = (url: URL, init: RequestInit | undefined): Response => {
+        const authError = (code: string, status: number) => json({ code: status, error_code: code, msg: code }, status);
+        const body = (typeof init?.body === 'string' ? JSON.parse(init.body) : {}) as { email?: string; password?: string; token?: string };
+        const route = `${init?.method ?? 'GET'} ${url.pathname}${url.searchParams.has('grant_type') ? `?${url.searchParams.get('grant_type')}` : ''}`;
+        const user = users.get(body.email ?? '');
+        if (route === 'POST /auth/v1/signup') {
+          const created = user ?? { id: crypto.randomUUID(), email: body.email ?? '', password: body.password ?? '', confirmed: false };
+          users.set(created.email, created);
+          return json(publicUser(created));
+        }
+        if (route === 'POST /auth/v1/verify') {
+          if (!user || body.token !== signupCode) return authError('otp_expired', 403);
+          user.confirmed = true;
+          return json(session(user));
+        }
+        if (route === 'POST /auth/v1/token?password') {
+          if (!user || user.password !== body.password) return authError('invalid_credentials', 400);
+          return user.confirmed ? json(session(user)) : authError('email_not_confirmed', 400);
+        }
+        if (route === 'POST /auth/v1/logout') return new Response(null, { status: 204 });
+        return json({ msg: `Sin simular: ${route}` }, 404);
+      };
       globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
         const url = String(input instanceof Request ? input.url : input);
         g.requests.push({ url, body: typeof init?.body === 'string' ? init.body : '' });
+        if (url.startsWith(`${supabaseUrl}/auth/v1/`)) return supabase(new URL(url), init);
         if (url.endsWith('/api/v1/models')) {
           const free = { prompt: '0', completion: '0' };
           return json({
@@ -124,8 +163,26 @@ async function simulate(app: ElectronApplication): Promise<void> {
         return json({ error: { message: `Sin simular: ${url}` } }, 404);
       };
     },
-    repo,
+    [repo, SUPABASE_URL, SIGNUP_CODE] as const,
   );
+}
+
+/** Crea la cuenta y confirma el correo con el código, como haría el usuario. */
+async function signUp(page: Page): Promise<void> {
+  await page.getByRole('heading', { name: 'Inicia sesión' }).waitFor();
+  await shot(page, 'inicio-de-sesion');
+  await page.getByRole('button', { name: 'Crear una' }).click();
+  await page.getByLabel('Correo').fill(EMAIL);
+  await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+  await page.getByLabel('Repite la contraseña').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Crear cuenta' }).click();
+  await page.getByRole('heading', { name: 'Confirma tu correo' }).waitFor();
+  await page.getByLabel('Código del correo').fill('111111');
+  await page.getByRole('button', { name: 'Confirmar' }).click();
+  await page.getByText('El código no es correcto o ya caducó. Pide uno nuevo.').waitFor();
+  await page.getByLabel('Código del correo').fill(SIGNUP_CODE);
+  await shot(page, 'confirmar-correo');
+  await page.getByRole('button', { name: 'Confirmar' }).click();
 }
 
 async function analyze(page: Page): Promise<void> {
@@ -160,7 +217,13 @@ async function main(): Promise<void> {
   const app = await electron.launch({
     executablePath,
     args: [appDir],
-    env: { ...process.env, RADAR_DATA_DIR: path.join(tmp, 'datos'), RADAR_CACHE_DIR: path.join(tmp, 'cache') },
+    env: {
+      ...process.env,
+      RADAR_DATA_DIR: path.join(tmp, 'datos'),
+      RADAR_CACHE_DIR: path.join(tmp, 'cache'),
+      RADAR_SUPABASE_URL: SUPABASE_URL,
+      RADAR_SUPABASE_PUBLISHABLE_KEY: SUPABASE_KEY,
+    },
   });
   const problems: string[] = [];
   try {
@@ -177,10 +240,21 @@ async function main(): Promise<void> {
       const w = globalThis as unknown as { require?: unknown; process?: unknown; radar: object; location: { origin: string } };
       return { require: typeof w.require, process: typeof w.process, api: Object.keys(w.radar).sort(), origin: w.location.origin };
     });
-    assert.deepEqual(surface, { require: 'undefined', process: 'undefined', api: ['ai', 'analyses', 'app', 'chat', 'files', 'jobs', 'projects', 'secrets', 'settings'], origin: 'app://radar' });
+    assert.deepEqual(surface, { require: 'undefined', process: 'undefined', api: ['account', 'ai', 'analyses', 'app', 'chat', 'files', 'jobs', 'projects', 'secrets', 'settings'], origin: 'app://radar' });
     log('la interfaz no tiene acceso a Node y solo ve window.radar');
 
+    // Sin sesión, la interfaz no llega a ningún dato.
+    await assert.rejects(page.evaluate(() => (globalThis as unknown as { radar: { projects: { list: () => Promise<unknown> } } }).radar.projects.list()), /Inicia sesión para continuar/);
+    await signUp(page);
     await page.getByRole('heading', { name: 'Añade tu primer proyecto' }).waitFor();
+    assert.equal(await page.locator('.sidebar-account .email').textContent(), EMAIL);
+    const kept = await page.evaluate(() => {
+      const w = globalThis as unknown as { localStorage: { length: number }; sessionStorage: { length: number }; document: { cookie: string } };
+      return { local: w.localStorage.length, session: w.sessionStorage.length, cookie: w.document.cookie };
+    });
+    assert.deepEqual(kept, { local: 0, session: 0, cookie: '' }, 'La interfaz guardó algo de la sesión');
+    log('cuenta creada y correo confirmado con el código; la sesión no llega a la interfaz');
+
     await shot(page, 'bienvenida');
     await page.getByRole('button', { name: 'Añadir carpeta' }).first().click();
     await page.getByRole('heading', { name: 'tienda', level: 1 }).waitFor();

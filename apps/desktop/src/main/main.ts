@@ -6,19 +6,20 @@ import { defaultCacheDir } from '@radar/engine';
 import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
 import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
 import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell } from 'electron';
-import { JOB_EVENT_CHANNEL } from '../shared/ipc.js';
+import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
-import { AiService } from './ai-service.js';
-import { CredentialStore } from './credentials.js';
-import { createHandlers, loadSettings } from './handlers.js';
+import { createAccountHandlers } from './account-handlers.js';
+import { AccountService } from './account-service.js';
+import { cloudConfig } from './cloud-config.js';
+import type { AppDeps } from './handlers.js';
 import { registerIpc } from './ipc.js';
-import { JobManager } from './jobs.js';
 import { devServerFromEnv } from './policy.js';
 import { registerAppScheme, serveRenderer } from './protocol.js';
 import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
+import { EncryptedSessionStorage } from './session-storage.js';
 import { checkRenderer, checkWorker, SMOKE_FLAG } from './smoke.js';
-import { Store } from './store.js';
 import { spawnAnalysisWorker } from './worker-process.js';
+import { openWorkspace, SessionRouter } from './workspace.js';
 
 /** URL del servidor de Vite en desarrollo (npm run dev); null en la aplicación compilada o empaquetada. */
 const devServerUrl = devServerFromEnv(process.env['RADAR_DEV_SERVER_URL'], app.isPackaged);
@@ -94,59 +95,71 @@ function start(): void {
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 
   const dataDir = app.getPath('userData');
-  const store = Store.open(path.join(dataDir, 'radar.db'));
-  app.on('will-quit', () => store.close());
-  const credentials = new CredentialStore(store, safeStorage);
-  const jobs = new JobManager({
-    store,
-    credentials,
-    settings: () => loadSettings(store),
-    spawn: ({ memoryLimitMb }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb),
-    emit: (state) => {
-      for (const w of BrowserWindow.getAllWindows()) w.webContents.send(JOB_EVENT_CHANNEL, state);
-    },
-  });
-  app.on('before-quit', () => jobs.dispose());
+  const spawn = ({ memoryLimitMb }: { memoryLimitMb: number }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb);
+  const broadcast = (channel: string, payload: unknown): void => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
+  };
   let win: BrowserWindow | null = null;
-  registerIpc(
-    createHandlers({
-      store,
-      credentials,
-      jobs,
-      ai: new AiService({ store, credentials, settings: () => loadSettings(store) }),
-      info: () => ({ versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node }, dataDir, cacheDir: defaultCacheDir(), reposDir: defaultReposDir() }),
-      chooseFolder: async () => {
-        const options = { title: 'Elige la carpeta del proyecto', properties: ['openDirectory' as const] };
-        const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-        return r.canceled ? null : (r.filePaths[0] ?? null);
-      },
-      openExternal,
-      // Solo se muestra en el explorador: abrir el archivo con su programa asociado podría ejecutarlo (.js, .bat…).
-      reveal: (abs) => shell.showItemInFolder(abs),
-      copyText: (text) => clipboard.writeText(text),
-      storage: async () => {
-        const [cache, clones] = await Promise.all([cacheUsage(defaultCacheDir()), folderSize(defaultReposDir())]);
-        return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
-      },
-      clearCache: () => clearCache(defaultCacheDir()),
-      removeClone: async (repo) => {
-        const ref = parseGitHubRepo(repo);
-        if (ref) await removeClone(ref, defaultReposDir());
-      },
-      // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
-      savePatch: async (name, content) => {
-        const options = { title: 'Guardar el parche', defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Parche', extensions: ['patch', 'diff'] }] };
-        const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
-        if (r.canceled || !r.filePath) return null;
-        await writeFile(r.filePath, content, 'utf8');
-        return r.filePath;
-      },
+  let router: SessionRouter | null = null;
+
+  const appDeps: AppDeps = {
+    info: () => ({
+      versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
+      dataDir: router?.userDir ?? dataDir,
+      cacheDir: defaultCacheDir(),
+      reposDir: defaultReposDir(),
     }),
-    devServerUrl,
-  );
+    chooseFolder: async () => {
+      const options = { title: 'Elige la carpeta del proyecto', properties: ['openDirectory' as const] };
+      const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+      return r.canceled ? null : (r.filePaths[0] ?? null);
+    },
+    openExternal,
+    // Solo se muestra en el explorador: abrir el archivo con su programa asociado podría ejecutarlo (.js, .bat…).
+    reveal: (abs) => shell.showItemInFolder(abs),
+    copyText: (text) => clipboard.writeText(text),
+    storage: async () => {
+      const [cache, clones] = await Promise.all([cacheUsage(defaultCacheDir()), folderSize(defaultReposDir())]);
+      return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
+    },
+    clearCache: () => clearCache(defaultCacheDir()),
+    removeClone: async (repo) => {
+      const ref = parseGitHubRepo(repo);
+      if (ref) await removeClone(ref, defaultReposDir());
+    },
+    // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
+    savePatch: async (name, content) => {
+      const options = { title: 'Guardar el parche', defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Parche', extensions: ['patch', 'diff'] }] };
+      const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+      if (r.canceled || !r.filePath) return null;
+      await writeFile(r.filePath, content, 'utf8');
+      return r.filePath;
+    },
+  };
+
+  // Cuentas (fase 13): sin sesión no se abre ninguna base de datos; con sesión, la del usuario.
+  const account = new AccountService({
+    config: cloudConfig(process.env, null),
+    storage: new EncryptedSessionStorage(path.join(dataDir, 'sesion.bin'), safeStorage),
+    onChange: (change) => router?.change(change),
+  });
+  router = new SessionRouter({
+    account: createAccountHandlers(account),
+    app: appDeps,
+    open: (userId) => openWorkspace(userId, { dataDir, cipher: safeStorage, spawn, emit: (state) => broadcast(JOB_EVENT_CHANNEL, state) }),
+    notify: (state) => broadcast(ACCOUNT_EVENT_CHANNEL, state),
+  });
+  // La sesión guardada (si la hay) llega por onChange en cuanto se lee, ya con el enrutador creado.
+  const sessions = router;
+  app.on('will-quit', () => {
+    sessions.dispose();
+    account.dispose();
+  });
+  registerIpc(() => sessions.handlers(), devServerUrl);
+
   win = createWindow();
   if (smoke) {
-    void runSmokeTest(win, (memoryLimitMb) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb))
+    void runSmokeTest(win, (memoryLimitMb) => spawn({ memoryLimitMb }))
       .catch((err: unknown) => {
         console.error(`Prueba de arranque: ${err instanceof Error ? err.message : String(err)}`);
         return false;
@@ -154,7 +167,7 @@ function start(): void {
       .then((ok) => {
         // Pase lo que pase, la prueba termina: limpiar es secundario.
         try {
-          store.close();
+          sessions.dispose();
           // La carpeta temporal de la prueba (la de RADAR_DATA_DIR no se toca). En Windows,
           // Chromium aún tiene abiertos sus archivos: la borra quien lanzó la prueba.
           if (!dataDirFromEnv) rmSync(dataDir, { recursive: true, force: true });

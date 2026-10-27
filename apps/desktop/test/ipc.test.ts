@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createAccountHandlers, signedInHandlers, type AccountApi } from '../src/main/account-handlers.js';
 import { CredentialStore } from '../src/main/credentials.js';
 import { createHandlers, type HandlerDeps } from '../src/main/handlers.js';
 import { dispatch } from '../src/main/ipc-dispatch.js';
@@ -16,11 +17,25 @@ afterEach(async () => {
   for (const f of cleanup.splice(0)) await f();
 });
 
+const signedIn = { status: 'signed-in', email: 'ana@ejemplo.com', offline: false } as const;
+/** Cuenta simulada: los canales de la cuenta se prueban en account-handlers.test.ts. */
+const fakeAccount: AccountApi = {
+  state: async () => signedIn,
+  signIn: async () => ({ confirmEmail: false }),
+  signUp: async () => ({ confirmEmail: true }),
+  confirmEmail: async () => signedIn,
+  resendConfirmation: async () => null,
+  requestPasswordReset: async () => null,
+  resetPassword: async () => signedIn,
+  setNewPassword: async () => signedIn,
+  signOut: async () => ({ status: 'signed-out' }),
+};
+
 function setup(over: Partial<HandlerDeps> = {}) {
   const store = Store.open(':memory:');
   cleanup.push(() => store.close());
   const cipher = { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s).reverse(), decryptString: (b: Buffer) => Buffer.from(b).reverse().toString() };
-  const handlers = createHandlers({
+  const workspace = createHandlers({
     store,
     credentials: new CredentialStore(store, cipher, {}),
     jobs: { start: () => Promise.reject(new Error('no se usa')) as never, cancel: () => undefined, list: () => [] },
@@ -44,6 +59,7 @@ function setup(over: Partial<HandlerDeps> = {}) {
     removeClone: async () => undefined,
     ...over,
   });
+  const handlers = signedInHandlers(workspace, createAccountHandlers(fakeAccount));
   const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, handlers, null);
   return { store, handlers, call };
 }
@@ -70,6 +86,17 @@ describe('contrato IPC', () => {
     expect(await call('secrets:set', 'aws', 'x')).toEqual({ ok: false, error: 'Credencial desconocida.' });
     expect(await call('secrets:set', 'openrouter', 'x'.repeat(1001))).toEqual({ ok: false, error: 'Credencial no válida.' });
     expect(await call('app:openExternal', 42)).toEqual({ ok: false, error: 'Enlace no válido.' });
+  });
+
+  it('valida los argumentos de la cuenta sin repetirlos en el error', async () => {
+    const { call } = setup();
+    expect(await call('account:signIn', 'ana@ejemplo.com', 'contraseña-larga', 'sí')).toEqual({ ok: false, error: 'Opción no válida.' });
+    expect(await call('account:signIn', 'ana@ejemplo.com', '', true)).toEqual({ ok: false, error: 'Contraseña no válida.' });
+    expect(await call('account:signIn', 42, 'contraseña-larga', true)).toEqual({ ok: false, error: 'Correo no válido.' });
+    expect(await call('account:confirmEmail', 'ana@ejemplo.com', '12a456')).toEqual({ ok: false, error: 'El código son los dígitos que llegaron a tu correo.' });
+    expect(await call('account:confirmEmail', 'ana@ejemplo.com', ' 123456 ')).toMatchObject({ ok: true, value: { status: 'signed-in' } });
+    expect(await call('account:setNewPassword', 'x'.repeat(1001))).toEqual({ ok: false, error: 'Contraseña no válida.' });
+    expect(await call('account:signOut')).toEqual({ ok: true, value: { status: 'signed-out' } });
   });
 
   it('añade repositorios de GitHub normalizados y valida la rama', async () => {

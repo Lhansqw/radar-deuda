@@ -1,3 +1,4 @@
+import type { AccountState } from '../../shared/account.js';
 import type { JobState } from '../../shared/jobs.js';
 import type { Project } from '../../shared/model.js';
 import { BrandMark, Icon, type IconName } from './Icon.js';
@@ -24,6 +25,8 @@ interface Props {
   onView: (view: View) => void;
   onAddFolder: () => void;
   onAddGithub: () => void;
+  /** Cuenta con la sesión iniciada. */
+  account?: Extract<AccountState, { status: 'signed-in' }>;
   settingsAvailable: boolean;
 }
 
@@ -91,6 +94,13 @@ export function Sidebar(p: Props) {
       </div>
       {p.settingsAvailable ? (
         <div className="sidebar-footer">
+          {p.account ? (
+            <p className="sidebar-account" title={p.account.email}>
+              <Icon name="user" size={14} />
+              <span className="email">{p.account.email}</span>
+              {p.account.offline ? <span className="tag">sin conexión</span> : null}
+            </p>
+          ) : null}
           <button type="button" className="nav-item" aria-current={p.view === 'ajustes' ? 'page' : undefined} onClick={() => p.onView('ajustes')}>
             <Icon name="settings" size={16} /> Configuración
           </button>

@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { compareReports, type AnalysisReport } from '@radar/engine';
-import type { AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
+import type { AccountChannel, AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
 import type { StorageInfo } from '../shared/model.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
 import type { AiService } from './ai-service.js';
@@ -31,7 +31,12 @@ export interface HandlerDeps {
   savePatch: (defaultName: string, content: string) => Promise<string | null>;
 }
 
+/** Lo que no depende del usuario: el sistema y la ventana. */
+export type AppDeps = Omit<HandlerDeps, 'store' | 'credentials' | 'jobs' | 'ai'>;
+
 export type Handlers = { [C in Channel]: (...args: ArgsOf<C>) => Promise<ResultOf<C>> | ResultOf<C> };
+/** Los canales del espacio de trabajo de un usuario (todos menos los de la cuenta, account-handlers.ts). */
+export type WorkspaceHandlers = Omit<Handlers, AccountChannel>;
 
 export const SETTINGS_KEY = 'settings';
 
@@ -52,7 +57,7 @@ function report(d: HandlerDeps, analysisId: number): AnalysisReport {
   return r;
 }
 
-export function createHandlers(d: HandlerDeps): Handlers {
+export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
   return {
     'app:info': () => d.info(),
     'app:openExternal': (url) => d.openExternal(url),

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { RadarApi } from '../shared/api.js';
-import { JOB_EVENT_CHANNEL, type ArgsOf, type Channel, type IpcResult, type ResultOf } from '../shared/ipc.js';
+import type { AccountState } from '../shared/account.js';
+import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, type ArgsOf, type Channel, type IpcResult, type ResultOf } from '../shared/ipc.js';
 import type { JobState } from '../shared/jobs.js';
 
 /**
@@ -16,6 +17,24 @@ async function invoke<C extends Channel>(channel: C, ...args: ArgsOf<C>): Promis
 }
 
 const api: RadarApi = {
+  account: {
+    state: () => invoke('account:state'),
+    signIn: (email, password, remember) => invoke('account:signIn', email, password, remember),
+    signUp: (email, password) => invoke('account:signUp', email, password),
+    confirmEmail: (email, code) => invoke('account:confirmEmail', email, code),
+    resendConfirmation: (email) => invoke('account:resendConfirmation', email),
+    requestPasswordReset: (email) => invoke('account:requestPasswordReset', email),
+    resetPassword: (email, code, password) => invoke('account:resetPassword', email, code, password),
+    setNewPassword: (password) => invoke('account:setNewPassword', password),
+    signOut: () => invoke('account:signOut'),
+    onChange: (cb) => {
+      const listener = (_event: unknown, state: AccountState): void => cb(state);
+      ipcRenderer.on(ACCOUNT_EVENT_CHANNEL, listener);
+      return () => {
+        ipcRenderer.removeListener(ACCOUNT_EVENT_CHANNEL, listener);
+      };
+    },
+  },
   app: {
     info: () => invoke('app:info'),
     openExternal: (url) => invoke('app:openExternal', url),

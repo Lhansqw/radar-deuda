@@ -42,7 +42,7 @@ export function cloudConfig(env: NodeJS.ProcessEnv, built: BuiltCloudConfig | nu
   if (url === '' && key === '') {
     return {
       ok: false,
-      message: `Falta la conexión con Supabase: define ${ENV_URL} y ${ENV_KEY} (la URL y la clave publicable de tu proyecto) antes de abrir o de compilar la aplicación. Ver docs/CUENTAS.md.`,
+      message: `Define ${ENV_URL} y ${ENV_KEY} (la URL y la clave publicable de tu proyecto de Supabase) antes de abrir o de compilar la aplicación. Ver docs/CUENTAS.md.`,
     };
   }
   if (url === '') return { ok: false, message: `Falta ${ENV_URL}: la URL de tu proyecto de Supabase (https://<proyecto>.supabase.co).` };
