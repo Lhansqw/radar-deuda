@@ -85,6 +85,8 @@ export interface AiRunOptions {
   onProgress?: (done: number, total: number) => void;
 }
 
+const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
 /**
  * Ejecuta la capa de IA sobre un informe: explica los hallazgos
  * seleccionados y propone un plan. Devuelve una sección aparte; los
@@ -92,139 +94,230 @@ export interface AiRunOptions {
  */
 export async function runAi(report: AnalysisReport, o: AiRunOptions): Promise<AiSection> {
   assertProviderAllowed(o.provider, o.privacy);
-  const tracker = new UsageTracker(o.budget ?? {});
-  // Se aborta al primer error fatal (o si el usuario cancela): las consultas pendientes no se envían.
-  const stop = new AbortController();
-  const signal = o.signal ? AbortSignal.any([o.signal, stop.signal]) : stop.signal;
-  let fatal: ProviderError | null = null;
-  let skipped = 0;
-  // Se detecta en el propio proveedor (no al final de la consulta) para que la
-  // siguiente tarea en cola vea la parada antes de enviar nada.
-  const guarded: LlmProvider = {
-    id: o.provider.id,
-    label: o.provider.label,
-    locality: o.provider.locality,
-    complete: async (req) => {
-      try {
-        return await o.provider.complete(req);
-      } catch (err) {
-        if (!fatal && err instanceof ProviderError && FATAL.has(err.kind)) {
-          fatal = err;
-          stop.abort();
-        }
-        throw err;
-      }
-    },
-  };
-  const deps: RunnerDeps = {
-    provider: guarded,
-    tracker,
-    cache: new AiResponseCache(o.cacheDir ?? null),
-    limit: createLimiter(o.concurrency ?? (o.provider.locality === 'local' ? 1 : 4)),
-    signal,
-  };
-  const errors: AiSection['errors'] = [];
-  // Precio publicado por el propio proveedor (si lo ofrece), para que el presupuesto se aplique antes de enviar.
-  if (o.provider.price) {
-    for (const model of new Set([o.model, o.planModel ?? o.model])) {
-      const price = await o.provider.price(model, o.signal).catch(() => null);
-      if (price) tracker.setPrice({ providerId: o.provider.id, locality: o.provider.locality, model }, price);
-    }
-  }
+  const run = new AiRun(report, o);
+  await run.loadPrices();
   const summary = await projectSummary(report, o.readText);
-  // Hallazgos concretos (p. ej. "explicar este" desde la aplicación) o la selección habitual.
-  const selected = o.findingIds
-    ? o.findingIds.map((id) => report.findings.find((f) => f.id === id)).filter((f): f is Finding => f !== undefined)
-    : selectForAi(report, o.limit !== undefined ? { limit: o.limit } : {});
-  // Clave, saldo y cuota antes de empezar: un problema general da un solo error, no uno por hallazgo.
-  let notes: string[] = [];
-  if (o.provider.preflight) {
-    try {
-      notes = await o.provider.preflight({ models: [...new Set([o.model, o.planModel ?? o.model])], requests: selected.length + (o.plan === false ? 0 : 1) }, o.signal);
-    } catch (err) {
-      if (o.signal?.aborted) throw err;
-      // El análisis del motor sigue siendo válido: se informa del problema una sola vez.
-      return { privacy: o.privacy, explanations: [], usage: tracker.summary(), errors: [{ message: err instanceof Error ? err.message : String(err) }] };
-    }
+  const selected = selectFindings(report, o);
+  const failed = await run.preflight(selected.length);
+  if (failed) return failed;
+  const explanations = await run.explainAll(selected, summary);
+  const plan = await run.plan(explanations, summary);
+  return run.result(selected, explanations, plan);
+}
+
+/** Hallazgos concretos (p. ej. «explicar este» desde la aplicación) o la selección habitual. */
+function selectFindings(report: AnalysisReport, o: AiRunOptions): Finding[] {
+  if (!o.findingIds) return selectForAi(report, o.limit !== undefined ? { limit: o.limit } : {});
+  const byId = new Map(report.findings.map((f) => [f.id, f]));
+  return o.findingIds.map((id) => byId.get(id)).filter((f): f is Finding => f !== undefined);
+}
+
+/** Para todo al primer error fatal (o si el usuario cancela): las consultas pendientes no se envían. */
+class FatalStop {
+  error: ProviderError | null = null;
+  readonly signal: AbortSignal;
+  private readonly stop = new AbortController();
+
+  constructor(outer: AbortSignal | undefined) {
+    this.signal = outer ? AbortSignal.any([outer, this.stop.signal]) : this.stop.signal;
   }
 
-  let budgetHit = false;
-  let done = 0;
-  const explanations = (
-    await Promise.all(
-      selected.map(async (f): Promise<AiExplanation | null> => {
-        if (budgetHit) {
-          errors.push({ findingId: f.id, message: 'No se explicó: presupuesto de IA agotado.' });
-          return null;
-        }
-        if (fatal) {
-          skipped++;
-          return null;
-        }
+  /**
+   * Se detecta en el propio proveedor (no al final de la consulta) para que la
+   * siguiente tarea en cola vea la parada antes de enviar nada.
+   */
+  guard(provider: LlmProvider): LlmProvider {
+    return {
+      id: provider.id,
+      label: provider.label,
+      locality: provider.locality,
+      complete: async (req) => {
         try {
-          const ctx = await buildFindingContext(f, { readText: o.readText, mode: o.privacy, projectSummary: summary, ...(o.contextLimits ? { limits: o.contextLimits } : {}) });
-          const r = await askJson(deps, {
-            model: o.model,
-            system: EXPLAIN_SYSTEM,
-            user: `${ctx.text}\n\n${EXPLAIN_FORMAT_HINT}\nEl id del hallazgo es "${f.id}".`,
-            schema: EXPLANATION_SCHEMA,
-            maxOutputTokens: 1200,
-            cacheKey: [EXPLAIN_PROMPT_VERSION, o.privacy],
-            validate: (d) => validateExplanation(d, f.id, ctx),
-          });
-          const v = r.value;
-          return {
-            findingId: f.id,
-            summary: v.summary,
-            rootCause: v.rootCause,
-            recommendation: v.recommendation,
-            claims: v.claims,
-            confidence: v.confidence,
-            insufficientInformation: v.insufficientInformation,
-            validationNotes: v.notes,
-            provider: o.provider.id,
-            model: r.model,
-            fromCache: r.fromCache,
-          };
+          return await provider.complete(req);
         } catch (err) {
-          if (o.signal?.aborted) throw err;
-          if (fatal) {
-            // El error fatal (o la parada que provocó) se informa una sola vez al final.
-            if (err !== fatal) skipped++;
-            return null;
-          }
-          if (err instanceof BudgetExceededError) budgetHit = true;
-          errors.push({ findingId: f.id, message: err instanceof Error ? err.message : String(err) });
-          return null;
-        } finally {
-          o.onProgress?.(++done, selected.length + (o.plan === false ? 0 : 1));
+          this.observe(err);
+          throw err;
         }
-      }),
-    )
-  ).filter((e): e is AiExplanation => e !== null);
+      },
+    };
+  }
 
-  let plan: AiPlan | undefined;
-  if (o.plan !== false && !budgetHit && !fatal) {
-    try {
-      plan = await buildPlan(report, explanations, deps, o.planModel ?? o.model, o.privacy, summary);
-    } catch (err) {
-      if (o.signal?.aborted) throw err;
-      if (!fatal) errors.push({ message: `No se pudo generar el plan: ${err instanceof Error ? err.message : String(err)}` });
+  private observe(err: unknown): void {
+    if (this.error || !(err instanceof ProviderError) || !FATAL.has(err.kind)) return;
+    this.error = err;
+    this.stop.abort();
+  }
+}
+
+/** Estado de una ejecución: errores, presupuesto, parada y progreso. */
+class AiRun {
+  private readonly report: AnalysisReport;
+  private readonly o: AiRunOptions;
+  private readonly tracker: UsageTracker;
+  private readonly fatal: FatalStop;
+  private readonly deps: RunnerDeps;
+  private readonly errors: AiSection['errors'] = [];
+  private notes: string[] = [];
+  private budgetHit = false;
+  /** Consultas que no se enviaron por un error fatal. */
+  private skipped = 0;
+  private done = 0;
+  private total = 0;
+
+  constructor(report: AnalysisReport, o: AiRunOptions) {
+    this.report = report;
+    this.o = o;
+    this.tracker = new UsageTracker(o.budget ?? {});
+    this.fatal = new FatalStop(o.signal);
+    this.deps = {
+      provider: this.fatal.guard(o.provider),
+      tracker: this.tracker,
+      cache: new AiResponseCache(o.cacheDir ?? null),
+      limit: createLimiter(o.concurrency ?? (o.provider.locality === 'local' ? 1 : 4)),
+      signal: this.fatal.signal,
+    };
+  }
+
+  private get wantsPlan(): boolean {
+    return this.o.plan !== false;
+  }
+
+  private get models(): string[] {
+    return [...new Set([this.o.model, this.o.planModel ?? this.o.model])];
+  }
+
+  /** Precio publicado por el propio proveedor (si lo ofrece), para que el presupuesto se aplique antes de enviar. */
+  async loadPrices(): Promise<void> {
+    const { provider, signal } = this.o;
+    if (!provider.price) return;
+    for (const model of this.models) {
+      const price = await provider.price(model, signal).catch(() => null);
+      if (price) this.tracker.setPrice({ providerId: provider.id, locality: provider.locality, model }, price);
     }
-    o.onProgress?.(++done, selected.length + 1);
-  }
-  if (fatal) {
-    const stopped: ProviderError = fatal;
-    const pending = skipped + (o.plan !== false && !plan ? 1 : 0);
-    errors.unshift(
-      { message: `${stopped.message} Se detuvo la IA para no repetir el error.` },
-      ...(pending > 0 ? [{ message: `Quedaron sin hacer ${pending} consulta(s) (explicaciones${o.plan !== false && !plan ? ' y plan' : ''}).${o.cacheDir ? ' Las ya completadas se guardan en caché y no se repiten.' : ''}` }] : []),
-    );
   }
 
-  const order = new Map(selected.map((f, i) => [f.id, i]));
-  explanations.sort((a, b) => (order.get(a.findingId) ?? 0) - (order.get(b.findingId) ?? 0));
-  return { privacy: o.privacy, explanations, ...(plan ? { plan } : {}), usage: tracker.summary(), errors, ...(notes.length > 0 ? { notes } : {}) };
+  /**
+   * Clave, saldo y cuota antes de empezar: un problema general da un solo
+   * error, no uno por hallazgo. Si falla, devuelve ya la sección con ese error
+   * (el análisis del motor sigue siendo válido).
+   */
+  async preflight(explanations: number): Promise<AiSection | null> {
+    this.total = explanations + (this.wantsPlan ? 1 : 0);
+    if (!this.o.provider.preflight) return null;
+    try {
+      this.notes = await this.o.provider.preflight({ models: this.models, requests: this.total }, this.o.signal);
+      return null;
+    } catch (err) {
+      if (this.o.signal?.aborted) throw err;
+      return { privacy: this.o.privacy, explanations: [], usage: this.tracker.summary(), errors: [{ message: message(err) }] };
+    }
+  }
+
+  async explainAll(selected: readonly Finding[], summary: string): Promise<AiExplanation[]> {
+    const results = await Promise.all(selected.map((f) => this.explainSafely(f, summary)));
+    return results.filter((e): e is AiExplanation => e !== null);
+  }
+
+  private async explainSafely(f: Finding, summary: string): Promise<AiExplanation | null> {
+    if (this.budgetHit) {
+      this.errors.push({ findingId: f.id, message: 'No se explicó: presupuesto de IA agotado.' });
+      return null;
+    }
+    if (this.fatal.error) {
+      this.skipped++;
+      return null;
+    }
+    try {
+      return await this.explain(f, summary);
+    } catch (err) {
+      this.explainFailed(err, f.id);
+      return null;
+    } finally {
+      this.progress();
+    }
+  }
+
+  private async explain(f: Finding, summary: string): Promise<AiExplanation> {
+    const { o } = this;
+    const ctx = await buildFindingContext(f, { readText: o.readText, mode: o.privacy, projectSummary: summary, ...(o.contextLimits ? { limits: o.contextLimits } : {}) });
+    const r = await askJson(this.deps, {
+      model: o.model,
+      system: EXPLAIN_SYSTEM,
+      user: `${ctx.text}\n\n${EXPLAIN_FORMAT_HINT}\nEl id del hallazgo es "${f.id}".`,
+      schema: EXPLANATION_SCHEMA,
+      maxOutputTokens: 1200,
+      cacheKey: [EXPLAIN_PROMPT_VERSION, o.privacy],
+      validate: (d) => validateExplanation(d, f.id, ctx),
+    });
+    const v = r.value;
+    return {
+      findingId: f.id,
+      summary: v.summary,
+      rootCause: v.rootCause,
+      recommendation: v.recommendation,
+      claims: v.claims,
+      confidence: v.confidence,
+      insufficientInformation: v.insufficientInformation,
+      validationNotes: v.notes,
+      provider: o.provider.id,
+      model: r.model,
+      fromCache: r.fromCache,
+    };
+  }
+
+  private explainFailed(err: unknown, findingId: string): void {
+    if (this.o.signal?.aborted) throw err;
+    if (this.fatal.error) {
+      // El error fatal (o la parada que provocó) se informa una sola vez al final.
+      if (err !== this.fatal.error) this.skipped++;
+      return;
+    }
+    if (err instanceof BudgetExceededError) this.budgetHit = true;
+    this.errors.push({ findingId, message: message(err) });
+  }
+
+  private progress(): void {
+    this.o.onProgress?.(++this.done, this.total);
+  }
+
+  async plan(explanations: readonly AiExplanation[], summary: string): Promise<AiPlan | undefined> {
+    if (!this.wantsPlan || this.budgetHit || this.fatal.error) return undefined;
+    try {
+      return await buildPlan(this.report, explanations, this.deps, this.o.planModel ?? this.o.model, this.o.privacy, summary);
+    } catch (err) {
+      if (this.o.signal?.aborted) throw err;
+      if (!this.fatal.error) this.errors.push({ message: `No se pudo generar el plan: ${message(err)}` });
+      return undefined;
+    } finally {
+      this.progress();
+    }
+  }
+
+  /** Errores fatales primero y explicaciones en el orden de la selección. */
+  result(selected: readonly Finding[], explanations: AiExplanation[], plan: AiPlan | undefined): AiSection {
+    if (this.fatal.error) this.errors.unshift(...this.stoppedErrors(this.fatal.error, plan === undefined));
+    const order = new Map(selected.map((f, i) => [f.id, i]));
+    explanations.sort((a, b) => (order.get(a.findingId) ?? 0) - (order.get(b.findingId) ?? 0));
+    return {
+      privacy: this.o.privacy,
+      explanations,
+      ...(plan ? { plan } : {}),
+      usage: this.tracker.summary(),
+      errors: this.errors,
+      ...(this.notes.length > 0 ? { notes: this.notes } : {}),
+    };
+  }
+
+  private stoppedErrors(stopped: ProviderError, noPlan: boolean): AiSection['errors'] {
+    const planPending = this.wantsPlan && noPlan;
+    const pending = this.skipped + (planPending ? 1 : 0);
+    const out: AiSection['errors'] = [{ message: `${stopped.message} Se detuvo la IA para no repetir el error.` }];
+    if (pending > 0) {
+      const cached = this.o.cacheDir ? ' Las ya completadas se guardan en caché y no se repiten.' : '';
+      out.push({ message: `Quedaron sin hacer ${pending} consulta(s) (explicaciones${planPending ? ' y plan' : ''}).${cached}` });
+    }
+    return out;
+  }
 }
 
 /** El plan solo usa metadatos (nunca código), así que es válido con cualquier privacidad. */
