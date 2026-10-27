@@ -14,6 +14,7 @@ import type {
   CoverageNote,
   FileAnalysisResult,
   FileAnalyzer,
+  FileInput,
   FileMeta,
   Finding,
   ProgressEvent,
@@ -199,58 +200,95 @@ async function processFile(
   errors: AnalyzerError[],
 ): Promise<FileOutcome> {
   // 1) Camino rápido: metadatos sin cambios → no se lee el archivo.
-  const byMeta = analyzers.map((a) => cache.lookupByMeta(meta, keyOf(a)));
-  if (byMeta.every((r) => r !== undefined)) {
-    return { status: 'ok', results: analyzers.map((a, i) => [a, byMeta[i] as FileAnalysisResult]), fromCache: true };
-  }
+  const byMeta = cachedByMeta(meta, analyzers, cache);
+  if (byMeta) return { status: 'ok', results: byMeta, fromCache: true };
 
-  let buf: Buffer;
-  try {
-    buf = await readFile(meta.absPath);
-  } catch {
-    return { status: 'skipped', reason: 'unreadable' };
-  }
+  const buf = await readFile(meta.absPath).catch(() => null);
+  if (!buf) return { status: 'skipped', reason: 'unreadable' };
   if (looksBinary(buf)) return { status: 'skipped', reason: 'binary' };
-
   // 2) Demasiado grande para un análisis profundo: solo se mide.
-  if (meta.size > config.maxFileSizeBytes) {
-    // Conteo directo sobre los bytes: no se crea la cadena ni el array de líneas.
-    let lines = 0;
-    let totalLines = 1;
-    let nonBlank = false;
-    for (const byte of buf) {
-      if (byte === 10) {
-        totalLines++;
-        if (nonBlank) lines++;
-        nonBlank = false;
-      } else if (byte !== 13 && byte !== 32 && byte !== 9) nonBlank = true;
-    }
-    if (nonBlank) lines++;
-    const extra = meta.isCode
-      ? largeFileFinding(meta.relPath, lines, totalLines, config.thresholds, `No se analizó en profundidad: supera el límite de ${Math.round(config.maxFileSizeBytes / 1024)} KB.`)
-      : null;
-    return { status: 'skipped', reason: 'too-large', ...(extra ? { extraFinding: extra } : {}), ...(meta.isCode ? { codeLines: lines } : {}) };
-  }
+  if (meta.size > config.maxFileSizeBytes) return tooLarge(meta, buf, config);
 
   // 3) Mismo contenido que en la caché (p. ej. tras un checkout).
   const contentHash = sha1(buf);
-  const results: Array<[FileAnalyzer, FileAnalysisResult]> = [];
+  const { results, pending } = cachedByHash(meta, contentHash, analyzers, cache);
+  if (pending.length === 0) return { status: 'ok', results, fromCache: true };
+  await Promise.all(pending.map((a) => a.prepare?.()));
+
+  // 4) Análisis de lo que falta.
+  const text = decodeUtf8(buf);
+  const lines = splitLines(text);
+  if (meta.isCode && looksMinified(lines, meta.size)) return { status: 'skipped', reason: 'minified' };
+  const input = fileInput(meta, contentHash, text, lines);
+  for (const analyzer of pending) {
+    const result = runAnalyzer(analyzer, input, config, errors);
+    if (!result) continue;
+    cache.store(meta, contentHash, keyOf(analyzer), result);
+    results.push([analyzer, result]);
+  }
+  return { status: 'ok', results, fromCache: false };
+}
+
+type AnalyzerResults = Array<[FileAnalyzer, FileAnalysisResult]>;
+
+/** Los resultados de todos los analizadores si los metadatos del archivo no cambiaron; si falta alguno, null. */
+function cachedByMeta(meta: FileMeta, analyzers: readonly FileAnalyzer[], cache: AnalysisCache): AnalyzerResults | null {
+  const results: AnalyzerResults = [];
+  for (const a of analyzers) {
+    const hit = cache.lookupByMeta(meta, keyOf(a));
+    if (hit === undefined) return null;
+    results.push([a, hit]);
+  }
+  return results;
+}
+
+/** Lo que ya está en la caché para este contenido y los analizadores que faltan. */
+function cachedByHash(meta: FileMeta, contentHash: string, analyzers: readonly FileAnalyzer[], cache: AnalysisCache): { results: AnalyzerResults; pending: FileAnalyzer[] } {
+  const results: AnalyzerResults = [];
   const pending: FileAnalyzer[] = [];
   for (const a of analyzers) {
     const hit = cache.lookupByHash(meta, contentHash, keyOf(a));
     if (hit) results.push([a, hit]);
     else pending.push(a);
   }
-  if (pending.length === 0) return { status: 'ok', results, fromCache: true };
-  await Promise.all(pending.map((a) => a.prepare?.()));
+  return { results, pending };
+}
 
-  let text = buf.toString('utf8');
-  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-  const lines = splitLines(text);
-  if (meta.isCode && looksMinified(lines, meta.size)) return { status: 'skipped', reason: 'minified' };
+/** Un archivo demasiado grande se mide (y, si es código, se señala) sin analizarlo. */
+function tooLarge(meta: FileMeta, buf: Buffer, config: AnalysisConfig): FileOutcome {
+  if (!meta.isCode) return { status: 'skipped', reason: 'too-large' };
+  const { codeLines, totalLines } = countLines(buf);
+  const note = `No se analizó en profundidad: supera el límite de ${Math.round(config.maxFileSizeBytes / 1024)} KB.`;
+  const extra = largeFileFinding(meta.relPath, codeLines, totalLines, config.thresholds, note);
+  return { status: 'skipped', reason: 'too-large', ...(extra ? { extraFinding: extra } : {}), codeLines };
+}
 
+/** Líneas con contenido y líneas totales, contando sobre los bytes: sin crear la cadena ni el array de líneas. */
+function countLines(buf: Uint8Array): { codeLines: number; totalLines: number } {
+  let codeLines = 0;
+  let totalLines = 1;
+  let nonBlank = false;
+  for (const byte of buf) {
+    if (byte === 10) {
+      totalLines++;
+      if (nonBlank) codeLines++;
+      nonBlank = false;
+    } else if (byte !== 13 && byte !== 32 && byte !== 9) nonBlank = true;
+  }
+  if (nonBlank) codeLines++;
+  return { codeLines, totalLines };
+}
+
+/** Texto UTF-8 sin la marca de orden de bytes. */
+function decodeUtf8(buf: Buffer): string {
+  const text = buf.toString('utf8');
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+}
+
+/** Entrada común a los analizadores, con una memoria para compartir el árbol sintáctico y otros cálculos. */
+function fileInput(meta: FileMeta, contentHash: string, text: string, lines: string[]): FileInput {
   const memoStore = new Map<string, unknown>();
-  const input = {
+  return {
     meta,
     contentHash,
     text,
@@ -260,18 +298,16 @@ async function processFile(
       return memoStore.get(key) as T;
     },
   };
-  for (const analyzer of pending) {
-    let result: FileAnalysisResult;
-    try {
-      result = analyzer.analyze(input, config);
-    } catch (err) {
-      errors.push({ analyzer: keyOf(analyzer), file: meta.relPath, message: errorMessage(err) });
-      continue;
-    }
-    cache.store(meta, contentHash, keyOf(analyzer), result);
-    results.push([analyzer, result]);
+}
+
+/** El fallo de un analizador se registra y no impide los demás. */
+function runAnalyzer(analyzer: FileAnalyzer, input: FileInput, config: AnalysisConfig, errors: AnalyzerError[]): FileAnalysisResult | null {
+  try {
+    return analyzer.analyze(input, config);
+  } catch (err) {
+    errors.push({ analyzer: keyOf(analyzer), file: input.meta.relPath, message: errorMessage(err) });
+    return null;
   }
-  return { status: 'ok', results, fromCache: false };
 }
 
 /** Une una ruta relativa a la raíz y garantiza que el resultado no escapa de ella. */
