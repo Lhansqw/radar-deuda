@@ -11,13 +11,14 @@ import { CredentialStore } from './credentials.js';
 import { createHandlers, loadSettings } from './handlers.js';
 import { registerIpc } from './ipc.js';
 import { JobManager } from './jobs.js';
+import { devServerFromEnv } from './policy.js';
 import { registerAppScheme, serveRenderer } from './protocol.js';
 import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
 import { Store } from './store.js';
 import { spawnAnalysisWorker } from './worker-process.js';
 
-/** URL del servidor de Vite en desarrollo (npm run dev); null en la aplicación compilada. */
-const devServerUrl = process.env['RADAR_DEV_SERVER_URL'] ?? null;
+/** URL del servidor de Vite en desarrollo (npm run dev); null en la aplicación compilada o empaquetada. */
+const devServerUrl = devServerFromEnv(process.env['RADAR_DEV_SERVER_URL'], app.isPackaged);
 /** Carpeta del proceso principal compilado (dist/; el empaquetado es CommonJS). */
 const distDir = __dirname;
 
@@ -68,6 +69,8 @@ function createWindow(): BrowserWindow {
       allowRunningInsecureContent: false,
       experimentalFeatures: false,
       spellcheck: false,
+      // Las herramientas de desarrollo solo fuera de la aplicación instalada.
+      devTools: !app.isPackaged,
     },
   });
   win.once('ready-to-show', () => win.show());
