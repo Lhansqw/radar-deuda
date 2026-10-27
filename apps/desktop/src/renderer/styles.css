@@ -2025,3 +2025,120 @@ code,
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+
+/* ── Propuesta de corrección ────────────────────────────────────────────── */
+
+.detail-section h4 {
+  margin: 0.25rem 0 0;
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+  font-weight: 600;
+}
+
+.fix-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.125rem;
+}
+
+.fix-warn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--sev-medium);
+  font-size: var(--t-s);
+}
+
+.fix-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.diff {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* Todas las líneas tan anchas como la más larga: el fondo de color no se corta al desplazarse. */
+.diff-hunk pre {
+  display: grid;
+  grid-template-columns: minmax(100%, max-content);
+}
+
+.diff-line {
+  display: block;
+  padding-right: 1rem;
+  color: var(--tinta-2);
+}
+
+.diff-line .ln {
+  width: 2.75rem;
+  padding-right: 0.625rem;
+}
+
+.diff-sign {
+  display: inline-block;
+  width: 1.25rem;
+  color: var(--apagado);
+  user-select: none;
+}
+
+/* Fondo apenas teñido: el texto mantiene el contraste y el signo dice lo mismo. */
+.diff-line[data-kind='added'] {
+  background: color-mix(in srgb, var(--bien) 13%, transparent);
+  box-shadow: inset 2px 0 0 var(--bien);
+  color: var(--tinta);
+}
+
+.diff-line[data-kind='added'] .diff-sign {
+  color: #7ed98d;
+}
+
+.diff-line[data-kind='removed'] {
+  background: color-mix(in srgb, var(--sev-critical) 13%, transparent);
+  box-shadow: inset 2px 0 0 var(--sev-critical);
+  color: var(--tinta);
+}
+
+.diff-line[data-kind='removed'] .diff-sign {
+  color: var(--error-texto);
+}
+
+.dialog-wide {
+  width: min(46rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
+}
+
+.consent {
+  display: grid;
+  gap: 0.75rem;
+  color: var(--tinta-2);
+}
+
+.consent-files {
+  margin: 0;
+  padding-left: 1.125rem;
+  color: var(--tinta);
+  font-size: var(--t-s);
+}
+
+.consent summary {
+  color: var(--enlace);
+  cursor: pointer;
+}
+
+.consent-text {
+  max-height: 18rem;
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--linea);
+  border-radius: var(--r);
+  background: var(--pizarra);
+  color: var(--tinta-2);
+  font-size: var(--t-xs);
+  white-space: pre-wrap;
+}

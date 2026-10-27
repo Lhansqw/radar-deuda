@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Finding, Severity, Category } from '@radar/engine';
 import { countBySeverity, EMPTY_FILTER, filterFindings, sortFindings } from '../src/renderer/lib/findings.js';
+import { diffStats, fixAvailability } from '../src/renderer/lib/fix.js';
 import { formatEffort, formatPercent, formatRelative, fold } from '../src/renderer/lib/format.js';
 import { layoutRadar, RADAR_RINGS } from '../src/renderer/lib/radar.js';
 import { buildTree, flattenTree } from '../src/renderer/lib/tree.js';
@@ -129,5 +130,19 @@ describe('lista virtual', () => {
     expect(visibleRange(0, 300, 30, 1000)).toEqual({ start: 0, end: 16, offsetTop: 0, totalHeight: 30000 });
     expect(visibleRange(3000, 300, 30, 1000, 2)).toEqual({ start: 98, end: 112, offsetTop: 2940, totalHeight: 30000 });
     expect(visibleRange(0, 300, 30, 3)).toEqual({ start: 0, end: 3, offsetTop: 0, totalHeight: 90 });
+  });
+});
+
+describe('propuestas de corrección', () => {
+  it('solo se ofrecen para hallazgos con líneas de código y nunca para secretos', () => {
+    expect(fixAvailability(f('high', 'src/a.ts'))).toBe('available');
+    expect(fixAvailability(f('high', 'src/a.ts', { category: 'security' }))).toBe('secret');
+    expect(fixAvailability(f('medium', '.', { locations: [{ file: '.', startLine: 0, endLine: 0 }] }))).toBe('no-code');
+  });
+
+  it('cuenta líneas añadidas, eliminadas y archivos', () => {
+    const line = (kind: 'context' | 'removed' | 'added') => ({ kind, text: '', oldLine: null, newLine: null });
+    const hunk = (file: string, kinds: Array<'context' | 'removed' | 'added'>) => ({ file, oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: kinds.map(line) });
+    expect(diffStats([hunk('a.ts', ['context', 'removed', 'removed', 'added']), hunk('a.ts', ['added']), hunk('b.ts', ['removed'])])).toEqual({ added: 2, removed: 3, files: 2 });
   });
 });
