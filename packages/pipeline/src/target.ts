@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { cloneOrUpdate, GitHubClient, HttpError, parseGitHubRepo, type GitHubRepoRef } from '@radar/sources';
+import { cloneOrUpdate, GitHubClient, HttpError, parseGitHubRepo, type CloneOptions, type CloneResult, type GitHubRepoRef } from '@radar/sources';
 import type { PipelineHooks } from './types.js';
 
 export interface SourceOptions {
@@ -29,15 +29,26 @@ export function historyStart(o: Pick<SourceOptions, 'since'>, now = Date.now()):
   return o.since ?? new Date(now - 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+/** Acceso a GitHub; sustituible en las pruebas para no salir a la red. */
+export interface TargetDeps {
+  client: (token: string | undefined, signal: AbortSignal) => Pick<GitHubClient, 'getRepository' | 'checkToken'>;
+  clone: (ref: GitHubRepoRef, options: CloneOptions) => Promise<CloneResult>;
+}
+
+const DEFAULT_DEPS: TargetDeps = {
+  client: (token, signal) => new GitHubClient({ ...(token ? { token } : {}), signal }),
+  clone: cloneOrUpdate,
+};
+
 /** Carpeta local o, si no existe, repositorio de GitHub clonado. */
-export async function resolveTarget(o: SourceOptions, hooks: PipelineHooks, signal: AbortSignal): Promise<ResolvedTarget> {
+export async function resolveTarget(o: SourceOptions, hooks: PipelineHooks, signal: AbortSignal, deps: TargetDeps = DEFAULT_DEPS): Promise<ResolvedTarget> {
   const local = path.resolve(o.target);
   if (existsSync(local)) return { dir: local, github: null };
   const ref = parseGitHubRepo(o.target);
   if (!ref) throw new Error(`No existe la carpeta "${o.target}" ni es una referencia válida a GitHub (owner/repo o URL).`);
 
   const token = o.githubToken;
-  const gh = new GitHubClient({ ...(token ? { token } : {}), signal });
+  const gh = deps.client(token, signal);
   let meta: Awaited<ReturnType<GitHubClient['getRepository']>> | null = null;
   try {
     meta = await gh.getRepository(ref);
@@ -51,7 +62,7 @@ export async function resolveTarget(o: SourceOptions, hooks: PipelineHooks, sign
   hooks.info(`Clonando ${ref.owner}/${ref.repo}${meta ? ` (${Math.round(meta.sizeKb / 1024)} MB, rama ${o.branch ?? meta.defaultBranch})` : ''}…`);
   hooks.progress?.({ phase: 'clone', repo: `${ref.owner}/${ref.repo}` });
   const branch = o.branch ?? meta?.defaultBranch;
-  const clone = await cloneOrUpdate(ref, {
+  const clone = await deps.clone(ref, {
     ...(token ? { token } : {}),
     ...(branch ? { branch } : {}),
     ...(o.history ? { shallowSince: historyStart(o) } : {}),
