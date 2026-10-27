@@ -20,6 +20,15 @@ export default tseslint.config(
     },
   },
   {
+    // Scripts que ejecuta Electron directamente (CommonJS, sin compilar).
+    files: ['apps/desktop/scripts/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { require: 'readonly', __dirname: 'readonly', Buffer: 'readonly', console: 'readonly', process: 'readonly' },
+    },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['apps/desktop/src/renderer/**/*.{ts,tsx}'],
     ...reactHooks.configs.flat['recommended-latest'],
   },
