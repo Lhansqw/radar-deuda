@@ -1,4 +1,4 @@
-# Aplicación de escritorio (fases 8 y 9)
+# Aplicación de escritorio (fases 8, 9 y 11)
 
 La aplicación (`apps/desktop`) reúne en una ventana lo que hace la CLI: proyectos locales
 y de GitHub, análisis con progreso y cancelación, panel con el radar de hallazgos,
@@ -84,7 +84,8 @@ Windows (decisión D10 en [DECISIONES.md](DECISIONES.md)).
 
 Sigue la [lista de comprobación de Electron](https://www.electronjs.org/docs/latest/tutorial/security).
 La interfaz se trata como no confiable: muestra datos de repositorios ajenos (nombres de
-archivo, mensajes, fragmentos de código) y explicaciones de un modelo de lenguaje.
+archivo, mensajes, fragmentos de código) y explicaciones de un modelo de lenguaje. El modelo
+de amenazas completo y la auditoría de la fase 11 están en [SEGURIDAD.md](SEGURIDAD.md).
 
 | Medida | Dónde |
 |---|---|
@@ -101,6 +102,8 @@ archivo, mensajes, fragmentos de código) y explicaciones de un modelo de lengua
 | Antes de enviar código para una propuesta con la privacidad «solo metadatos», se pide permiso mostrando el texto exacto que saldría | `FixConsentDialog.tsx`, `@radar/pipeline` |
 | Las respuestas de la IA se muestran como texto, nunca como HTML | `lib/answer.ts` |
 | Una sola instancia: una segunda apertura enfoca la ventana existente | `main.ts` |
+| El servidor de desarrollo (`RADAR_DEV_SERVER_URL`) solo se acepta sin empaquetar y en `http://localhost` o `127.0.0.1`; sin herramientas de desarrollo en la aplicación empaquetada | `policy.ts`, `main.ts` |
+| La interfaz no recibe líneas que el detector de secretos no puede examinar (más de 2000 caracteres) | `snippets.ts` |
 
 La prueba de extremo a extremo comprueba que la interfaz no tiene `require` ni `process`,
 que solo ve `window.radar`, que una clave guardada no vuelve a aparecer en la página y que
