@@ -1,4 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { defaultCacheDir } from '@radar/engine';
 import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
@@ -14,6 +16,7 @@ import { JobManager } from './jobs.js';
 import { devServerFromEnv } from './policy.js';
 import { registerAppScheme, serveRenderer } from './protocol.js';
 import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
+import { checkRenderer, checkWorker, SMOKE_FLAG } from './smoke.js';
 import { Store } from './store.js';
 import { spawnAnalysisWorker } from './worker-process.js';
 
@@ -22,14 +25,19 @@ const devServerUrl = devServerFromEnv(process.env['RADAR_DEV_SERVER_URL'], app.i
 /** Carpeta del proceso principal compilado (dist/; el empaquetado es CommonJS). */
 const distDir = __dirname;
 
+/** Prueba de arranque de la aplicación empaquetada (smoke.ts): datos temporales y salir. */
+const smoke = process.argv.includes(SMOKE_FLAG);
+
 // Datos en %APPDATA%\radar-deuda (o la carpeta indicada, para pruebas aisladas).
-app.setPath('userData', process.env['RADAR_DATA_DIR'] ?? path.join(app.getPath('appData'), 'radar-deuda'));
+const defaultDataDir = smoke ? mkdtempSync(path.join(os.tmpdir(), 'radar-datos-')) : path.join(app.getPath('appData'), 'radar-deuda');
+app.setPath('userData', process.env['RADAR_DATA_DIR'] ?? defaultDataDir);
 
 // Ambas deben ocurrir antes de que la aplicación esté lista.
 registerAppScheme();
 enableSandboxEverywhere();
 
-if (!app.requestSingleInstanceLock()) {
+// La prueba de arranque no compite con una ventana ya abierta de la aplicación.
+if (!smoke && !app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
@@ -136,6 +144,22 @@ function start(): void {
     devServerUrl,
   );
   win = createWindow();
+  if (smoke) {
+    void runSmokeTest(win, (memoryLimitMb) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb)).then((ok) => {
+      store.close();
+      // La carpeta de datos temporal de la prueba (la de RADAR_DATA_DIR no se toca).
+      if (!process.env['RADAR_DATA_DIR']) rmSync(dataDir, { recursive: true, force: true });
+      app.exit(ok ? 0 : 1);
+    });
+    return;
+  }
   // Limpieza en segundo plano de lo que lleva 90 días sin usarse (la caché es compartida con la CLI).
   setTimeout(() => void pruneCache(defaultCacheDir(), 90).catch(() => undefined), 20_000).unref();
+}
+
+async function runSmokeTest(win: BrowserWindow, spawn: Parameters<typeof checkWorker>[0]): Promise<boolean> {
+  const problems = [...(await checkRenderer({ evaluate: (e) => win.webContents.executeJavaScript(e) }, 30_000)), ...(await checkWorker(spawn, 60_000))];
+  if (problems.length === 0) console.log('Prueba de arranque superada: la interfaz y el proceso de análisis funcionan desde el paquete.');
+  for (const p of problems) console.error(`Prueba de arranque: ${p}`);
+  return problems.length === 0;
 }
