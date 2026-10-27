@@ -181,5 +181,7 @@ describe('Store', () => {
     db.exec('PRAGMA user_version = 99');
     db.close();
     expect(() => Store.open(file)).toThrow(/versión más reciente/);
+    // La conexión se cerró: el archivo no queda bloqueado (en Windows, borrarlo fallaría con EBUSY).
+    await rm(file);
   });
 });
