@@ -17,6 +17,15 @@ interface FakeUser {
   confirmed: boolean;
 }
 
+interface FakeRequest {
+  body: Record<string, unknown>;
+  headers: Headers;
+  email: string;
+  password: string;
+}
+
+const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+
 export interface FakeSupabaseOptions {
   /** El proyecto pide confirmar el correo al registrarse (lo normal en Supabase). */
   confirmEmail?: boolean;
@@ -56,63 +65,70 @@ export class FakeSupabase {
     const url = new URL(input instanceof Request ? input.url : String(input));
     const method = (init?.method ?? 'GET').toUpperCase();
     const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Record<string, unknown>) : {};
-    const route = `${method} ${url.pathname}${url.searchParams.get('grant_type') ? `?${url.searchParams.get('grant_type')}` : ''}`;
+    const grant = url.searchParams.get('grant_type');
+    const route = `${method} ${url.pathname}${grant ? `?${grant}` : ''}`;
     this.requests.push({ method, path: url.pathname, body });
     const headers = new Headers(init?.headers);
     if (headers.get('apikey') !== FAKE_KEY) return json({ message: 'Invalid API key' }, 401);
-    const email = typeof body['email'] === 'string' ? body['email'] : '';
-    const password = typeof body['password'] === 'string' ? body['password'] : '';
-    switch (route) {
-      case 'POST /auth/v1/signup':
-        return this.signUp(email, password);
-      case 'POST /auth/v1/token?password': {
-        const u = this.users.get(email);
-        if (!u || u.password !== password) return error('invalid_credentials', 400);
-        if (!u.confirmed) return error('email_not_confirmed', 400);
-        return json(this.session(u));
-      }
-      case 'POST /auth/v1/token?refresh_token': {
-        const id = this.refresh.get(String(body['refresh_token']));
-        const u = [...this.users.values()].find((x) => x.id === id);
-        if (!u) return error('refresh_token_not_found', 400);
-        return json(this.session(u));
-      }
-      case 'POST /auth/v1/verify': {
-        const pending = this.codes.get(email);
-        const type = body['type'] === 'recovery' ? 'recovery' : 'signup';
-        const u = this.users.get(email);
-        if (!u || pending?.type !== type || pending.code !== body['token']) return error('otp_expired', 403);
-        this.codes.delete(email);
-        u.confirmed = true;
-        return json(this.session(u));
-      }
-      case 'POST /auth/v1/resend':
-        this.codes.set(email, { type: 'signup', code: CODES.signup });
-        return json({});
-      case 'POST /auth/v1/recover':
-        if (this.users.has(email)) this.codes.set(email, { type: 'recovery', code: CODES.recovery });
-        return json({});
-      case 'PUT /auth/v1/user': {
-        const u = this.bearer(headers);
-        if (!u) return error('session_not_found', 403);
-        if (password === u.password) return error('same_password', 422);
-        if (password.length < (this.options.minPassword ?? 6)) return json({ error_code: 'weak_password', msg: 'Password is too weak', weak_password: { reasons: ['length'] } }, 422);
-        u.password = password;
-        return json(publicUser(u));
-      }
-      case 'GET /auth/v1/user': {
-        const u = this.bearer(headers);
-        return u ? json(publicUser(u)) : error('session_not_found', 403);
-      }
-      case 'POST /auth/v1/logout': {
-        const token = headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
-        this.access.delete(token);
-        return new Response(null, { status: 204 });
-      }
-      default:
-        return json({ message: `Ruta no simulada: ${route}` }, 404);
-    }
+    const handler = this.routes[route];
+    if (!handler) return json({ message: `Ruta no simulada: ${route}` }, 404);
+    return handler({ body, headers, email: text(body['email']), password: text(body['password']) });
   };
+
+  /** Cada ruta de la API de Supabase Auth que usa la aplicación. */
+  private readonly routes: Record<string, (r: FakeRequest) => Response> = {
+    'POST /auth/v1/signup': (r) => this.signUp(r.email, r.password),
+    'POST /auth/v1/token?password': (r) => {
+      const u = this.users.get(r.email);
+      if (!u || u.password !== r.password) return error('invalid_credentials', 400);
+      return u.confirmed ? json(this.session(u)) : error('email_not_confirmed', 400);
+    },
+    'POST /auth/v1/token?refresh_token': (r) => {
+      const u = this.byId(this.refresh.get(text(r.body['refresh_token'])));
+      return u ? json(this.session(u)) : error('refresh_token_not_found', 400);
+    },
+    'POST /auth/v1/verify': (r) => this.verify(r),
+    'POST /auth/v1/resend': (r) => {
+      this.codes.set(r.email, { type: 'signup', code: CODES.signup });
+      return json({});
+    },
+    'POST /auth/v1/recover': (r) => {
+      if (this.users.has(r.email)) this.codes.set(r.email, { type: 'recovery', code: CODES.recovery });
+      return json({});
+    },
+    'PUT /auth/v1/user': (r) => this.updatePassword(r),
+    'GET /auth/v1/user': (r) => {
+      const u = this.bearer(r.headers);
+      return u ? json(publicUser(u)) : error('session_not_found', 403);
+    },
+    'POST /auth/v1/logout': (r) => {
+      this.access.delete(r.headers.get('authorization')?.replace(/^Bearer /, '') ?? '');
+      return new Response(null, { status: 204 });
+    },
+  };
+
+  private verify(r: FakeRequest): Response {
+    const pending = this.codes.get(r.email);
+    const type = r.body['type'] === 'recovery' ? 'recovery' : 'signup';
+    const u = this.users.get(r.email);
+    if (!u || pending?.type !== type || pending.code !== r.body['token']) return error('otp_expired', 403);
+    this.codes.delete(r.email);
+    u.confirmed = true;
+    return json(this.session(u));
+  }
+
+  private updatePassword(r: FakeRequest): Response {
+    const u = this.bearer(r.headers);
+    if (!u) return error('session_not_found', 403);
+    if (r.password === u.password) return error('same_password', 422);
+    if (r.password.length < (this.options.minPassword ?? 6)) return json({ error_code: 'weak_password', msg: 'Password is too weak', weak_password: { reasons: ['length'] } }, 422);
+    u.password = r.password;
+    return json(publicUser(u));
+  }
+
+  private byId(id: string | undefined): FakeUser | undefined {
+    return [...this.users.values()].find((u) => u.id === id);
+  }
 
   private signUp(email: string, password: string): Response {
     const existing = this.users.get(email);
@@ -136,8 +152,7 @@ export class FakeSupabase {
   }
 
   private bearer(headers: Headers): FakeUser | undefined {
-    const id = this.access.get(headers.get('authorization')?.replace(/^Bearer /, '') ?? '');
-    return [...this.users.values()].find((u) => u.id === id);
+    return this.byId(this.access.get(headers.get('authorization')?.replace(/^Bearer /, '') ?? ''));
   }
 }
 
