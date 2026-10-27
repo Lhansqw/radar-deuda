@@ -19,6 +19,7 @@ const api: RadarApi = {
   app: {
     info: () => invoke('app:info'),
     openExternal: (url) => invoke('app:openExternal', url),
+    copyText: (text) => invoke('app:copyText', text),
   },
   projects: {
     list: () => invoke('projects:list'),
@@ -43,11 +44,20 @@ const api: RadarApi = {
   files: {
     snippet: (analysisId, file, start, end) => invoke('files:snippet', analysisId, file, start, end),
     reveal: (analysisId, file) => invoke('files:reveal', analysisId, file),
+    savePatch: (analysisId, findingId) => invoke('files:savePatch', analysisId, findingId),
   },
   ai: {
     explain: (analysisId, findingId) => invoke('ai:explain', analysisId, findingId),
     models: () => invoke('ai:models'),
     checkKey: () => invoke('ai:checkKey'),
+    fixPreview: (analysisId, findingId) => invoke('ai:fixPreview', analysisId, findingId),
+    proposeFix: (analysisId, findingId, consent) => invoke('ai:proposeFix', analysisId, findingId, consent),
+    getFix: (analysisId, findingId) => invoke('ai:getFix', analysisId, findingId),
+  },
+  chat: {
+    list: (analysisId) => invoke('chat:list', analysisId),
+    ask: (analysisId, question) => invoke('chat:ask', analysisId, question),
+    clear: (analysisId) => invoke('chat:clear', analysisId),
   },
   jobs: {
     start: (projectId) => invoke('jobs:start', projectId),

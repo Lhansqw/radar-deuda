@@ -1,3 +1,4 @@
+import { MAX_QUESTION_CHARS } from '@radar/ai';
 import { parseGitHubRepo } from '@radar/sources';
 import type { ArgsOf, Channel } from '../shared/ipc.js';
 import { SECRET_NAMES, type SecretName } from '../shared/secrets.js';
@@ -37,6 +38,7 @@ type Validators = { [C in Channel]: (args: unknown[]) => ArgsOf<C> };
 export const VALIDATORS: Validators = {
   'app:info': (a) => (count(a, 0), []),
   'app:openExternal': (a) => (count(a, 1), [text(a[0], 'Enlace no válido.', 2000)]),
+  'app:copyText': (a) => (count(a, 1), [text(a[0], 'Texto no válido.', 2_000_000)]),
   'projects:list': (a) => (count(a, 0), []),
   'projects:addFolder': (a) => (count(a, 0), []),
   'projects:addGithub': (a) => {
@@ -86,15 +88,33 @@ export const VALIDATORS: Validators = {
     return [id(a[0], 'Análisis no válido.'), relPath(a[1]), start, end];
   },
   'files:reveal': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), relPath(a[1])]),
-  'ai:explain': (a) => {
-    count(a, 2);
-    const findingId = text(a[1], 'Hallazgo no válido.', 128);
-    if (!/^[\w:.-]+$/.test(findingId)) throw new IpcValidationError('Hallazgo no válido.');
-    return [id(a[0], 'Análisis no válido.'), findingId];
-  },
+  'files:savePatch': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), findingId(a[1])]),
+  'ai:explain': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), findingId(a[1])]),
   'ai:models': (a) => (count(a, 0), []),
   'ai:checkKey': (a) => (count(a, 0), []),
+  'ai:fixPreview': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), findingId(a[1])]),
+  'ai:proposeFix': (a) => {
+    count(a, 3);
+    if (typeof a[2] !== 'boolean') throw new IpcValidationError('Confirmación no válida.');
+    return [id(a[0], 'Análisis no válido.'), findingId(a[1]), a[2]];
+  },
+  'ai:getFix': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), findingId(a[1])]),
+  'chat:list': (a) => (count(a, 1), [id(a[0], 'Análisis no válido.')]),
+  'chat:ask': (a) => {
+    count(a, 2);
+    const q = typeof a[1] === 'string' ? a[1].trim() : '';
+    if (q === '') throw new IpcValidationError('Escribe una pregunta.');
+    if (q.length > MAX_QUESTION_CHARS) throw new IpcValidationError(`La pregunta es demasiado larga (máximo ${MAX_QUESTION_CHARS} caracteres).`);
+    return [id(a[0], 'Análisis no válido.'), q];
+  },
+  'chat:clear': (a) => (count(a, 1), [id(a[0], 'Análisis no válido.')]),
 };
+
+function findingId(v: unknown): string {
+  const f = text(v, 'Hallazgo no válido.', 128);
+  if (!/^[\w:.-]+$/.test(f)) throw new IpcValidationError('Hallazgo no válido.');
+  return f;
+}
 
 function line(v: unknown): number {
   if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 1 || v > 10_000_000) throw new IpcValidationError('Número de línea no válido.');
