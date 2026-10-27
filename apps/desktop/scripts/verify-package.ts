@@ -20,7 +20,12 @@ import { FuseV1Options, getCurrentFuseWire } from '@electron/fuses';
 const OFF = '0'.charCodeAt(0);
 const ON = '1'.charCodeAt(0);
 
-const EXPECTED: Record<FuseV1Options, number> = {
+/**
+ * Los fuses que fija electron-builder.yml. Las versiones nuevas de @electron/fuses
+ * añaden fuses (como WasmTrapHandlers en la 2.x) que la configuración no toca y que
+ * quedan con el valor de Electron: no se comprueban.
+ */
+const EXPECTED: Partial<Record<FuseV1Options, number>> = {
   [FuseV1Options.RunAsNode]: OFF,
   [FuseV1Options.EnableCookieEncryption]: ON,
   [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: OFF,
