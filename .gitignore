@@ -6,6 +6,7 @@ coverage/
 bench-results/
 radar-informe.json
 apps/desktop/e2e/capturas/
+apps/desktop/release/
 .env
 .env.*
 !.env.example
