@@ -26,7 +26,7 @@ motor de análisis determinista y la IA es una capa encima**, no al revés.
 | La IA inventa errores o métricas | Pérdida de confianza en el producto | Evidencia solo de herramientas; salida estructurada validada; toda afirmación debe citar un hallazgo existente |
 | Inyección de instrucciones desde archivos del repositorio | La IA obedece texto malicioso | El código se trata como dato no confiable, delimitado; el modelo no tiene herramientas con efectos; validación de salida |
 | Fuga de código o secretos a proveedores externos | Incumplimiento de privacidad | Modos de privacidad por repositorio, redacción de secretos antes de enviar, opción solo-local |
-| Repositorios grandes agotan RAM/CPU | Aplicación inutilizable | Recorrido en streaming, lectura archivo a archivo, concurrencia limitada, caché incremental, límites de tamaño |
+| Repositorios grandes agotan RAM/CPU | Aplicación inutilizable | Recorrido en streaming, lectura archivo a archivo, concurrencia limitada, caché incremental, límites de tamaño, exclusiones con `.radarignore` y límite de memoria del proceso de análisis (fase 10) |
 | Falsos positivos | Ruido, el usuario ignora el panel | Umbrales conservadores, nivel de confianza explícito, severidad reducida en código de pruebas |
 | Coste de la IA en la nube | Facturas inesperadas | IA solo para hallazgos relevantes, caché, presupuesto por análisis, registro de tokens |
 | Ejecución de código de terceros | Compromiso del equipo | El motor solo lee archivos; no instala dependencias ni ejecuta scripts |

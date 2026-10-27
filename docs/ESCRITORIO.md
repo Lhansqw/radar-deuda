@@ -30,8 +30,9 @@ npm run desktop        # compila y abre la aplicación
    deuda es nueva, cuál se resolvió y cuál cambió de severidad.
 6. **Preguntar**: conversación con la IA sobre el análisis (solo recibe sus datos, nunca
    código); las referencias de la respuesta (`H2`) llevan al hallazgo.
-7. **Configuración**: opciones del análisis, proveedor y modelo de IA (con el catálogo de
-   OpenRouter y sus modelos gratuitos), privacidad, presupuesto y credenciales.
+7. **Configuración**: opciones del análisis (incluida la memoria máxima del proceso de
+   análisis), proveedor y modelo de IA (con el catálogo de OpenRouter y sus modelos
+   gratuitos), privacidad, presupuesto, credenciales y espacio en disco (vaciar la caché).
 
 La IA es opcional. Para usar OpenRouter: Configuración → Inteligencia artificial → elige
 un modelo de la lista (filtro «Solo gratuitos») → si es gratuito, marca «Permitir
