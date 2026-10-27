@@ -1,7 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { packageDirOf, thirdPartyNotices } from '../scripts/licenses.js';
 import type { WorkerHandle } from '../src/main/jobs.js';
 import { checkRenderer, checkWorker } from '../src/main/smoke.js';
 import type { FromWorker, ToWorker } from '../src/worker/protocol.js';
+
+const dirs: string[] = [];
+afterEach(async () => {
+  await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })));
+});
 
 describe('prueba de arranque del paquete', () => {
   it('la interfaz tiene que pintarse y estar aislada', async () => {
@@ -43,5 +52,33 @@ describe('prueba de arranque del paquete', () => {
     expect(await checkWorker(worker(() => [{ type: 'error', message: 'sin memoria', cancelled: false }]).spawn, 5_000)).toEqual(['El análisis falló: sin memoria']);
     expect(await checkWorker(worker(() => [report(0), { type: 'finished' }]).spawn, 5_000)).toEqual(['Se esperaba 1 archivo analizado y hubo 0.']);
     expect(await checkWorker(worker(() => []).spawn, 200)).toEqual(['El proceso de análisis no terminó a tiempo.']);
+  });
+});
+
+describe('licencias del software empaquetado', () => {
+  it('reconoce el paquete de cada módulo, con ámbito, en Windows y con consultas de Vite', () => {
+    expect(packageDirOf('/r/node_modules/react/cjs/react.production.js')).toBe('/r/node_modules/react');
+    expect(packageDirOf('C:\\r\\node_modules\\@fontsource-variable\\jetbrains-mono\\index.css?inline')).toBe('C:/r/node_modules/@fontsource-variable/jetbrains-mono');
+    expect(packageDirOf('/r/node_modules/a/node_modules/b/index.js')).toBe('/r/node_modules/a/node_modules/b');
+    expect(packageDirOf('/r/packages/engine/src/index.ts')).toBeNull();
+  });
+
+  it('una sección por paquete con su licencia y sus avisos, sin repetir', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'radar-licencias-'));
+    dirs.push(root);
+    const pkg = async (name: string, files: Record<string, string>): Promise<string> => {
+      const dir = path.join(root, 'node_modules', name);
+      await mkdir(dir, { recursive: true });
+      for (const [f, text] of Object.entries(files)) await writeFile(path.join(dir, f), text);
+      return dir;
+    };
+    const a = await pkg('a', { 'package.json': '{"name":"a","version":"1.0.0","license":"MIT"}', LICENSE: 'Texto MIT de a' });
+    const b = await pkg('@x/b', { 'package.json': '{"name":"@x/b","version":"2.0.0","license":"Apache-2.0"}', 'LICENSE.txt': 'Apache', NOTICE: 'Aviso de b', 'README.md': 'no' });
+    const { text, packages } = await thirdPartyNotices([`${a}/index.js`, `${a}/otro.js`, `${b}/dist/b.js`, path.join(root, 'src', 'propio.ts')]);
+    expect(packages).toEqual(['@x/b@2.0.0', 'a@1.0.0']);
+    expect(text).toContain('@x/b 2.0.0 (Apache-2.0)');
+    expect(text).toContain('Apache\n\nAviso de b');
+    expect(text).toContain('a 1.0.0 (MIT)\n-------------\nTexto MIT de a');
+    expect(text).not.toContain('no\n');
   });
 });
