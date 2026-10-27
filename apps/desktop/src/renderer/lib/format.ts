@@ -1,6 +1,7 @@
 /** Formato en español para la interfaz. */
 const nf1 = new Intl.NumberFormat('es', { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat('es', { maximumFractionDigits: 0 });
+const nf2 = new Intl.NumberFormat('es', { maximumFractionDigits: 2 });
 
 export function formatNumber(n: number): string {
   return nf0.format(n);
@@ -47,4 +48,12 @@ export function formatRelative(iso: string, now: Date = new Date()): string {
 /** Para buscar sin distinguir mayúsculas ni tildes. */
 export function fold(text: string): string {
   return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+}
+
+/** Tamaño en disco: "512 B", "1,5 KB", "12,3 MB", "1,25 GB". */
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${nf1.format(n / 1024)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${nf1.format(n / (1024 * 1024))} MB`;
+  return `${nf2.format(n / (1024 * 1024 * 1024))} GB`;
 }
