@@ -5,6 +5,7 @@ import { Icon } from '../components/Icon.js';
 import { SeverityMark } from '../components/SeverityMark.js';
 import { formatEffort } from '../lib/format.js';
 import { CATEGORY_LABEL, CONFIDENCE_LABEL } from '../lib/labels.js';
+import { FixProposal } from './FixProposal.js';
 
 /** Líneas de contexto alrededor de la ubicación. */
 const CONTEXT = 4;
@@ -61,6 +62,8 @@ export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSe
       </section>
 
       {ai ? <AiBlock explanation={ai} /> : <AiRequest onExplain={() => onExplain(finding.id)} onOpenSettings={onOpenSettings} />}
+
+      <FixProposal key={`${analysisId}:${finding.id}`} finding={finding} analysisId={analysisId} onOpenSettings={onOpenSettings} />
     </article>
   );
 }

@@ -137,9 +137,11 @@ export class AiService {
     if (running) return running;
     const p = (async (): Promise<StoredFixProposal> => {
       const report = this.report(analysisId, findingId);
+      // Si ya había una, se pide otra distinta: sin la caché de respuestas.
+      const again = this.d.store.getFixProposal(analysisId, findingId) !== null;
       const proposal = await proposeFixStep(report, findingId, aiOptionsFrom(this.aiSettings()), this.d.credentials.apiKeys(), {
         consent,
-        cacheBase: this.cacheBase,
+        cacheBase: again ? null : this.cacheBase,
         signal: new AbortController().signal,
       });
       this.d.store.saveFixProposal(analysisId, proposal);
