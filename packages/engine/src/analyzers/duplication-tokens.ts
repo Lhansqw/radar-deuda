@@ -17,12 +17,20 @@ const P2 = 25165843;
 const B1 = 257;
 const B2 = 263;
 
-/** [hash, posiciónDeToken, líneaInicio, líneaFin] */
+/** Una huella: [hash, posiciónDeToken, líneaInicio, líneaFin]. */
 export type Fingerprint = [number, number, number, number];
+
+/** Números por huella en `DuplicationArtifact.fps`. */
+export const FP_STRIDE = 4;
 
 export interface DuplicationArtifact {
   tokens: number;
-  fps: Fingerprint[];
+  /**
+   * Huellas seguidas en un solo arreglo: hash, posición, línea de inicio y
+   * línea de fin de cada una (FP_STRIDE números por huella). Un arreglo plano
+   * ocupa en memoria y en la caché bastante menos que un arreglo por huella.
+   */
+  fps: number[];
   /** Hash del contenido del archivo; habilita la caché de verificación por par. */
   hash?: string;
 }
@@ -124,7 +132,7 @@ export function fingerprintSource(text: string, relPath: string): DuplicationArt
   }
 
   // Winnowing: mínimo de cada ventana (el más a la derecha en caso de empate).
-  const fps: Fingerprint[] = [];
+  const fps: number[] = [];
   let last = -1;
   const windows = Math.max(grams.length - W + 1, 1);
   for (let start = 0; start < windows; start++) {
@@ -132,11 +140,19 @@ export function fingerprintSource(text: string, relPath: string): DuplicationArt
     const end = Math.min(start + W, grams.length);
     for (let j = start; j < end; j++) if ((grams[j] as number) <= (grams[minPos] as number)) minPos = j;
     if (minPos !== last) {
-      fps.push([grams[minPos] as number, minPos, startLines[minPos] as number, endLines[minPos + K - 1] as number]);
+      fps.push(grams[minPos] as number, minPos, startLines[minPos] as number, endLines[minPos + K - 1] as number);
       last = minPos;
     }
   }
   return { tokens: n, fps };
+}
+
+/** Las huellas de un artefacto, una a una. */
+export function* fingerprints(art: DuplicationArtifact | undefined): Generator<Fingerprint> {
+  const fps = art?.fps ?? [];
+  for (let i = 0; i + FP_STRIDE <= fps.length; i += FP_STRIDE) {
+    yield [fps[i] as number, fps[i + 1] as number, fps[i + 2] as number, fps[i + 3] as number];
+  }
 }
 
 export interface TokenSeq {

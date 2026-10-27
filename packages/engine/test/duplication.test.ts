@@ -6,8 +6,10 @@ import {
   duplicationAnalyzer,
   findCandidates,
   findClones,
+  fingerprints,
   fingerprintSource,
   forEachToken,
+  FP_STRIDE,
   refineCandidates,
   type DuplicationArtifact,
 } from '../src/analyzers/duplication.js';
@@ -111,7 +113,21 @@ describe('detección de clones', () => {
 
   it('las huellas son pocas en comparación con los tokens (artefacto pequeño)', () => {
     const art = fingerprintSource(BLOCK.repeat(10), 'a.ts');
-    expect(art.fps.length).toBeLessThan(art.tokens / 5);
+    const count = [...fingerprints(art)].length;
+    expect(count).toBe(art.fps.length / FP_STRIDE);
+    expect(count).toBeLessThan(art.tokens / 5);
+  });
+
+  it('las huellas van en un arreglo plano de números: hash, posición y líneas', () => {
+    const art = fingerprintSource(BLOCK, 'a.ts');
+    expect(art.fps.every((n) => typeof n === 'number')).toBe(true);
+    for (const [hash, pos, start, end] of fingerprints(art)) {
+      expect(Number.isSafeInteger(hash)).toBe(true);
+      expect(pos).toBeGreaterThanOrEqual(0);
+      expect(end).toBeGreaterThanOrEqual(start);
+    }
+    // Un arreglo incompleto (caché dañada) no produce huellas a medias.
+    expect([...fingerprints({ tokens: 10, fps: [1, 2, 3] })]).toEqual([]);
   });
 });
 

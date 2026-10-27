@@ -1,6 +1,6 @@
 import type { FinalizeStore } from '../types.js';
 import { sha1 } from '../util.js';
-import { K, W, tokenSequence, type DuplicationArtifact, type TokenSeq } from './duplication-tokens.js';
+import { FP_STRIDE, fingerprints, K, W, tokenSequence, type DuplicationArtifact, type TokenSeq } from './duplication-tokens.js';
 import { loadTypeScript } from './ts-runtime.js';
 
 /**
@@ -61,7 +61,7 @@ function fingerprintIndex(files: readonly string[], artifacts: ReadonlyMap<strin
   const candidates = repeatedHashes(files, artifacts);
   const index = new Map<number, Occurrence[]>();
   files.forEach((file, fi) => {
-    for (const [hash, pos, s, e] of artifacts.get(file)?.fps ?? []) {
+    for (const [hash, pos, s, e] of fingerprints(artifacts.get(file))) {
       if (!candidates.has(hash)) continue;
       let list = index.get(hash);
       if (!list) index.set(hash, (list = []));
@@ -78,10 +78,13 @@ function fingerprintIndex(files: readonly string[], artifacts: ReadonlyMap<strin
  */
 function repeatedHashes(files: readonly string[], artifacts: ReadonlyMap<string, DuplicationArtifact>): Set<number> {
   let n = 0;
-  for (const file of files) n += artifacts.get(file)?.fps.length ?? 0;
+  for (const file of files) n += Math.floor((artifacts.get(file)?.fps.length ?? 0) / FP_STRIDE);
   const all = new Float64Array(n);
   let i = 0;
-  for (const file of files) for (const fp of artifacts.get(file)?.fps ?? []) all[i++] = fp[0];
+  for (const file of files) {
+    const fps = artifacts.get(file)?.fps ?? [];
+    for (let j = 0; j + FP_STRIDE <= fps.length; j += FP_STRIDE) all[i++] = fps[j] as number;
+  }
   all.sort();
   const repeated = new Set<number>();
   for (let a = 0; a < n; ) {

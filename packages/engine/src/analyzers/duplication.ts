@@ -6,7 +6,7 @@ import { isJsLike } from './shared.js';
 import { loadTypeScript } from './ts-runtime.js';
 
 export { findCandidates, refineCandidates, type Candidate, type RefineOptions, type Region } from './duplication-pairs.js';
-export { fingerprintSource, forEachToken, K, tokenSequence, W, type DuplicationArtifact, type Fingerprint } from './duplication-tokens.js';
+export { fingerprints, fingerprintSource, forEachToken, FP_STRIDE, K, tokenSequence, W, type DuplicationArtifact, type Fingerprint } from './duplication-tokens.js';
 
 /**
  * Detección de código duplicado (clones de tipo 1: idénticos salvo espacios y
@@ -21,7 +21,7 @@ export { fingerprintSource, forEachToken, K, tokenSequence, W, type DuplicationA
  *   retokenizan los pares en los que algo cambió.
  */
 const ID = 'duplication';
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const TOOL = `${ID}@${VERSION}`;
 
 /** Agrupa pares en clases de clones (union-find sobre regiones idénticas). */
