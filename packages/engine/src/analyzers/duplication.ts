@@ -178,9 +178,24 @@ export interface Candidate {
   approxB: [number, number];
 }
 
+/** Una aparición de una huella: [archivo, posición, líneaIni, líneaFin]. */
+type Occurrence = [number, number, number, number];
+
 export function findCandidates(artifacts: ReadonlyMap<string, DuplicationArtifact>): { files: string[]; candidates: Candidate[] } {
   const files = [...artifacts.keys()].sort();
-  const index = new Map<number, Array<[number, number, number, number]>>(); // hash -> [archivo, pos, líneaIni, líneaFin]
+  const groups = groupMatches(fingerprintIndex(files, artifacts));
+  const candidates: Candidate[] = [];
+  for (const [key, matches] of groups) {
+    const [fa, fb, delta] = key.split('|').map(Number) as [number, number, number];
+    matches.sort((x, y) => x.pA - y.pA);
+    for (const run of consecutiveRuns(matches)) candidates.push(toCandidate(run, fa, fb, delta));
+  }
+  return { files, candidates };
+}
+
+/** Huella → dónde aparece. */
+function fingerprintIndex(files: readonly string[], artifacts: ReadonlyMap<string, DuplicationArtifact>): Map<number, Occurrence[]> {
+  const index = new Map<number, Occurrence[]>();
   files.forEach((file, fi) => {
     for (const [hash, pos, s, e] of artifacts.get(file)?.fps ?? []) {
       let list = index.get(hash);
@@ -188,16 +203,21 @@ export function findCandidates(artifacts: ReadonlyMap<string, DuplicationArtifac
       list.push([fi, pos, s, e]);
     }
   });
+  return index;
+}
 
-  // Agrupar por (archivoA, archivoB, desplazamiento) para fusionar huellas consecutivas.
+/**
+ * Cada par de apariciones de una misma huella, agrupado por (archivoA,
+ * archivoB, desplazamiento) para poder fusionar después huellas consecutivas.
+ * Las huellas demasiado frecuentes (código repetitivo sin interés) se ignoran.
+ */
+function groupMatches(index: ReadonlyMap<number, Occurrence[]>): Map<string, Match[]> {
   const groups = new Map<string, Match[]>();
   for (const occ of index.values()) {
     if (occ.length < 2 || occ.length > MAX_OCCURRENCES) continue;
     for (let i = 0; i < occ.length; i++) {
       for (let j = i + 1; j < occ.length; j++) {
-        let a = occ[i] as [number, number, number, number];
-        let b = occ[j] as [number, number, number, number];
-        if (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1])) [a, b] = [b, a];
+        const [a, b] = ordered(occ[i] as Occurrence, occ[j] as Occurrence);
         if (a[0] === b[0] && b[1] - a[1] < K) continue; // solapamiento dentro del mismo archivo
         const key = `${a[0]}|${b[0]}|${b[1] - a[1]}`;
         let g = groups.get(key);
@@ -206,32 +226,42 @@ export function findCandidates(artifacts: ReadonlyMap<string, DuplicationArtifac
       }
     }
   }
+  return groups;
+}
 
-  const candidates: Candidate[] = [];
-  for (const [key, matches] of groups) {
-    const [fa, fb, delta] = key.split('|').map(Number) as [number, number, number];
-    matches.sort((x, y) => x.pA - y.pA);
-    let run: Match[] = [];
-    const flush = (): void => {
-      if (run.length === 0) return;
-      const first = run[0] as Match;
-      const last = run[run.length - 1] as Match;
-      let sA = Infinity, eA = 0, sB = Infinity, eB = 0;
-      for (const m of run) {
-        sA = Math.min(sA, m.sA); eA = Math.max(eA, m.eA);
-        sB = Math.min(sB, m.sB); eB = Math.max(eB, m.eB);
-      }
-      candidates.push({ fa, fb, pA: first.pA, pB: first.pA + delta, tokens: last.pA + K - first.pA, approxA: [sA, eA], approxB: [sB, eB] });
+/** Primero la del archivo menor y, en el mismo archivo, la de posición menor. */
+const ordered = (a: Occurrence, b: Occurrence): [Occurrence, Occurrence] => (a[0] > b[0] || (a[0] === b[0] && a[1] > b[1]) ? [b, a] : [a, b]);
+
+/** Coincidencias (ya ordenadas por posición) separadas por no más de W tokens. */
+function consecutiveRuns(matches: readonly Match[]): Match[][] {
+  const runs: Match[][] = [];
+  let run: Match[] = [];
+  for (const m of matches) {
+    const prev = run[run.length - 1];
+    if (prev && m.pA - prev.pA > W) {
+      runs.push(run);
       run = [];
-    };
-    for (const m of matches) {
-      const prev = run[run.length - 1];
-      if (prev && m.pA - prev.pA > W) flush();
-      run.push(m);
     }
-    flush();
+    run.push(m);
   }
-  return { files, candidates };
+  if (run.length > 0) runs.push(run);
+  return runs;
+}
+
+function toCandidate(run: readonly Match[], fa: number, fb: number, delta: number): Candidate {
+  const first = run[0] as Match;
+  const last = run[run.length - 1] as Match;
+  let sA = Infinity;
+  let eA = 0;
+  let sB = Infinity;
+  let eB = 0;
+  for (const m of run) {
+    sA = Math.min(sA, m.sA);
+    eA = Math.max(eA, m.eA);
+    sB = Math.min(sB, m.sB);
+    eB = Math.max(eB, m.eB);
+  }
+  return { fa, fb, pA: first.pA, pB: first.pA + delta, tokens: last.pA + K - first.pA, approxA: [sA, eA], approxB: [sB, eB] };
 }
 
 interface TokenSeq {
