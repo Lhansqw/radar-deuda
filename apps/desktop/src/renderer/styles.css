@@ -2597,6 +2597,18 @@ code,
   }
 }
 
+/* Configuración → Cuenta */
+.account-actions {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+}
+
+.account-actions .hint {
+  color: var(--apagado);
+  font-size: var(--t-xs);
+}
+
 /* Cuenta con la sesión iniciada, al pie de la barra lateral */
 .sidebar-account {
   display: flex;
