@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import type { AccountState } from '../../shared/account.js';
 import type { AppInfo } from '../../shared/ipc.js';
 import type { SecretsStatus } from '../../shared/secrets.js';
 import type { AppSettings } from '../../shared/settings.js';
+import { AccountSection } from './settings/AccountSection.js';
 import { AiSection } from './settings/AiSection.js';
 import { AnalysisSection } from './settings/AnalysisSection.js';
 import { AppSection } from './settings/AppSection.js';
@@ -53,7 +55,7 @@ function useSettingsDraft() {
   return { draft, setDraft, error, savedOk, dirty, save, discard };
 }
 
-export function Settings() {
+export function Settings({ account }: { account: Extract<AccountState, { status: 'signed-in' }> }) {
   const settings = useSettingsDraft();
   const [secrets, setSecrets] = useState<SecretsStatus | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -70,6 +72,7 @@ export function Settings() {
       <header className="settings-head">
         <h1>Configuración</h1>
       </header>
+      <AccountSection account={account} />
       <AnalysisSection value={draft.analysis} onChange={(patch) => setDraft({ ...draft, analysis: { ...draft.analysis, ...patch } })} />
       <AiSection value={draft.ai} onChange={(patch) => setDraft({ ...draft, ai: { ...draft.ai, ...patch } })} />
       <Credentials status={secrets} onChange={setSecrets} />

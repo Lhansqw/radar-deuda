@@ -368,6 +368,19 @@ async function main(): Promise<void> {
     await page.getByRole('heading', { name: /Función difícil de mantener/ }).waitFor();
     log('pregunta respondida sin enviar código; la referencia abre el hallazgo');
 
+    // Cerrar sesión vuelve al acceso; al entrar de nuevo, los proyectos siguen ahí.
+    await page.getByRole('button', { name: 'Configuración' }).click();
+    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+    await page.getByRole('heading', { name: 'Inicia sesión' }).waitFor();
+    await page.getByLabel('Correo').fill(EMAIL);
+    await page.getByLabel('Contraseña', { exact: true }).fill('otra-contraseña');
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+    await page.getByText('El correo o la contraseña no son correctos.').waitFor();
+    await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+    await page.getByRole('button', { name: /tienda/ }).first().waitFor();
+    log('sesión cerrada y vuelta a iniciar: los proyectos de la cuenta siguen ahí');
+
     assert.deepEqual(problems, [], `Errores en la consola de la interfaz:\n${problems.join('\n')}`);
   } finally {
     await app.close();

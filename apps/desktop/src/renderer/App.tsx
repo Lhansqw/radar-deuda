@@ -70,7 +70,7 @@ export function App({ account }: { account: Extract<AccountState, { status: 'sig
         {error ? <ErrorNotice message={error} onClose={() => setError(null)} /> : null}
         {view === 'ajustes' ? (
           <div className="workspace-body">
-            <Settings />
+            <Settings account={account} />
           </div>
         ) : project ? (
           <ProjectWorkspace
