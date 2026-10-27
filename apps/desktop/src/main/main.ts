@@ -10,7 +10,7 @@ import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { createAccountHandlers } from './account-handlers.js';
 import { AccountService } from './account-service.js';
-import { cloudConfig } from './cloud-config.js';
+import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import type { AppDeps } from './handlers.js';
 import { registerIpc } from './ipc.js';
 import { devServerFromEnv } from './policy.js';
@@ -20,6 +20,10 @@ import { EncryptedSessionStorage } from './session-storage.js';
 import { checkRenderer, checkWorker, SMOKE_FLAG } from './smoke.js';
 import { spawnAnalysisWorker } from './worker-process.js';
 import { openWorkspace, SessionRouter } from './workspace.js';
+
+/** Conexión con Supabase incrustada al compilar (scripts/config.ts); null si no se definió. */
+declare const __RADAR_NUBE__: BuiltCloudConfig | null;
+const builtCloud: BuiltCloudConfig | null = typeof __RADAR_NUBE__ === 'undefined' ? null : __RADAR_NUBE__;
 
 /** URL del servidor de Vite en desarrollo (npm run dev); null en la aplicación compilada o empaquetada. */
 const devServerUrl = devServerFromEnv(process.env['RADAR_DEV_SERVER_URL'], app.isPackaged);
@@ -139,7 +143,7 @@ function start(): void {
 
   // Cuentas (fase 13): sin sesión no se abre ninguna base de datos; con sesión, la del usuario.
   const account = new AccountService({
-    config: cloudConfig(process.env, null),
+    config: cloudConfig(process.env, builtCloud),
     storage: new EncryptedSessionStorage(path.join(dataDir, 'sesion.bin'), safeStorage),
     onChange: (change) => router?.change(change),
   });

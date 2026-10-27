@@ -1,12 +1,26 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BuildOptions } from 'esbuild';
+import { cloudConfig, ENV_KEY, ENV_URL, type BuiltCloudConfig } from '../src/main/cloud-config.js';
 
 /** apps/desktop */
 export const appDir = fileURLToPath(new URL('..', import.meta.url));
 export const distDir = path.join(appDir, 'dist');
 const repoDir = path.resolve(appDir, '../..');
 const pkg = (name: string): string => path.join(repoDir, 'packages', name, 'src', 'index.ts');
+
+/**
+ * Conexión con Supabase que se incrusta en la aplicación al compilar: la de
+ * RADAR_SUPABASE_URL y RADAR_SUPABASE_PUBLISHABLE_KEY si están definidas (null
+ * si no). Ninguna es secreta, pero solo viven en el entorno de quien compila,
+ * nunca en el repositorio. Una clave secreta detiene la compilación.
+ */
+export function cloudForBuild(env: NodeJS.ProcessEnv = process.env): BuiltCloudConfig | null {
+  if ((env[ENV_URL] ?? '').trim() === '' && (env[ENV_KEY] ?? '').trim() === '') return null;
+  const r = cloudConfig(env, null);
+  if (!r.ok) throw new Error(`No se puede incrustar la conexión con Supabase: ${r.message}`);
+  return r.config;
+}
 
 /**
  * Procesos de Node (principal, preload y el de análisis). Se
@@ -34,5 +48,7 @@ export function nodeBuildOptions(dev: boolean): BuildOptions {
     minify: !dev,
     legalComments: 'none',
     logLevel: 'warning',
+    // src/main/main.ts: conexión con Supabase incrustada (o null).
+    define: { __RADAR_NUBE__: JSON.stringify(cloudForBuild()) },
   };
 }
