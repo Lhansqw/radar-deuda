@@ -2,8 +2,8 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runGit } from '@radar/sources';
-import { createProvider, historyStart, keysFromEnv, resolveTarget, runPipeline, type PipelineEvent } from '../src/index.js';
+import { HttpError, runGit, type CloneOptions, type GitHubRepoRef } from '@radar/sources';
+import { createProvider, historyStart, keysFromEnv, resolveTarget, runPipeline, type PipelineEvent, type TargetDeps } from '../src/index.js';
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -71,6 +71,71 @@ describe('origen', () => {
     const root = await tmp();
     expect(await resolveTarget({ target: root, history: false }, silent, new AbortController().signal)).toEqual({ dir: root, github: null });
     await expect(resolveTarget({ target: 'no/es/valido', history: false }, silent, new AbortController().signal)).rejects.toThrow(/ni es una referencia válida a GitHub/);
+  });
+
+  /** GitHub simulado: metadatos (o un error) y un clonado que solo registra sus opciones. */
+  function github(meta: { defaultBranch: string; sizeKb: number } | Error, warnings: string[] = []) {
+    const clones: Array<{ ref: GitHubRepoRef; options: CloneOptions }> = [];
+    const tokens: Array<string | undefined> = [];
+    const deps: TargetDeps = {
+      client: (token) => {
+        tokens.push(token);
+        return {
+          getRepository: async () => {
+            if (meta instanceof Error) throw meta;
+            return { fullName: 'ana/tienda', private: false, archived: false, pushedAt: null, language: 'TypeScript', ...meta };
+          },
+          checkToken: async () => ({ kind: 'fine-grained', login: 'ana', warnings }),
+        };
+      },
+      clone: async (ref, options) => {
+        clones.push({ ref, options });
+        return { dir: '/clones/ana__tienda', head: 'abc', updated: false };
+      },
+    };
+    return { deps, clones, tokens };
+  }
+  const recorder = () => {
+    const log: string[] = [];
+    return { log, hooks: { info: (m: string) => log.push(`info: ${m}`), warn: (m: string) => log.push(`aviso: ${m}`) } };
+  };
+  const signal = new AbortController().signal;
+
+  it('un repositorio de GitHub se clona con la rama principal, el periodo del historial y el tamaño', async () => {
+    const gh = github({ defaultBranch: 'develop', sizeKb: 2048 });
+    const { log, hooks } = recorder();
+    const r = await resolveTarget({ target: 'ana/tienda', history: true, since: '2026-01-01' }, hooks, signal, gh.deps);
+    expect(r).toEqual({ dir: '/clones/ana__tienda', github: { owner: 'ana', repo: 'tienda' } });
+    expect(gh.clones[0]?.options).toMatchObject({ branch: 'develop', shallowSince: '2026-01-01', sizeKb: 2048 });
+    expect(gh.clones[0]?.options).not.toHaveProperty('token');
+    expect(log).toEqual(['info: Clonando ana/tienda (2 MB, rama develop)…', 'info: Clonado en /clones/ana__tienda']);
+  });
+
+  it('la rama indicada manda; sin historial no se limita el periodo; los avisos del token llegan al usuario', async () => {
+    const gh = github({ defaultBranch: 'main', sizeKb: 10 }, ['El token puede escribir en el repositorio.']);
+    const { log, hooks } = recorder();
+    await resolveTarget({ target: 'https://github.com/ana/tienda', history: false, branch: 'v2', githubToken: 'github_pat_x' }, hooks, signal, gh.deps);
+    expect(gh.tokens).toEqual(['github_pat_x']);
+    expect(gh.clones[0]?.options).toMatchObject({ branch: 'v2', token: 'github_pat_x' });
+    expect(gh.clones[0]?.options).not.toHaveProperty('shallowSince');
+    expect(log).toContain('aviso: El token puede escribir en el repositorio.');
+  });
+
+  it('un repositorio que no existe (o sin acceso) no se intenta clonar', async () => {
+    for (const status of [401, 404]) {
+      const gh = github(new Error('GitHub respondió con un error', { cause: new HttpError(`HTTP ${status}`, status, new Headers(), '') }));
+      await expect(resolveTarget({ target: 'ana/tienda', history: false }, silent, signal, gh.deps)).rejects.toThrow(/error/);
+      expect(gh.clones).toEqual([]);
+    }
+  });
+
+  it('sin metadatos (límite de peticiones, red) avisa y clona igualmente', async () => {
+    const gh = github(new Error('límite de peticiones', { cause: new HttpError('HTTP 403', 403, new Headers(), '') }));
+    const { log, hooks } = recorder();
+    await resolveTarget({ target: 'ana/tienda', history: false }, hooks, signal, gh.deps);
+    expect(log[0]).toMatch(/^aviso: No se pudieron obtener los metadatos de GitHub \(límite de peticiones\)/);
+    expect(gh.clones[0]?.options).not.toHaveProperty('branch');
+    expect(gh.clones[0]?.options).not.toHaveProperty('sizeKb');
   });
 
   it('el historial empieza en la fecha indicada o hace 12 meses', () => {
