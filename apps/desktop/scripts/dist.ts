@@ -42,3 +42,4 @@ if (process.platform === 'linux' && !process.env['DISPLAY']) {
   process.exit(0);
 }
 await verifyPackage(unpacked, exe);
+console.log('Paquete comprobado.');
