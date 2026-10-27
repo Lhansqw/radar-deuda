@@ -91,8 +91,24 @@ async function simulate(app: ElectronApplication): Promise<void> {
         }
         if (url.endsWith('/api/v1/key')) return json({ data: { limit_remaining: null, usage: 0, free_model_daily_requests: { used: 3, limit: 50, remaining: 47 } } });
         if (url.endsWith('/api/v1/chat/completions')) {
-          const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ content: string }> };
+          const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
+          const system = body.messages.find((m) => m.role === 'system')?.content ?? '';
           const id = /El id del hallazgo es "([^"]+)"/.exec(body.messages.map((m) => m.content).join('\n'))?.[1];
+          const reply = (content: string): Response => json({ model: body.model, choices: [{ message: { content }, finish_reason: 'stop' }], usage: { prompt_tokens: 900, completion_tokens: 120, cost: 0 } });
+          if (system.includes('responde preguntas')) return reply('Empieza por [H2], el punto crítico, después de añadir pruebas ([H1]).');
+          if (system.includes('corrección más pequeña')) {
+            // Sustituye la rama de la electrónica (líneas 16-29 del ejemplo) por una llamada.
+            return reply(
+              JSON.stringify({
+                id_hallazgo: id,
+                aplicable: true,
+                resumen: 'Extraer el descuento de la electrónica.',
+                cambios: [{ archivo: 'src/pedidos/procesarPedido.ts', linea_inicio: 17, linea_fin: 29, reemplazo: '        total += item.precio * item.cantidad * factorElectronica(item.precio, pedido.cliente);' }],
+                riesgos: ['Falta definir factorElectronica.'],
+                verificacion: ['Pruebas de procesarPedido.'],
+              }),
+            );
+          }
           const content = JSON.stringify({
             id_hallazgo: id,
             resumen: 'Explicación simulada: la función mezcla demasiadas decisiones.',
@@ -148,7 +164,7 @@ async function main(): Promise<void> {
       const w = globalThis as unknown as { require?: unknown; process?: unknown; radar: object; location: { origin: string } };
       return { require: typeof w.require, process: typeof w.process, api: Object.keys(w.radar).sort(), origin: w.location.origin };
     });
-    assert.deepEqual(surface, { require: 'undefined', process: 'undefined', api: ['ai', 'analyses', 'app', 'files', 'jobs', 'projects', 'secrets', 'settings'], origin: 'app://radar' });
+    assert.deepEqual(surface, { require: 'undefined', process: 'undefined', api: ['ai', 'analyses', 'app', 'chat', 'files', 'jobs', 'projects', 'secrets', 'settings'], origin: 'app://radar' });
     log('la interfaz no tiene acceso a Node y solo ve window.radar');
 
     await page.getByRole('heading', { name: 'Añade tu primer proyecto' }).waitFor();
@@ -234,6 +250,36 @@ async function main(): Promise<void> {
       assert.equal(r.body.includes(SECRET_IN_DEMO), false, 'Se envió el secreto a la IA');
     }
     log('explicación de la IA guardada en el análisis, sin enviar código');
+
+    // Propuesta de corrección: con «solo metadatos», primero se pide permiso mostrando lo que sale.
+    await page.getByRole('button', { name: 'Proponer una corrección' }).click();
+    const consent = page.getByRole('dialog', { name: /Enviar este fragmento de código a OpenRouter/ });
+    await consent.waitFor();
+    assert.match((await consent.textContent()) ?? '', /src\/pedidos\/procesarPedido\.ts, líneas 1–/);
+    await consent.locator('summary').click();
+    assert.ok(((await consent.locator('.consent-text').textContent()) ?? '').includes("if (item.categoria === 'electronica') {"), 'La vista previa muestra el código que se enviará');
+    await shot(page, 'permiso-envio');
+    await consent.getByRole('button', { name: /^Enviar el fragmento/ }).click();
+    await page.locator('.diff-line[data-kind="added"]', { hasText: 'factorElectronica' }).waitFor({ timeout: 30_000 });
+    await page.locator('.fix').scrollIntoViewIfNeeded();
+    await shot(page, 'propuesta');
+    await page.getByRole('button', { name: 'Copiar el parche' }).click();
+    await page.getByText('Parche copiado al portapapeles.').waitFor();
+    const patch = await app.evaluate(({ clipboard }) => clipboard.readText());
+    writeFileSync(path.join(tmp, 'cambio.patch'), patch);
+    execFileSync('git', ['apply', '--check', path.join(tmp, 'cambio.patch')], { cwd: repo });
+    log('propuesta de corrección con permiso explícito; el parche se aplica con git apply');
+
+    // Preguntas: solo datos del análisis; las referencias llevan al hallazgo.
+    await page.getByRole('button', { name: /^Preguntar/ }).click();
+    await page.getByRole('button', { name: '¿Por dónde empiezo a reducir la deuda?' }).click();
+    await page.locator('.msg-refs').waitFor({ timeout: 30_000 });
+    await shot(page, 'preguntar');
+    const asked = (await app.evaluate(() => (globalThis as unknown as { requests: Array<{ url: string; body: string }> }).requests)).filter((r) => r.url.endsWith('/chat/completions')).at(-1);
+    for (const line of code) assert.equal(asked?.body.includes(line), false, `Se envió código al preguntar: ${line}`);
+    await page.locator('.ref-inline', { hasText: 'H2' }).click();
+    await page.getByRole('heading', { name: /Función difícil de mantener/ }).waitFor();
+    log('pregunta respondida sin enviar código; la referencia abre el hallazgo');
 
     assert.deepEqual(problems, [], `Errores en la consola de la interfaz:\n${problems.join('\n')}`);
   } finally {
