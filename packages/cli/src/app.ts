@@ -83,72 +83,103 @@ function severityOption(name: string, value: string | undefined): Severity | und
   return value in SEVERITY_ORDER && value !== 'info' ? (value as Severity) : new Error(`Severidad no válida para --${name}: ${value}`);
 }
 
+const CLI_ARGS = {
+  json: { type: 'string' },
+  baseline: { type: 'string' },
+  branch: { type: 'string' },
+  since: { type: 'string' },
+  online: { type: 'boolean', default: false },
+  'no-history': { type: 'boolean', default: false },
+  'no-cache': { type: 'boolean', default: false },
+  'cache-dir': { type: 'string' },
+  concurrency: { type: 'string' },
+  top: { type: 'string' },
+  'fail-on': { type: 'string' },
+  'fail-on-new': { type: 'string' },
+  quiet: { type: 'boolean', default: false },
+  preguntar: { type: 'string' },
+  proponer: { type: 'string' },
+  parche: { type: 'string' },
+  help: { type: 'boolean', short: 'h', default: false },
+  ...AI_ARGS,
+} as const;
+
+const readArgs = (argv: string[]) => parseArgs({ args: argv, allowPositionals: true, options: CLI_ARGS });
+type CliValues = ReturnType<typeof readArgs>['values'];
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_QUESTION = 2000;
+
+/** `{ clave: valor }` si hay valor y nada si no (con exactOptionalPropertyTypes no vale `clave: undefined`). */
+function present<K extends string, T>(key: K, value: T | undefined): Partial<Record<K, T>> {
+  return value === undefined ? {} : ({ [key]: value } as Partial<Record<K, T>>);
+}
+
 export function parseCli(argv: string[]): Parsed {
-  let parsed;
+  let parsed: ReturnType<typeof readArgs>;
   try {
-    parsed = parseArgs({
-      args: argv,
-      allowPositionals: true,
-      options: {
-        json: { type: 'string' },
-        baseline: { type: 'string' },
-        branch: { type: 'string' },
-        since: { type: 'string' },
-        online: { type: 'boolean', default: false },
-        'no-history': { type: 'boolean', default: false },
-        'no-cache': { type: 'boolean', default: false },
-        'cache-dir': { type: 'string' },
-        concurrency: { type: 'string' },
-        top: { type: 'string' },
-        'fail-on': { type: 'string' },
-        'fail-on-new': { type: 'string' },
-        quiet: { type: 'boolean', default: false },
-        preguntar: { type: 'string' },
-        proponer: { type: 'string' },
-        parche: { type: 'string' },
-        help: { type: 'boolean', short: 'h', default: false },
-        ...AI_ARGS,
-      },
-    });
+    parsed = readArgs(argv);
   } catch (err) {
     return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
   }
   const { values: v, positionals } = parsed;
   if (v.help) return { kind: 'help' };
-  if (positionals.length !== 1) return { kind: 'error', message: 'Indica exactamente una carpeta o repositorio a analizar.' };
+  const checked = checkCli(v, positionals);
+  if (checked instanceof Error) return { kind: 'error', message: checked.message };
+  return { kind: 'run', options: buildOptions(v, positionals[0] as string, checked) };
+}
+
+interface Checked {
+  failOn: Severity | undefined;
+  failOnNew: Severity | undefined;
+  ai: AiCliOptions | undefined;
+}
+
+/** Comprueba las opciones en orden; el primer problema es el que se informa. */
+function checkCli(v: CliValues, positionals: readonly string[]): Checked | Error {
+  if (positionals.length !== 1) return new Error('Indica exactamente una carpeta o repositorio a analizar.');
   const failOn = severityOption('fail-on', v['fail-on']);
+  if (failOn instanceof Error) return failOn;
   const failOnNew = severityOption('fail-on-new', v['fail-on-new']);
-  if (failOn instanceof Error) return { kind: 'error', message: failOn.message };
-  if (failOnNew instanceof Error) return { kind: 'error', message: failOnNew.message };
-  if (failOnNew && !v.baseline) return { kind: 'error', message: '--fail-on-new requiere --baseline.' };
-  if (v.since !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(v.since)) return { kind: 'error', message: `Fecha no válida para --since: ${v.since} (usa AAAA-MM-DD).` };
+  if (failOnNew instanceof Error) return failOnNew;
+  if (failOnNew && !v.baseline) return new Error('--fail-on-new requiere --baseline.');
+  if (v.since !== undefined && !DATE.test(v.since)) return new Error(`Fecha no válida para --since: ${v.since} (usa AAAA-MM-DD).`);
   const ai = parseAiOptions(v);
-  if (ai instanceof Error) return { kind: 'error', message: ai.message };
-  if ((v.preguntar !== undefined || v.proponer !== undefined) && !ai) return { kind: 'error', message: '--preguntar y --proponer requieren --ai.' };
-  if (v.preguntar !== undefined && (v.preguntar.trim() === '' || v.preguntar.length > 2000)) return { kind: 'error', message: '--preguntar necesita una pregunta de hasta 2000 caracteres.' };
-  if (v.parche !== undefined && v.proponer === undefined) return { kind: 'error', message: '--parche requiere --proponer.' };
+  if (ai instanceof Error) return ai;
+  const problem = actionProblem(v, ai !== undefined);
+  return problem ? new Error(problem) : { failOn, failOnNew, ai };
+}
+
+/** --preguntar y --proponer sustituyen a las explicaciones y necesitan la IA. */
+function actionProblem(v: CliValues, usesAi: boolean): string | null {
+  if ((v.preguntar !== undefined || v.proponer !== undefined) && !usesAi) return '--preguntar y --proponer requieren --ai.';
+  if (v.preguntar !== undefined && (v.preguntar.trim() === '' || v.preguntar.length > MAX_QUESTION)) return `--preguntar necesita una pregunta de hasta ${MAX_QUESTION} caracteres.`;
+  if (v.parche !== undefined && v.proponer === undefined) return '--parche requiere --proponer.';
+  return null;
+}
+
+function buildOptions(v: CliValues, target: string, { failOn, failOnNew, ai }: Checked): CliOptions {
   const top = v.top !== undefined ? Number(v.top) : 15;
-  const options: CliOptions = {
-    target: positionals[0] as string,
+  return {
+    target,
     noCache: v['no-cache'],
     online: v.online,
     history: !v['no-history'],
     quiet: v.quiet,
     top: Number.isInteger(top) && top >= 0 ? top : 15,
-    ...(v.json !== undefined ? { json: v.json } : {}),
-    ...(v.baseline !== undefined ? { baseline: v.baseline } : {}),
-    ...(v.branch !== undefined ? { branch: v.branch } : {}),
-    ...(v.since !== undefined ? { since: v.since } : {}),
-    ...(v['cache-dir'] !== undefined ? { cacheDir: v['cache-dir'] } : {}),
-    ...(v.concurrency !== undefined ? { concurrency: Number(v.concurrency) } : {}),
-    ...(failOn ? { failOn } : {}),
-    ...(failOnNew ? { failOnNew } : {}),
-    ...(ai ? { ai } : {}),
-    ...(v.preguntar !== undefined ? { ask: v.preguntar.trim() } : {}),
-    ...(v.proponer !== undefined ? { propose: v.proponer.trim() } : {}),
-    ...(v.parche !== undefined ? { patch: v.parche } : {}),
+    ...present('json', v.json),
+    ...present('baseline', v.baseline),
+    ...present('branch', v.branch),
+    ...present('since', v.since),
+    ...present('cacheDir', v['cache-dir']),
+    ...present('concurrency', v.concurrency === undefined ? undefined : Number(v.concurrency)),
+    ...present('failOn', failOn),
+    ...present('failOnNew', failOnNew),
+    ...present('ai', ai),
+    ...present('ask', v.preguntar?.trim()),
+    ...present('propose', v.proponer?.trim()),
+    ...present('patch', v.parche),
   };
-  return { kind: 'run', options };
 }
 
 export interface Io {
