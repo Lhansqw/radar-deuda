@@ -61,7 +61,7 @@ async function run(exe: string, args: string[], env: Record<string, string> = {}
       });
     });
   } finally {
-    await rm(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }).catch(() => undefined);
+    await removeTemp(dataDir);
   }
 }
 
@@ -111,7 +111,7 @@ export async function verifyPackage(unpacked: string, exe: string): Promise<void
     const ran = await readFile(marker, 'utf8').then(() => true, () => false);
     check(injected.code === 0 && !ran, 'NODE_OPTIONS no inyecta código', injected.output);
   } finally {
-    await rm(markerDir, { recursive: true, force: true });
+    await removeTemp(markerDir);
   }
 
   const inspect = await run(exe, ['--inspect=0', '--prueba-arranque']);
@@ -126,6 +126,17 @@ export async function verifyPackage(unpacked: string, exe: string): Promise<void
     const tampered = await run(path.join(copy, path.basename(exe)), ['--prueba-arranque'], {}, 60_000);
     check(tampered.code !== 0 && !tampered.output.includes(SMOKE_OK), 'Un app.asar alterado no se carga', tampered.output);
   } finally {
-    await rm(copy, { recursive: true, force: true });
+    await removeTemp(copy);
   }
+}
+
+/**
+ * Borra una carpeta temporal de la comprobación. En Windows, los procesos de
+ * Chromium pueden tener abiertos el ejecutable o sus archivos un momento
+ * después de salir: se reintenta y, si no se puede, solo se avisa.
+ */
+async function removeTemp(dir: string): Promise<void> {
+  await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }).catch((err: unknown) => {
+    console.warn(`  (no se pudo borrar la carpeta temporal ${dir}: ${err instanceof Error ? err.message : String(err)})`);
+  });
 }
