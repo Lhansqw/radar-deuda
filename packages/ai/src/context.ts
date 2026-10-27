@@ -1,4 +1,4 @@
-import { redactSecrets, scanSecrets, sha1, type Finding } from '@radar/engine';
+import { MAX_SCANNED_LINE, redactSecrets, scanSecrets, sha1, type Finding } from '@radar/engine';
 import type { LlmProvider } from './provider.js';
 
 /**
@@ -60,9 +60,12 @@ export interface FindingContext {
 /** Lo que ve la IA en lugar de una línea con un posible secreto. */
 export const OMITTED_LINE = '[línea omitida: posible secreto]';
 
-/** Línea sustituida si contiene un posible secreto (formato conocido o asignación de alta entropía). */
+/**
+ * Línea sustituida si contiene un posible secreto (formato conocido o
+ * asignación de alta entropía) o si es tan larga que el detector no la examina.
+ */
 export function sanitizeLine(line: string, file: string): string {
-  if (scanSecrets([line], file).length > 0) return OMITTED_LINE;
+  if (line.length > MAX_SCANNED_LINE || scanSecrets([line], file).length > 0) return OMITTED_LINE;
   const redacted = redactSecrets(line);
   // Un archivo del repositorio no puede imitar los delimitadores del contexto.
   return redacted.replace(/<<</g, '‹‹‹').replace(/>>>/g, '›››');

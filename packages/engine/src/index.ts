@@ -9,7 +9,7 @@ export { isTestPath } from './discovery.js';
 export { resolveConfig, configHash, DEFAULT_CONFIG, DEFAULT_THRESHOLDS, ENGINE_VERSION, type ConfigOverrides } from './config.js';
 export { computeScore } from './score.js';
 export { defaultCacheDir } from './cache.js';
-export { redactSecrets, redactValue, scanSecrets } from './analyzers/secrets.js';
+export { MAX_SCANNED_LINE, redactSecrets, redactValue, scanSecrets } from './analyzers/secrets.js';
 export * from './analyzers/index.js';
 export { formatReport, formatComparison } from './report.js';
 export { findingRefs, findFindingByRef } from './refs.js';

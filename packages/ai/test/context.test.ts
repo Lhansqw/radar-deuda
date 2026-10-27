@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertProviderAllowed, buildFindingContext, PrivacyError, sanitizeLine } from '../src/context.js';
+import { assertProviderAllowed, buildFindingContext, OMITTED_LINE, PrivacyError, sanitizeLine } from '../src/context.js';
 import type { LlmProvider } from '../src/provider.js';
 import { FILE, finding } from './helpers/findings.js';
 
@@ -80,5 +80,11 @@ describe('fragmentos', () => {
 
   it('sanitizeLine deja intactas las líneas normales', () => {
     expect(sanitizeLine('const total = a + b;', 'x.ts')).toBe('const total = a + b;');
+  });
+
+  it('sanitizeLine omite las líneas demasiado largas para buscar secretos en ellas', () => {
+    const secret = ['Zq8v', 'T2mW', '9xLp', '4RbN', '7cYd'].join('');
+    const long = `const c = { password: "${secret}", datos: "${'x'.repeat(2100)}" };`;
+    expect(sanitizeLine(long, 'x.ts')).toBe(OMITTED_LINE);
   });
 });

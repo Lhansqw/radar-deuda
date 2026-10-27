@@ -1,6 +1,6 @@
 import { lstat, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
-import { safeJoin, scanSecrets, type AnalysisReport } from '@radar/engine';
+import { MAX_SCANNED_LINE, safeJoin, scanSecrets, type AnalysisReport } from '@radar/engine';
 import type { CodeSnippet } from '../shared/model.js';
 
 /** Tamaño máximo de archivo que se abre para mostrar un fragmento. */
@@ -55,13 +55,20 @@ export async function readSnippet(report: AnalysisReport, rel: string, start: nu
     const original = lines[m.line - from] ?? '';
     lines[m.line - from] = `${/^\s*/.exec(original)?.[0] ?? ''}${m.redacted}`;
   }
+  // El detector no examina las líneas muy largas: no se puede asegurar que no tengan un secreto.
+  const tooLong: number[] = [];
+  lines.forEach((l, i) => {
+    if (l.length <= MAX_SCANNED_LINE) return;
+    lines[i] = `[línea de ${l.length} caracteres: no se muestra porque no se puede comprobar si contiene secretos]`;
+    tooLong.push(from + i);
+  });
   return {
     file: rel,
     startLine: from,
     endLine: to,
     totalLines: all.length,
     lines,
-    redactedLines: secrets.map((m) => m.line),
+    redactedLines: [...secrets.map((m) => m.line), ...tooLong].sort((a, b) => a - b),
     changedSinceAnalysis: st.mtimeMs > Date.parse(report.generatedAt),
   };
 }
