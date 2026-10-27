@@ -48,7 +48,7 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
   const projectAnalyzers = options.projectAnalyzers ?? DEFAULT_PROJECT_ANALYZERS;
 
   onProgress?.({ phase: 'discovery', done: 0, total: 0 });
-  const { root, files, skipped: discoverySkipped } = await discoverFiles(rootInput, config, signal);
+  const { root, files, skipped: discoverySkipped, radarignore } = await discoverFiles(rootInput, config, signal);
   const skipped: SkippedFile[] = [...discoverySkipped];
   const errors: AnalyzerError[] = [];
 
@@ -133,6 +133,9 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
     },
   };
   const extraCoverage: CoverageNote[] = [];
+  if (radarignore !== null) {
+    extraCoverage.push({ area: 'Exclusiones', status: 'partial', detail: `.radarignore excluye ${radarignore} patrón(es): esos archivos no se analizan.` });
+  }
   for (const analyzer of projectAnalyzers) {
     signal?.throwIfAborted();
     try {

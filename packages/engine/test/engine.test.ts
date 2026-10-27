@@ -178,6 +178,13 @@ describe('analyzeRepository', () => {
     expect(report.coverage.filter((c) => c.area === 'Dependencias')).toEqual([{ area: 'Dependencias', status: 'analyzed', detail: 'Consultado OSV.' }]);
   });
 
+  it('declara las exclusiones de .radarignore en la cobertura', async () => {
+    const repo = await tmp({ '.radarignore': 'generado/\n', 'generado/x.ts': NESTED, 'src/a.ts': 'export const a = 1;' });
+    const report = await analyzeRepository(repo.root, { cacheDir: null });
+    expect(report.findings.some((f) => f.locations.some((l) => l.file.startsWith('generado/')))).toBe(false);
+    expect(report.coverage).toContainEqual({ area: 'Exclusiones', status: 'partial', detail: '.radarignore excluye 1 patrón(es): esos archivos no se analizan.' });
+  });
+
   it('se puede cancelar', async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 200; i++) files[`src/m${i}.ts`] = NESTED;

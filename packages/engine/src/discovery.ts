@@ -49,7 +49,13 @@ export interface DiscoveryResult {
   root: string;
   files: FileMeta[];
   skipped: SkippedFile[];
+  /** Patrones de .radarignore en la raíz (null si no existe). */
+  radarignore: number | null;
 }
+
+/** Exclusiones propias del análisis, con la sintaxis de .gitignore (carpetas generadas, vendor…). */
+export const RADARIGNORE = '.radarignore';
+const MAX_IGNORE_BYTES = 256 * 1024;
 
 /**
  * Valida y normaliza la raíz a analizar. Rechaza rutas que no son directorios
@@ -73,16 +79,31 @@ export async function resolveRoot(input: string): Promise<string> {
   return resolved;
 }
 
-async function loadGitignore(root: string, config: AnalysisConfig): Promise<Ignore> {
+async function readIgnoreFile(file: string): Promise<string | null> {
+  try {
+    const info = await stat(file);
+    if (!info.isFile() || info.size > MAX_IGNORE_BYTES) return null;
+    return await readFile(file, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/** Patrones de una lista con la sintaxis de .gitignore (sin comentarios ni líneas vacías). */
+function patternCount(text: string): number {
+  return text.split(/\r?\n/).filter((l) => l.trim() !== '' && !l.trimStart().startsWith('#')).length;
+}
+
+async function loadIgnores(root: string, config: AnalysisConfig): Promise<{ ig: Ignore; radarignore: number | null }> {
   const ig = ignoreFactory().add(config.exclude);
   if (config.respectGitignore) {
-    try {
-      ig.add(await readFile(path.join(root, '.gitignore'), 'utf8'));
-    } catch {
-      /* sin .gitignore */
-    }
+    const gitignore = await readIgnoreFile(path.join(root, '.gitignore'));
+    if (gitignore !== null) ig.add(gitignore);
   }
-  return ig;
+  // .radarignore se aplica siempre: es una decisión explícita sobre qué analizar.
+  const own = await readIgnoreFile(path.join(root, RADARIGNORE));
+  if (own !== null) ig.add(own);
+  return { ig, radarignore: own === null ? null : patternCount(own) };
 }
 
 /**
@@ -96,7 +117,7 @@ export async function discoverFiles(
   signal?: AbortSignal,
 ): Promise<DiscoveryResult> {
   const root = await resolveRoot(rootInput);
-  const ig = await loadGitignore(root, config);
+  const { ig, radarignore } = await loadIgnores(root, config);
   const files: FileMeta[] = [];
   const skipped: SkippedFile[] = [];
   const stack: string[] = [''];
@@ -145,7 +166,7 @@ export async function discoverFiles(
     }
   }
   files.sort((a, b) => a.relPath.localeCompare(b.relPath));
-  return { root, files, skipped };
+  return { root, files, skipped, radarignore };
 }
 
 /** Heurística barata para binarios: un byte nulo en los primeros 8 KB. */
