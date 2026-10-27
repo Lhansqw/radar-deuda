@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -99,8 +99,21 @@ describe('getRepoInfo', () => {
     const sha = await repo.commit({ 'src/a.ts': 'x' }, 'inicial');
     await repo.git('remote', 'add', 'origin', 'https://x-access-token:ghp_abc123@github.com/Lhansqw/radar-deuda.git');
     const info = await getRepoInfo(path.join(repo.root, 'src'));
-    expect(info).toMatchObject({ head: sha, branch: 'main', remoteUrl: 'https://github.com/Lhansqw/radar-deuda.git', shallow: false });
-    expect(path.resolve(info?.root ?? '')).toBe(path.resolve(repo.root));
+    expect(info).toMatchObject({ prefix: 'src', head: sha, branch: 'main', remoteUrl: 'https://github.com/Lhansqw/radar-deuda.git', shallow: false });
+    // Git escribe la raíz a su manera (en Windows, sin nombres cortos como RUNNER~1): se compara la ruta real.
+    expect(await realpath(info?.root ?? '')).toBe(await realpath(repo.root));
+    expect((await getRepoInfo(repo.root))?.prefix).toBe('');
+  });
+
+  it('la carpeta relativa a la raíz es correcta aunque se llegue por un enlace', async () => {
+    repo = await createGitRepo();
+    await mkdir(path.join(repo.root, 'src', 'ui'), { recursive: true });
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'radar-enlace-'));
+    extra.push(outside);
+    const link = path.join(outside, 'enlace');
+    await symlink(path.join(repo.root, 'src'), link, 'junction'); // una unión no pide permisos en Windows
+    expect((await getRepoInfo(link))?.prefix).toBe('src');
+    expect((await getRepoInfo(path.join(link, 'ui')))?.prefix).toBe('src/ui');
   });
 
   it('acepta un repositorio sin commits', async () => {

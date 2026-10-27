@@ -89,7 +89,8 @@ export async function cloneInternal(ref: GitHubRepoRef, options: InternalCloneOp
   await mkdir(baseDir, { recursive: true });
 
   const existing = await getRepoInfo(dir, signal).catch(() => null);
-  const sameRepo = existing !== null && path.resolve(existing.root) === path.resolve(dir) && existing.remoteUrl === url;
+  // La carpeta es la raíz de su propio repositorio (no una subcarpeta de otro) y apunta al mismo remoto.
+  const sameRepo = existing !== null && existing.prefix === '' && existing.remoteUrl === url;
   if (sameRepo) {
     const target = branch ?? 'HEAD';
     await fetchWithFallback(cfg, depthArgs, ['--no-tags', '--prune', 'origin', '--end-of-options', target], { ...base, cwd: dir });

@@ -70,7 +70,7 @@ export async function addGitContext(
   if (!o.history || !info.head) return;
   hooks.progress?.({ phase: 'history' });
   const since = historyStart(o);
-  const prefix = path.relative(info.root, report.root).split(path.sep).join('/');
+  const { prefix } = info;
   const { churn } = await cachedFileChurn(info.root, { head: info.head, shallow: info.shallow, since, prefix, cacheBase }, signal);
   report.hotspots = computeHotspots(report, churn, { prefix });
   report.coverage.push(

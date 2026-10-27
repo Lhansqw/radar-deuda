@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -90,6 +90,17 @@ describe('cloneOrUpdate', () => {
     expect(second).toMatchObject({ dir: first.dir, head, updated: true });
     expect(await readFile(path.join(second.dir, 'a.ts'), 'utf8')).toBe('v2');
     expect(existsSync(path.join(second.dir, 'basura.tmp'))).toBe(false);
+  });
+
+  it('actualiza el clon aunque la carpeta de clones se escriba de otra forma (enlace, nombre corto de Windows)', async () => {
+    origin = await createGitRepo();
+    await origin.commit({ 'a.ts': 'v1' }, 'c1');
+    const link = path.join(await tmp(), 'enlace');
+    await symlink(await tmp(), link, 'junction'); // una unión no pide permisos en Windows
+    const url = `file://${origin.root}`;
+    await cloneInternal(ref, { baseDir: link, url, extraConfig: LOCAL });
+    const head = await origin.commit({ 'a.ts': 'v2' }, 'c2');
+    expect(await cloneInternal(ref, { baseDir: link, url, extraConfig: LOCAL })).toMatchObject({ head, updated: true });
   });
 
   it('si el clon falla no deja carpetas a medias', async () => {

@@ -1,8 +1,14 @@
 import { GitError, runGit } from './run.js';
 
 export interface RepoInfo {
-  /** Raíz del repositorio (puede ser superior a la carpeta analizada). */
+  /** Raíz del repositorio (puede ser superior a la carpeta analizada), tal como la escribe Git. */
   root: string;
+  /**
+   * La carpeta pedida respecto a la raíz, con «/» y sin barra final ('' si es la
+   * raíz). La calcula Git: no depende de cómo esté escrita la ruta (enlaces,
+   * nombres cortos de Windows como RUNNER~1), así que no hay que comparar rutas.
+   */
+  prefix: string;
   /** Commit actual; null en un repositorio sin commits. */
   head: string | null;
   /** Rama actual; null si HEAD está desacoplado. */
@@ -35,8 +41,12 @@ async function optional(args: string[], cwd: string, signal?: AbortSignal): Prom
  */
 export async function getRepoInfo(dir: string, signal?: AbortSignal): Promise<RepoInfo | null> {
   let root: string;
+  let prefix: string;
   try {
-    root = (await runGit(['rev-parse', '--show-toplevel'], signal ? { cwd: dir, signal } : { cwd: dir })).trim();
+    const out = await runGit(['rev-parse', '--show-toplevel', '--show-prefix'], signal ? { cwd: dir, signal } : { cwd: dir });
+    const [top = '', sub = ''] = out.split(/\r?\n/);
+    root = top.trim();
+    prefix = sub.trim().replace(/\/+$/, '');
   } catch (err) {
     if (!(err instanceof GitError) || err.exitCode === null) throw err;
     if (/dubious ownership/i.test(err.stderr)) {
@@ -57,6 +67,7 @@ export async function getRepoInfo(dir: string, signal?: AbortSignal): Promise<Re
   ]);
   return {
     root,
+    prefix,
     head,
     branch,
     remoteUrl: remote ? stripCredentials(remote) : null,
