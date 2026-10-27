@@ -92,65 +92,94 @@ function downgrade(s: Severity): Severity {
 }
 
 const CODE_FILE = /\.(?:[cm]?[jt]sx?|py|java|kt|go|rb|php|cs|rs|swift|scala|c|h|cc|cpp|hpp|dart|lua|vue|svelte)$/i;
+/** Sin comillas, `nombre(` o `objeto.metodo(` es una llamada a función, no un literal. */
+const FUNCTION_CALL = /^[a-z_$][\w$]*(\.[\w$]+)*\(/i;
+/** Las líneas más largas (código minificado, datos) no se examinan. */
+const MAX_LINE = 2000;
+
+interface FileTraits {
+  /** En código fuente solo cuenta un literal de cadena; en .env/.ini/YAML los valores van sin comillas. */
+  isCode: boolean;
+  /** Pruebas, ejemplos y documentación: lo encontrado probablemente no es real. */
+  lowConfidence: boolean;
+}
+
+function fileTraits(relPath: string): FileTraits {
+  return {
+    isCode: CODE_FILE.test(relPath),
+    lowConfidence: LOW_CONFIDENCE_PATH.test(relPath) || TEST_FILE_NAME.test(relPath) || /\.md$/i.test(relPath) || /\.example$|\.sample$/i.test(relPath),
+  };
+}
 
 export function scanSecrets(lines: readonly string[], relPath: string): SecretMatch[] {
-  const matches: SecretMatch[] = [];
-  const isCodeFile = CODE_FILE.test(relPath);
-  const lowConfidencePath = LOW_CONFIDENCE_PATH.test(relPath) || TEST_FILE_NAME.test(relPath) || /\.md$/i.test(relPath) || /\.example$|\.sample$/i.test(relPath);
-  lines.forEach((line, i) => {
-    if (line.length > 2000) return;
-    let matchedKnown = false;
-    for (const rule of KNOWN_FORMATS) {
-      const m = rule.pattern.exec(line);
-      if (!m) continue;
-      matchedKnown = true;
-      let severity = rule.severity;
-      let confidence: Confidence = 'high';
-      if (rule.id === 'connection-string') {
-        const u = URL_PASSWORD.exec(m[0]);
-        const pwd = u?.[1] ?? '';
-        if (INTERPOLATION.test(pwd)) continue; // la contraseña viene de una variable, no está incrustada
-        if (EXAMPLE_PASSWORD.test(pwd) || EXAMPLE_HOST.test(u?.[2] ?? '')) {
-          severity = 'low';
-          confidence = 'low';
-        }
-      }
-      if (lowConfidencePath) {
-        severity = downgrade(severity);
-        confidence = confidence === 'high' ? 'medium' : 'low';
-      }
-      matches.push({
-        ruleId: rule.id,
-        label: rule.label,
-        line: i + 1,
-        severity,
-        confidence,
-        redacted: line.replace(m[0], redactValue(m[0])).trim().slice(0, 160),
-      });
-    }
-    if (matchedKnown) return;
-    const g = GENERIC_ASSIGNMENT.exec(line);
-    if (!g) return;
-    const quoted = (g[2] ?? '') !== '';
-    // En código fuente solo cuenta un literal de cadena; en .env/.ini/YAML los valores van sin comillas.
-    if (isCodeFile && !quoted) return;
-    const value = (g[3] ?? '').replace(/["'`]+$/, '');
-    if (value.length < 8 || PLACEHOLDER.test(value) || CODE_REFERENCE.test(value) || INTERPOLATION.test(value) || IDENTIFIER_LIKE.test(value)) return;
-    if (!quoted && /^[a-z_$][\w$]*(\.[\w$]+)*\(/i.test(value)) return; // llamada a función, no un literal
-    // Sin comillas, un valor que empieza por ( [ o { es una expresión (p. ej. PowerShell en la documentación).
-    if (!quoted && /^[([{]/.test(value)) return;
-    const entropy = shannonEntropy(value);
-    if (entropy < 3.0) return;
-    matches.push({
-      ruleId: 'generic-assignment',
-      label: `Posible secreto asignado a "${g[1] ?? ''}"`,
-      line: i + 1,
-      severity: lowConfidencePath ? 'low' : 'high',
-      confidence: lowConfidencePath ? 'low' : entropy >= 3.8 ? 'medium' : 'low',
-      redacted: line.replace(value, redactValue(value)).trim().slice(0, 160),
-    });
+  const traits = fileTraits(relPath);
+  return lines.flatMap((line, i) => (line.length > MAX_LINE ? [] : scanLine(line, i + 1, traits)));
+}
+
+/** Los formatos conocidos tienen prioridad: si alguno aparece, la línea no se examina como asignación genérica. */
+function scanLine(line: string, n: number, traits: FileTraits): SecretMatch[] {
+  const known = KNOWN_FORMATS.flatMap((rule) => {
+    const m = rule.pattern.exec(line);
+    return m ? [{ rule, text: m[0] }] : [];
   });
-  return matches;
+  if (known.length > 0) return known.flatMap(({ rule, text }) => knownMatch(rule, text, line, n, traits) ?? []);
+  const generic = genericMatch(line, n, traits);
+  return generic ? [generic] : [];
+}
+
+const redactIn = (line: string, secret: string): string => line.replace(secret, redactValue(secret)).trim().slice(0, 160);
+
+function knownMatch(rule: SecretRule, text: string, line: string, n: number, traits: FileTraits): SecretMatch | null {
+  let severity = rule.severity;
+  let confidence: Confidence = 'high';
+  if (rule.id === 'connection-string') {
+    const kind = connectionPassword(text);
+    if (kind === 'variable') return null;
+    if (kind === 'example') {
+      severity = 'low';
+      confidence = 'low';
+    }
+  }
+  if (traits.lowConfidence) {
+    severity = downgrade(severity);
+    confidence = confidence === 'high' ? 'medium' : 'low';
+  }
+  return { ruleId: rule.id, label: rule.label, line: n, severity, confidence, redacted: redactIn(line, text) };
+}
+
+/** La contraseña de una URL de conexión viene de una variable, es de ejemplo o parece real. */
+function connectionPassword(url: string): 'variable' | 'example' | 'real' {
+  const u = URL_PASSWORD.exec(url);
+  const pwd = u?.[1] ?? '';
+  if (INTERPOLATION.test(pwd)) return 'variable';
+  return EXAMPLE_PASSWORD.test(pwd) || EXAMPLE_HOST.test(u?.[2] ?? '') ? 'example' : 'real';
+}
+
+/** `clave = "valor"` con un valor que parece una credencial y tiene entropía suficiente. */
+function genericMatch(line: string, n: number, traits: FileTraits): SecretMatch | null {
+  const g = GENERIC_ASSIGNMENT.exec(line);
+  if (!g) return null;
+  const quoted = (g[2] ?? '') !== '';
+  if (traits.isCode && !quoted) return null;
+  const value = (g[3] ?? '').replace(/["'`]+$/, '');
+  if (!looksLikeSecret(value, quoted)) return null;
+  const entropy = shannonEntropy(value);
+  if (entropy < 3.0) return null;
+  return {
+    ruleId: 'generic-assignment',
+    label: `Posible secreto asignado a "${g[1] ?? ''}"`,
+    line: n,
+    severity: traits.lowConfidence ? 'low' : 'high',
+    confidence: traits.lowConfidence ? 'low' : entropy >= 3.8 ? 'medium' : 'low',
+    redacted: redactIn(line, value),
+  };
+}
+
+function looksLikeSecret(value: string, quoted: boolean): boolean {
+  if (value.length < 8 || PLACEHOLDER.test(value) || CODE_REFERENCE.test(value) || INTERPOLATION.test(value) || IDENTIFIER_LIKE.test(value)) return false;
+  if (quoted) return true;
+  // Sin comillas, una llamada o un valor que empieza por ( [ o { es una expresión (p. ej. PowerShell en la documentación).
+  return !FUNCTION_CALL.test(value) && !/^[([{]/.test(value);
 }
 
 export const secretsAnalyzer: FileAnalyzer = {
