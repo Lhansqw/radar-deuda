@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Icono de la aplicación: la marca del radar sobre la pizarra de la interfaz. -->
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="#131b26"/>
+  <rect x="8" y="8" width="240" height="240" rx="52" fill="none" stroke="#2b3a4d" stroke-width="4"/>
+  <g fill="none" stroke-width="14" stroke-linecap="round">
+    <circle cx="128" cy="128" r="84" stroke="#3a4b61"/>
+    <circle cx="128" cy="128" r="44" stroke="#3a4b61"/>
+    <path d="M128 128 L186 70" stroke="#e9eff7"/>
+  </g>
+  <circle cx="164" cy="150" r="17" fill="#fab219"/>
+  <circle cx="99" cy="104" r="14" fill="#d03b3b"/>
+</svg>
