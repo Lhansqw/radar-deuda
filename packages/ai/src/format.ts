@@ -1,4 +1,5 @@
-import type { AiSection, AnalysisReport, ClaimKind } from '@radar/engine';
+import { findingRefs, type AiFixProposal, type AiSection, type AnalysisReport, type ClaimKind, type Finding } from '@radar/engine';
+import type { ChatAnswer } from './chat.js';
 
 const KIND: Record<ClaimKind, string> = { evidencia: 'Evidencia', inferencia: 'Inferencia', recomendacion: 'Recomendación' };
 const SEV: Record<string, string> = { critical: 'CRÍTICA', high: 'ALTA', medium: 'MEDIA', low: 'BAJA', info: 'INFO' };
@@ -73,5 +74,38 @@ export function formatAiSection(ai: AiSection, report: AnalysisReport, label: st
     if (groups.length > 8) out.push(`    … y ${groups.length - 8} motivo(s) más (ver el informe JSON).`);
   }
   out.push('');
+  return out.join('\n');
+}
+
+/** Propuesta de corrección para la terminal: resumen, diferencia, riesgos y cómo comprobarla. */
+export function formatFixProposal(p: AiFixProposal, finding: Finding, ref: string): string {
+  const out: string[] = ['', `Propuesta de corrección para ${ref} · ${finding.title}`, '─'.repeat(72)];
+  out.push(wrap(p.applicable ? p.summary : `La IA no propone cambios: ${p.summary}`, ''));
+  if (p.patch !== '') out.push('', p.patch.trimEnd());
+  // Viñeta en la primera línea y sangría en las siguientes.
+  const bullet = (t: string): string => `  - ${wrap(t, '    ').slice(4)}`;
+  if (p.risks.length > 0) out.push('', 'Qué revisar:', ...p.risks.map(bullet));
+  if (p.verification.length > 0) out.push('', 'Cómo comprobarlo:', ...p.verification.map(bullet));
+  for (const n of p.validationNotes) out.push(wrap(`Validación: ${n}`, '  '));
+  out.push('', `Modelo ${p.model}${p.fromCache ? ' (desde caché)' : ''}. Orientativa: revísala antes de aplicarla; la herramienta nunca modifica tus archivos.`);
+  return out.join('\n');
+}
+
+/** Respuesta a una pregunta, con la lista de hallazgos citados. */
+export function formatChatAnswer(a: ChatAnswer, report: AnalysisReport): string {
+  const byId = new Map(report.findings.map((f) => [f.id, f]));
+  const refs = findingRefs(report.findings);
+  const out: string[] = ['', a.text];
+  if (a.truncated) out.push('', '(La respuesta se cortó por el límite de longitud.)');
+  if (a.references.length > 0) {
+    out.push('', 'Hallazgos citados:');
+    for (const r of a.references) {
+      const f = byId.get(r.findingId);
+      const loc = f?.locations[0];
+      if (f) out.push(`  ${(refs.get(f.id) ?? r.alias).padEnd(4)}[${SEV[f.severity] ?? f.severity}] ${f.title}${loc && loc.file !== '.' ? ` · ${loc.file}:${loc.startLine}` : ''}`);
+    }
+  }
+  if (a.unknownReferences.length > 0) out.push('', `La IA citó referencias que no existen (${a.unknownReferences.join(', ')}): ignóralas.`);
+  out.push('', `Modelo ${a.model}. Solo se enviaron datos del análisis, nunca código.`);
   return out.join('\n');
 }

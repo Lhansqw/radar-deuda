@@ -246,3 +246,63 @@ describe('--ai anthropic', () => {
     vi.unstubAllEnvs();
   });
 });
+
+describe('--preguntar y --proponer', () => {
+  const KEY = `${['sk', 'or', 'v1', 'x'.repeat(64)].join('-')}`;
+  function stub(reply: (body: { messages: Array<{ role: string; content: string }> }) => string): Array<{ messages: Array<{ role: string; content: string }> }> {
+    const chats: Array<{ messages: Array<{ role: string; content: string }> }> = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/models')) return Response.json({ data: [{ id: 'a/m:free', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['structured_outputs'] }] });
+      if (url.endsWith('/key')) return Response.json({ data: { limit_remaining: null, free_model_daily_requests: { used: 0, limit: 50, remaining: 50 } } });
+      const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
+      chats.push(body);
+      return Response.json({ model: body.model, choices: [{ message: { content: reply(body) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, cost: 0 } });
+    });
+    vi.stubEnv('RADAR_OPENROUTER_API_KEY', KEY);
+    return chats;
+  }
+  const base = async (over: Partial<CliOptions>): Promise<CliOptions> => ({ target: await repo(), noCache: true, online: false, history: false, quiet: true, top: 5, ai: { provider: 'openrouter', model: 'a/m:free', limit: 3, budgetUsd: 0.5, plan: true }, ...over });
+
+  it('validan sus combinaciones', () => {
+    expect(parseCli(['.', '--preguntar', '¿Qué hago?'])).toEqual({ kind: 'error', message: '--preguntar y --proponer requieren --ai.' });
+    expect(parseCli(['.', '--parche', 'x.patch'])).toEqual({ kind: 'error', message: '--parche requiere --proponer.' });
+    const ok = parseCli(['.', '--ai', 'lmstudio', '--proponer', 'H1', '--parche', 'x.patch']);
+    expect(ok.kind === 'run' && [ok.options.propose, ok.options.patch]).toEqual(['H1', 'x.patch']);
+  });
+
+  it('--preguntar responde con solo metadatos y sin explicar los hallazgos', async () => {
+    const chats = stub(() => 'Empieza por [H1].');
+    const logs: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((m: string) => void logs.push(m));
+    await run(await base({ ask: '¿Por dónde empiezo?' }), io, new AbortController().signal);
+    expect(chats).toHaveLength(1);
+    expect(JSON.stringify(chats)).not.toContain('for (const x of a)');
+    const out = logs.join('\n');
+    expect(out).toContain('Empieza por [H1].');
+    expect(out).toMatch(/Hallazgos citados:\n {2}H1 {2}\[MEDIA\] Función difícil de mantener: procesar · procesar\.ts:1/);
+    vi.unstubAllEnvs();
+  });
+
+  it('--proponer exige --privacy fragmentos en la nube, muestra la diferencia y guarda el parche', async () => {
+    const chats = stub((body) => {
+      const id = /El id del hallazgo es "([^"]+)"/.exec(body.messages.at(-1)?.content ?? '')?.[1];
+      return JSON.stringify({ id_hallazgo: id, aplicable: true, resumen: 'Retornos tempranos.', cambios: [{ archivo: 'procesar.ts', linea_inicio: 3, linea_fin: 3, reemplazo: '} // fin' }], riesgos: ['Ninguno conocido.'], verificacion: [] });
+    });
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    await expect(run(await base({ propose: 'H1' }), io, new AbortController().signal)).rejects.toThrow(/--privacy fragmentos/);
+    expect(chats).toHaveLength(0);
+
+    const logs: string[] = [];
+    vi.mocked(console.log).mockImplementation((m: string) => void logs.push(m));
+    const patch = path.join(await tmp(), 'cambio.patch');
+    const o = await base({ propose: 'h1', patch });
+    await run({ ...o, ai: { ...(o.ai as AiCliOptions), privacy: 'fragmentos' } }, io, new AbortController().signal);
+    expect(chats).toHaveLength(1);
+    const out = logs.join('\n');
+    expect(out).toContain('Propuesta de corrección para H1 · Función difícil de mantener: procesar');
+    expect(out).toContain('+} // fin');
+    expect(await readFile(patch, 'utf8')).toMatch(/^diff --git a\/procesar\.ts b\/procesar\.ts\n/);
+    await expect(run({ ...o, propose: 'H99', ai: { ...(o.ai as AiCliOptions), privacy: 'fragmentos' } }, io, new AbortController().signal)).rejects.toThrow(/No hay ningún hallazgo «H99»/);
+    vi.unstubAllEnvs();
+  });
+});
