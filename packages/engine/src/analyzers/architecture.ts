@@ -1,8 +1,9 @@
 import path from 'node:path';
-import ts from 'typescript';
+import type ts from 'typescript';
 import type { FileAnalyzer, Finding, Location } from '../types.js';
 import { findingId } from '../util.js';
 import { getSourceFile, isJsLike } from './shared.js';
+import { loadTypeScript, tsApi } from './ts-runtime.js';
 
 /**
  * Grafo de importaciones internas: ciclos entre módulos (Tarjan) y módulos con
@@ -24,6 +25,7 @@ export interface ImportsArtifact {
 }
 
 function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
+  const ts = tsApi();
   const clause = node.importClause;
   if (!clause) return false; // import './efecto' tiene efectos en ejecución
   if (clause.isTypeOnly) return true;
@@ -34,6 +36,7 @@ function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
 
 /** Importaciones relativas: import/export…from, require('…') e import('…'). */
 export function extractImports(sf: ts.SourceFile): ImportRef[] {
+  const ts = tsApi();
   const out: ImportRef[] = [];
   const push = (spec: ts.Expression, typeOnly: boolean): void => {
     if (!ts.isStringLiteralLike(spec) || !spec.text.startsWith('.')) return;
@@ -124,6 +127,9 @@ export const architectureAnalyzer: FileAnalyzer<ImportsArtifact> = {
   version: VERSION,
   description: 'Ciclos de dependencias entre módulos y acoplamiento eferente alto (grafo de importaciones relativas).',
   supports: (meta) => isJsLike(meta),
+  prepare: async () => {
+    await loadTypeScript();
+  },
   analyze(input) {
     return { findings: [], artifact: { imports: extractImports(getSourceFile(input)) } };
   },

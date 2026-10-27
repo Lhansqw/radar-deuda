@@ -1,5 +1,6 @@
 import ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadTypeScript } from '../src/analyzers/ts-runtime.js';
 import {
   cloneFinding,
   duplicationAnalyzer,
@@ -13,6 +14,11 @@ import {
 import { resolveConfig } from '../src/config.js';
 import { fileInput } from './helpers/file-input.js';
 import { memoryStore } from './helpers/memory-store.js';
+
+// Estas pruebas llaman a los analizadores directamente, sin el motor que carga el compilador.
+beforeAll(async () => {
+  await loadTypeScript();
+});
 
 const config = resolveConfig();
 

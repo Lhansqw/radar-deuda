@@ -1,10 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { loadTypeScript } from '../src/analyzers/ts-runtime.js';
 import { architectureAnalyzer, extractImports, resolveImport, stronglyConnected, type ImportsArtifact } from '../src/analyzers/architecture.js';
 import { getSourceFile } from '../src/analyzers/shared.js';
 import { resolveConfig } from '../src/config.js';
 import type { Finding } from '../src/types.js';
 import { fileInput } from './helpers/file-input.js';
 import { memoryStore } from './helpers/memory-store.js';
+
+// Estas pruebas llaman a los analizadores directamente, sin el motor que carga el compilador.
+beforeAll(async () => {
+  await loadTypeScript();
+});
 
 const importsOf = (code: string, file = 'src/a.ts') => extractImports(getSourceFile(fileInput(file, code)));
 
