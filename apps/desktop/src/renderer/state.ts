@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AnalysisReport } from '@radar/engine';
+import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { JobState } from '../shared/jobs.js';
 import type { AnalysisSummary, Project } from '../shared/model.js';
 
@@ -90,4 +90,22 @@ export function useProjectData(projectId: number | null, revision: number, chose
     loading: loaded?.key !== key,
     error: sameProject ? loaded.error : null,
   };
+}
+
+/** Deuda nueva, resuelta y con otra severidad respecto al análisis anterior (null si no hay anterior). */
+export function useComparison(analysisId: number | null, previousId: number | null): ReportComparison | null {
+  const key = `${previousId}|${analysisId}`;
+  const [loaded, setLoaded] = useState<{ key: string; value: ReportComparison | null } | null>(null);
+  useEffect(() => {
+    if (analysisId === null || previousId === null) return;
+    let cancelled = false;
+    window.radar.analyses
+      .compare(previousId, analysisId)
+      .then((value) => !cancelled && setLoaded({ key, value }))
+      .catch(() => !cancelled && setLoaded({ key, value: null }));
+    return () => {
+      cancelled = true;
+    };
+  }, [key, analysisId, previousId]);
+  return loaded?.key === key ? loaded.value : null;
 }

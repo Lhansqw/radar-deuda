@@ -2321,3 +2321,39 @@ code,
   align-items: center;
   gap: 0.75rem;
 }
+
+/* ── Deuda nueva ────────────────────────────────────────────────────────── */
+
+.since {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--linea);
+  border-radius: var(--r);
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+}
+
+.since strong {
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+.since-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tag-new {
+  display: inline-block;
+  margin-right: 0.375rem;
+  padding: 0 0.3125rem;
+  border: 1px solid var(--enlace);
+  border-radius: 3px;
+  color: var(--enlace);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  line-height: 1.35;
+  vertical-align: 0.08em;
+}

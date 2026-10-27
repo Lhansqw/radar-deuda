@@ -19,13 +19,15 @@ interface Props {
   onSelect: (id: string | null) => void;
   /** Explicar con IA un hallazgo de este análisis. */
   onExplain: (analysisId: number, findingId: string) => Promise<void>;
+  /** Hallazgos nuevos respecto al análisis anterior (sin análisis anterior, undefined). */
+  newIds?: ReadonlySet<string> | undefined;
   onOpenSettings: () => void;
 }
 
-export function Findings({ report, analysisId, filter, onFilter, selectedId, onSelect, onExplain, onOpenSettings }: Props) {
+export function Findings({ report, analysisId, filter, onFilter, selectedId, onSelect, onExplain, onOpenSettings, newIds }: Props) {
   const [sort, setSort] = useState<FindingSort>('severity');
   const counts = useMemo(() => countBySeverity(report.findings), [report.findings]);
-  const list = useMemo(() => sortFindings(filterFindings(report.findings, filter), sort), [report.findings, filter, sort]);
+  const list = useMemo(() => sortFindings(filterFindings(report.findings, filter, newIds), sort), [report.findings, filter, sort, newIds]);
   const selected = list.find((f) => f.id === selectedId) ?? report.findings.find((f) => f.id === selectedId) ?? list[0] ?? null;
 
   const toggleSeverity = (s: Severity): void => {
@@ -65,6 +67,12 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
           <option value="effort">Por esfuerzo</option>
           <option value="file">Por archivo</option>
         </select>
+        {newIds ? (
+          <button type="button" className="chip" aria-pressed={filter.onlyNew} onClick={() => onFilter({ ...filter, onlyNew: !filter.onlyNew })} disabled={newIds.size === 0 && !filter.onlyNew} title="Deuda que no estaba en el análisis anterior">
+            Solo nuevos
+            <span className="chip-count">{newIds.size}</span>
+          </button>
+        ) : null}
         {filter.path !== null ? (
           <button type="button" className="chip" aria-pressed="true" onClick={() => onFilter({ ...filter, path: null })} title="Quitar el filtro de carpeta">
             <Icon name="folder" size={14} />
@@ -75,7 +83,7 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
       </div>
 
       <div className="findings-split">
-        <FindingList findings={list} total={report.findings.length} selectedId={selected?.id ?? null} onSelect={onSelect} />
+        <FindingList findings={list} total={report.findings.length} selectedId={selected?.id ?? null} onSelect={onSelect} newIds={newIds} />
         <section className="detail-pane" aria-label="Detalle del hallazgo">
           {selected ? <FindingDetail key={selected.id} finding={selected} report={report} analysisId={analysisId} onExplain={(id) => onExplain(analysisId, id)} onOpenSettings={onOpenSettings} /> : <p className="pane-empty">Ningún hallazgo coincide con los filtros.</p>}
         </section>
@@ -84,7 +92,19 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
   );
 }
 
-function FindingList({ findings, total, selectedId, onSelect }: { findings: Finding[]; total: number; selectedId: string | null; onSelect: (id: string) => void }) {
+function FindingList({
+  findings,
+  total,
+  selectedId,
+  onSelect,
+  newIds,
+}: {
+  findings: Finding[];
+  total: number;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  newIds: ReadonlySet<string> | undefined;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState(0);
   const [height, setHeight] = useState(600);
@@ -137,7 +157,10 @@ function FindingList({ findings, total, selectedId, onSelect }: { findings: Find
               return (
                 <div key={f.id} id={`h-${f.id}`} role="option" aria-selected={f.id === selectedId} className="finding-row" style={{ height: ROW }} onClick={() => onSelect(f.id)}>
                   <SeverityGlyph severity={f.severity} />
-                  <span className="row-title">{f.title}</span>
+                  <span className="row-title">
+                    {newIds?.has(f.id) ? <span className="tag-new">Nuevo</span> : null}
+                    {f.title}
+                  </span>
                   <span className="row-effort">{formatEffort(f.effort.minutes)}</span>
                   <span className="row-loc mono">
                     {loc && loc.file !== '.' ? `${loc.file}:${loc.startLine}` : 'Proyecto'}

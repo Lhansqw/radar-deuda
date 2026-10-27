@@ -8,21 +8,25 @@ export interface FindingFilter {
   text: string;
   /** Solo hallazgos con alguna ubicación en este archivo o carpeta. */
   path: string | null;
+  /** Solo la deuda nueva respecto al análisis anterior. */
+  onlyNew: boolean;
 }
 
 export type FindingSort = 'severity' | 'effort' | 'file';
 
 export const ALL_SEVERITIES: ReadonlySet<Severity> = new Set(['critical', 'high', 'medium', 'low', 'info']);
-export const EMPTY_FILTER: FindingFilter = { severities: ALL_SEVERITIES, categories: new Set(), text: '', path: null };
+export const EMPTY_FILTER: FindingFilter = { severities: ALL_SEVERITIES, categories: new Set(), text: '', path: null, onlyNew: false };
 
 function inPath(file: string, path: string): boolean {
   return file === path || file.startsWith(path.endsWith('/') ? path : `${path}/`);
 }
 
-export function filterFindings(findings: readonly Finding[], f: FindingFilter): Finding[] {
+/** `newIds`: hallazgos nuevos respecto al análisis anterior (sin él, «solo nuevos» no filtra). */
+export function filterFindings(findings: readonly Finding[], f: FindingFilter, newIds?: ReadonlySet<string>): Finding[] {
   const terms = fold(f.text).split(/\s+/).filter(Boolean);
   return findings.filter((x) => {
     if (!f.severities.has(x.severity)) return false;
+    if (f.onlyNew && newIds && !newIds.has(x.id)) return false;
     if (f.categories.size > 0 && !f.categories.has(x.category)) return false;
     if (f.path !== null && !x.locations.some((l) => inPath(l.file, f.path as string))) return false;
     if (terms.length === 0) return true;

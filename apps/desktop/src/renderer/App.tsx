@@ -1,11 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Project } from '../shared/model.js';
 import { AddGithubDialog } from './components/AddGithubDialog.js';
 import { Icon } from './components/Icon.js';
 import { JobStatus } from './components/JobStatus.js';
 import { ProjectHeader } from './components/ProjectHeader.js';
 import { Sidebar, type View } from './components/Sidebar.js';
-import { useProjectData, useRadar } from './state.js';
+import { useComparison, useProjectData, useRadar } from './state.js';
 import { EMPTY_FILTER, type FindingFilter } from './lib/findings.js';
 import { Files } from './views/Files.js';
 import { Findings } from './views/Findings.js';
@@ -38,6 +38,11 @@ export function App() {
   const job = project ? jobs[project.id] : undefined;
   const data = useProjectData(project?.id ?? null, project ? (revisions[project.id] ?? 0) : 0, project ? (chosenAnalysis[project.id] ?? null) : null);
   const settingsOpen = view === 'ajustes';
+  // Análisis anterior al que se está viendo (para la deuda nueva y resuelta).
+  const viewingIndex = data.analyses.findIndex((a) => a.id === data.analysisId);
+  const previousId = viewingIndex >= 0 ? (data.analyses[viewingIndex + 1]?.id ?? null) : null;
+  const comparison = useComparison(data.analysisId, previousId);
+  const newIds = useMemo(() => (comparison ? new Set(comparison.added.map((f) => f.id)) : undefined), [comparison]);
 
   const run = useCallback(async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -148,6 +153,7 @@ export function App() {
                     report={data.report}
                     analysisId={data.analysisId}
                     filter={filters[project.id] ?? EMPTY_FILTER}
+                    newIds={newIds}
                     onFilter={(f) => setFilters((all) => ({ ...all, [project.id]: f }))}
                     selectedId={selectedFinding[project.id] ?? null}
                     onSelect={(id) => setSelectedFinding((all) => ({ ...all, [project.id]: id }))}
@@ -168,6 +174,13 @@ export function App() {
                       setView('hallazgos');
                     }}
                     onOpenFiles={() => setView('archivos')}
+                    comparison={comparison}
+                    onShowNew={() => {
+                      setFilters((all) => ({ ...all, [project.id]: { ...EMPTY_FILTER, onlyNew: true } }));
+                      setSelectedFinding((all) => ({ ...all, [project.id]: comparison?.added[0]?.id ?? null }));
+                      setView('hallazgos');
+                    }}
+                    onOpenHistory={() => setView('historial')}
                     onShowLatest={() => setChosenAnalysis((all) => ({ ...all, [project.id]: null }))}
                   />
                 )
