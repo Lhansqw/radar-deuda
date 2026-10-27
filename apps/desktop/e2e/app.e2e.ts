@@ -136,6 +136,19 @@ async function analyze(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Cerrar aviso' }).click();
 }
 
+/**
+ * Borra la carpeta temporal. En Windows, los procesos de Chromium pueden tener
+ * archivos abiertos un momento después de cerrar la aplicación: se reintenta,
+ * y si aun así no se puede, se avisa sin dar la prueba por fallida.
+ */
+function removeTemp(): void {
+  try {
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+  } catch (err) {
+    console.warn(`No se pudo borrar la carpeta temporal ${tmp}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 async function main(): Promise<void> {
   if (process.platform === 'linux' && process.getuid?.() === 0) {
     throw new Error('El sandbox de Chromium no funciona como root: ejecuta la prueba con un usuario normal.');
@@ -285,7 +298,7 @@ async function main(): Promise<void> {
   } finally {
     await app.close();
     if (process.env['RADAR_E2E_KEEP'] === '1') console.log(`Datos de la prueba en ${tmp}`);
-    else rmSync(tmp, { recursive: true, force: true });
+    else removeTemp();
   }
   console.log(`Prueba de la aplicación superada. Capturas en ${path.relative(process.cwd(), shotsDir) || '.'}`);
 }
