@@ -109,3 +109,24 @@ export function useComparison(analysisId: number | null, previousId: number | nu
   }, [key, analysisId, previousId]);
   return loaded?.key === key ? loaded.value : null;
 }
+
+/**
+ * Lo que la interfaz recuerda de cada proyecto mientras se cambia de vista o
+ * de proyecto: filtros de hallazgos, hallazgo seleccionado y análisis elegido
+ * en el historial (null: el más reciente).
+ */
+export function useProjectMemory<F>(emptyFilter: F) {
+  const [filters, setFilters] = useState<Record<number, F>>({});
+  const [findings, setFindings] = useState<Record<number, string | null>>({});
+  const [analyses, setAnalyses] = useState<Record<number, number | null>>({});
+  return {
+    filterOf: (projectId: number): F => filters[projectId] ?? emptyFilter,
+    setFilter: (projectId: number, update: (f: F) => F) => setFilters((all) => ({ ...all, [projectId]: update(all[projectId] ?? emptyFilter) })),
+    findingOf: (projectId: number): string | null => findings[projectId] ?? null,
+    selectFinding: (projectId: number, findingId: string | null) => setFindings((all) => ({ ...all, [projectId]: findingId })),
+    analysisOf: (projectId: number): number | null => analyses[projectId] ?? null,
+    chooseAnalysis: (projectId: number, analysisId: number | null) => setAnalyses((all) => ({ ...all, [projectId]: analysisId })),
+  };
+}
+
+export type ProjectMemory<F> = ReturnType<typeof useProjectMemory<F>>;
