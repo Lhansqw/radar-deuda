@@ -38,18 +38,31 @@ interface Run {
   output: string;
 }
 
-function run(exe: string, args: string[], env: Record<string, string> = {}, timeoutMs = 180_000): Promise<Run> {
-  return new Promise((resolve) => {
-    const child = spawn(exe, args, { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
-    let output = '';
-    child.stdout.on('data', (d: Buffer) => (output += d.toString()));
-    child.stderr.on('data', (d: Buffer) => (output += d.toString()));
-    const timer = setTimeout(() => child.kill(), timeoutMs);
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      resolve({ code: code ?? 1, output });
+/**
+ * Ejecuta la aplicación con su propia carpeta de datos temporal, que se borra al
+ * terminar (en Windows, la aplicación no puede borrarla ella misma: Chromium
+ * tiene sus archivos abiertos hasta que el proceso sale).
+ */
+async function run(exe: string, args: string[], env: Record<string, string> = {}, timeoutMs = 180_000): Promise<Run> {
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), 'radar-datos-prueba-'));
+  try {
+    return await new Promise<Run>((resolve) => {
+      const child = spawn(exe, args, { env: { ...process.env, RADAR_DATA_DIR: dataDir, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
+      let output = '';
+      child.stdout.on('data', (d: Buffer) => (output += d.toString()));
+      child.stderr.on('data', (d: Buffer) => (output += d.toString()));
+      const timer = setTimeout(() => {
+        output += `\n[la comprobación detuvo la aplicación: no terminó en ${timeoutMs / 1000} s]`;
+        child.kill();
+      }, timeoutMs);
+      child.on('exit', (code) => {
+        clearTimeout(timer);
+        resolve({ code: code ?? 1, output });
+      });
     });
-  });
+  } finally {
+    await rm(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 }).catch(() => undefined);
+  }
 }
 
 function check(ok: boolean, message: string, detail = ''): void {
