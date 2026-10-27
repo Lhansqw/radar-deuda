@@ -36,10 +36,11 @@ describe('ajustes', () => {
   });
 
   it('rechaza tipos y rangos incorrectos y devuelve todos los errores a la vez', () => {
-    const bad = { analysis: { history: 'sí', historyMonths: 0, online: false }, ai: { ...DEFAULT_SETTINGS.ai, limit: 51, budgetUsd: 0, provider: 'otro' } };
+    const bad = { analysis: { history: 'sí', historyMonths: 0, online: false, memoryLimitMb: 100 }, ai: { ...DEFAULT_SETTINGS.ai, limit: 51, budgetUsd: 0, provider: 'otro' } };
     expect(errorsOf(bad)).toEqual([
       'Historial de Git: debe ser sí o no.',
       'Meses de historial: debe ser un número entero entre 1 y 120.',
+      'Memoria del análisis (MB): debe ser un número entero entre 512 y 4096.',
       'Proveedor de IA: valor no válido.',
       'Presupuesto: debe ser mayor que 0 y como mucho 50 USD.',
       'Hallazgos a explicar: debe ser un número entero entre 1 y 50.',

@@ -114,6 +114,26 @@ export function Settings() {
               onChange={(e) => setAnalysis({ historyMonths: Number(e.target.value) })}
             />
           </div>
+          <div className="field">
+            <label htmlFor="memoria">Memoria máxima del análisis</label>
+            <div className="field-unit">
+              <input
+                id="memoria"
+                className="input input-num"
+                type="number"
+                min={512}
+                max={4096}
+                step={512}
+                value={draft.analysis.memoryLimitMb}
+                onChange={(e) => setAnalysis({ memoryLimitMb: Number(e.target.value) })}
+              />
+              <span className="muted small">MB</span>
+            </div>
+            <span className="hint">
+              Entre 512 y 4096 MB. El análisis se detiene con un aviso antes de superarla. Si el proyecto tiene mucho código generado, mejor excluirlo con un archivo
+              .radarignore.
+            </span>
+          </div>
           <label className="check">
             <input type="checkbox" checked={draft.analysis.online} onChange={(e) => setAnalysis({ online: e.target.checked })} />
             <span>
