@@ -10,7 +10,7 @@ import type { JobState } from './jobs.js';
 type Fn<C extends Channel> = (...args: ArgsOf<C>) => Promise<ResultOf<C>>;
 
 export interface RadarApi {
-  app: { info: Fn<'app:info'>; openExternal: Fn<'app:openExternal'>; copyText: Fn<'app:copyText'> };
+  app: { info: Fn<'app:info'>; openExternal: Fn<'app:openExternal'>; copyText: Fn<'app:copyText'>; storage: Fn<'app:storage'>; clearCache: Fn<'app:clearCache'> };
   projects: { list: Fn<'projects:list'>; addFolder: Fn<'projects:addFolder'>; addGithub: Fn<'projects:addGithub'>; remove: Fn<'projects:remove'> };
   analyses: { list: Fn<'analyses:list'>; report: Fn<'analyses:report'>; compare: Fn<'analyses:compare'> };
   settings: { get: Fn<'settings:get'>; set: Fn<'settings:set'> };

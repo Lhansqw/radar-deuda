@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { compareReports, type AnalysisReport } from '@radar/engine';
 import type { AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
+import type { StorageInfo } from '../shared/model.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
 import type { AiService } from './ai-service.js';
 import type { CredentialStore } from './credentials.js';
@@ -22,6 +23,10 @@ export interface HandlerDeps {
   /** Muestra un archivo en el explorador del sistema. */
   reveal: (absPath: string) => void;
   copyText: (text: string) => void;
+  storage: () => Promise<StorageInfo>;
+  clearCache: () => Promise<{ files: number; bytes: number }>;
+  /** Borra el clon de un repositorio de GitHub (owner/repo) que creó la aplicación. */
+  removeClone: (repo: string) => Promise<void>;
   /** Diálogo para guardar un parche; devuelve la ruta elegida o null si se cancela. */
   savePatch: (defaultName: string, content: string) => Promise<string | null>;
 }
@@ -55,6 +60,8 @@ export function createHandlers(d: HandlerDeps): Handlers {
       d.copyText(text);
       return null;
     },
+    'app:storage': () => d.storage(),
+    'app:clearCache': () => d.clearCache(),
 
     'projects:list': () => d.store.listProjects(),
     'projects:addFolder': async () => {
@@ -66,8 +73,12 @@ export function createHandlers(d: HandlerDeps): Handlers {
       return d.store.addProject({ name: path.basename(abs) || abs, kind: 'local', location: abs });
     },
     'projects:addGithub': (repo, branch) => d.store.addProject({ name: repo.split('/')[1] ?? repo, kind: 'github', location: repo, branch }),
-    'projects:remove': (id) => {
+    'projects:remove': async (id) => {
+      if (d.jobs.list().some((j) => j.projectId === id && j.status === 'running')) throw new NotFoundError('Hay un análisis en curso de este proyecto: cancélalo antes de quitarlo.');
+      const project = d.store.getProject(id);
       d.store.removeProject(id);
+      // El clon lo descargó la aplicación: se borra con el proyecto (la carpeta de un proyecto local, nunca).
+      if (project?.kind === 'github') await d.removeClone(project.location).catch(() => undefined);
       return null;
     },
 

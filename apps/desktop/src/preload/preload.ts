@@ -20,6 +20,8 @@ const api: RadarApi = {
     info: () => invoke('app:info'),
     openExternal: (url) => invoke('app:openExternal', url),
     copyText: (text) => invoke('app:copyText', text),
+    storage: () => invoke('app:storage'),
+    clearCache: () => invoke('app:clearCache'),
   },
   projects: {
     list: () => invoke('projects:list'),

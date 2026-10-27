@@ -6,7 +6,7 @@
  */
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { JobState } from './jobs.js';
-import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, OpenRouterKeyCheck, Project, StoredFixProposal } from './model.js';
+import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
 
@@ -25,6 +25,10 @@ export interface IpcContract {
   'app:openExternal': { args: [url: string]; result: boolean };
   /** Copia texto al portapapeles del sistema. */
   'app:copyText': { args: [text: string]; result: null };
+  /** Espacio que ocupan la caché y los clones. */
+  'app:storage': { args: []; result: StorageInfo };
+  /** Vacía la caché (no los clones). */
+  'app:clearCache': { args: []; result: { files: number; bytes: number } };
   'projects:list': { args: []; result: Project[] };
   /** Abre el selector de carpetas del sistema; null si se cancela. */
   'projects:addFolder': { args: []; result: Project | null };
@@ -80,6 +84,8 @@ export const CHANNELS = [
   'app:info',
   'app:openExternal',
   'app:copyText',
+  'app:storage',
+  'app:clearCache',
   'projects:list',
   'projects:addFolder',
   'projects:addGithub',

@@ -2363,3 +2363,29 @@ code,
   line-height: 1.35;
   vertical-align: 0.08em;
 }
+
+.storage {
+  display: grid;
+  gap: 0.625rem;
+  grid-column: 2;
+  max-width: 34rem;
+  margin-top: 0.5rem;
+}
+
+.storage h3 {
+  font-size: var(--t-m);
+  font-weight: 600;
+}
+
+.storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--tinta-2);
+}
+
+.storage .hint {
+  color: var(--apagado);
+  font-size: var(--t-xs);
+}

@@ -1,7 +1,8 @@
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { defaultCacheDir } from '@radar/engine';
-import { defaultReposDir } from '@radar/sources';
+import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
+import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
 import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell } from 'electron';
 import { JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
@@ -111,6 +112,15 @@ function start(): void {
       // Solo se muestra en el explorador: abrir el archivo con su programa asociado podría ejecutarlo (.js, .bat…).
       reveal: (abs) => shell.showItemInFolder(abs),
       copyText: (text) => clipboard.writeText(text),
+      storage: async () => {
+        const [cache, clones] = await Promise.all([cacheUsage(defaultCacheDir()), folderSize(defaultReposDir())]);
+        return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
+      },
+      clearCache: () => clearCache(defaultCacheDir()),
+      removeClone: async (repo) => {
+        const ref = parseGitHubRepo(repo);
+        if (ref) await removeClone(ref, defaultReposDir());
+      },
       // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
       savePatch: async (name, content) => {
         const options = { title: 'Guardar el parche', defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Parche', extensions: ['patch', 'diff'] }] };
@@ -123,4 +133,6 @@ function start(): void {
     devServerUrl,
   );
   win = createWindow();
+  // Limpieza en segundo plano de lo que lleva 90 días sin usarse (la caché es compartida con la CLI).
+  setTimeout(() => void pruneCache(defaultCacheDir(), 90).catch(() => undefined), 20_000).unref();
 }

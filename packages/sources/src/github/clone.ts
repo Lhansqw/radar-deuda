@@ -82,7 +82,7 @@ export async function cloneInternal(ref: GitHubRepoRef, options: InternalCloneOp
   if (sizeKb !== undefined && sizeKb > maxSizeKb) {
     throw new Error(`El repositorio ocupa ${Math.round(sizeKb / 1024)} MB y supera el límite de ${Math.round(maxSizeKb / 1024)} MB.`);
   }
-  const name = `${ref.owner}__${ref.repo}`.toLowerCase();
+  const name = cloneName(ref);
   const dir = path.join(baseDir, name);
   const base = { env: authEnv(token), redact: token ? [token] : [], timeoutMs, ...(signal ? { signal } : {}) };
   const cfg = extraConfig.flatMap((c) => ['-c', c]);
@@ -145,6 +145,22 @@ async function exists(p: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Nombre de la carpeta del clon de un repositorio dentro de la carpeta de clones. */
+export function cloneName(ref: GitHubRepoRef): string {
+  return `${ref.owner}__${ref.repo}`.toLowerCase();
+}
+
+/**
+ * Borra el clon de un repositorio (p. ej. al quitar el proyecto de la
+ * aplicación). Solo dentro de la carpeta de clones; devuelve si existía.
+ */
+export async function removeClone(ref: GitHubRepoRef, baseDir = defaultReposDir()): Promise<boolean> {
+  const dir = path.resolve(baseDir, cloneName(ref));
+  if (path.dirname(dir) !== path.resolve(baseDir) || !(await exists(dir))) return false;
+  await rm(dir, { recursive: true, force: true });
+  return true;
 }
 
 /** Clones existentes (para la interfaz: listar y borrar). */
