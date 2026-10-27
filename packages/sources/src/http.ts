@@ -3,6 +3,11 @@
  * aplicación. Tiempo límite por intento, reintentos solo para errores
  * transitorios (red, 429, 5xx) con espera exponencial y respeto de
  * Retry-After, y límite de tamaño de la respuesta.
+ *
+ * Una petición con credenciales (Authorization, x-api-key…) solo sigue
+ * redirecciones dentro del mismo origen: fetch quita Authorization al cambiar
+ * de origen, pero no las cabeceras propias como x-api-key, que acabarían en el
+ * otro servidor.
  */
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -35,6 +40,40 @@ export class HttpError extends Error {
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+/** Redirección que no se sigue (otro origen con credenciales o demasiados saltos). No se reintenta. */
+export class RedirectError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RedirectError';
+  }
+}
+
+/** Cabeceras que llevan credenciales: con ellas no se sale del origen de la petición. */
+const CREDENTIAL_HEADERS = ['authorization', 'x-api-key', 'cookie', 'proxy-authorization'];
+const MAX_REDIRECTS = 5;
+
+export function carriesCredentials(init: RequestInit): boolean {
+  const headers = new Headers(init.headers);
+  return CREDENTIAL_HEADERS.some((h) => headers.has(h));
+}
+
+/** fetch que sigue las redirecciones a mano y rechaza las que cambian de origen. */
+async function fetchSameOrigin(doFetch: FetchLike, url: string, init: RequestInit): Promise<Response> {
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const res = await doFetch(current, { ...init, redirect: 'manual' });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (location === null) return res;
+    const next = new URL(location, current);
+    await res.body?.cancel();
+    if (next.origin !== new URL(current).origin) {
+      throw new RedirectError(`Redirección a otro servidor rechazada (${next.host}): la petición lleva credenciales.`);
+    }
+    current = next.href;
+  }
+  throw new RedirectError(`Demasiadas redirecciones (más de ${MAX_REDIRECTS}).`);
+}
+
 function retryDelay(attempt: number, headers?: Headers): number {
   const retryAfter = headers?.get('retry-after');
   if (retryAfter) {
@@ -66,6 +105,9 @@ async function readLimited(res: Response, maxBytes: number): Promise<string> {
 
 export async function requestText(url: string, init: RequestInit = {}, options: HttpOptions = {}): Promise<{ status: number; headers: Headers; text: string }> {
   const { fetch: doFetch = globalThis.fetch, timeoutMs = 20_000, retries = 3, maxBytes = 20 * 1024 * 1024, signal, sleep = defaultSleep, retryable = defaultRetryable } = options;
+  const send = carriesCredentials(init)
+    ? (combined: AbortSignal) => fetchSameOrigin(doFetch, url, { ...init, signal: combined })
+    : (combined: AbortSignal) => doFetch(url, { ...init, signal: combined, redirect: 'follow' });
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     signal?.throwIfAborted();
@@ -73,9 +115,9 @@ export async function requestText(url: string, init: RequestInit = {}, options: 
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     let res: Response;
     try {
-      res = await doFetch(url, { ...init, signal: combined, redirect: 'follow' });
+      res = await send(combined);
     } catch (err) {
-      if (signal?.aborted) throw err;
+      if (signal?.aborted || err instanceof RedirectError) throw err;
       lastError = err;
       if (attempt < retries) {
         await sleep(retryDelay(attempt));
