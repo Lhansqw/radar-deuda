@@ -7,6 +7,15 @@ updates:
       interval: weekly
       timezone: America/Bogota
     open-pull-requests-limit: 5
+    ignore:
+      # El motor usa la API del compilador de TypeScript para analizar el código; la
+      # versión 7 (el compilador nativo) aún no la ofrece.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # Los tipos corresponden a la versión mínima de Node admitida (engines: >=22.13), para
+      # no usar sin querer funciones que esa versión no tiene.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
     groups:
       desarrollo:
         dependency-type: development
