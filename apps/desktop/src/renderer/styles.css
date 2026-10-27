@@ -891,6 +891,7 @@ code,
   border-radius: var(--r);
   background: var(--pizarra);
   font: 400 var(--t-xs) / 1.6 var(--font-code);
+  font-variant-ligatures: none;
 }
 
 .metric {
@@ -953,6 +954,8 @@ code,
   padding: 0.5rem 0;
   overflow-x: auto;
   font: 400 var(--t-s) / 1.65 var(--font-code);
+  /* El atajo font restablece las ligaduras: en código, «!==» debe verse tal cual. */
+  font-variant-ligatures: none;
   tab-size: 2;
 }
 
