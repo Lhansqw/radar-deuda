@@ -6,6 +6,7 @@
 export { runPipeline, type PipelineRequest, type PipelineResult } from './pipeline.js';
 export { resolveTarget, historyStart, type SourceOptions, type ResolvedTarget } from './target.js';
 export { addGitContext } from './git-context.js';
+export { cacheUsage, clearCache, folderSize, pruneCache, type CacheCleanup, type CachePart, type CachePartName, type CacheUsage } from './maintenance.js';
 export {
   runAiStep,
   createProvider,

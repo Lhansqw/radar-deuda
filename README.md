@@ -80,6 +80,7 @@ npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archi
 npm run desktop   # compila y abre la aplicación de escritorio
 npm run desktop:dev   # aplicación con recarga en caliente de la interfaz
 npm run e2e:desktop   # prueba de extremo a extremo de la aplicación (abre una ventana; sin red)
+npm run cache     # cuánto ocupa la caché (-- --limpiar [días] | --vaciar)
 ```
 
 ## Analizar un repositorio
