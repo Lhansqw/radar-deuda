@@ -128,6 +128,14 @@ describe('runAi', () => {
     expect(broken.calls).toHaveLength(2);
   });
 
+  it('informa del progreso de cada consulta, plan incluido', async () => {
+    const { report, readText } = await demo();
+    const progress: string[] = [];
+    const ai = await runAi(report, { provider: fakeProvider(reply), model: 'm', privacy: 'local', readText, cacheDir: null, concurrency: 1, onProgress: (d, t) => progress.push(`${d}/${t}`) });
+    const total = ai.explanations.length + 1;
+    expect(progress).toEqual(Array.from({ length: total }, (_, i) => `${i + 1}/${total}`));
+  });
+
   it('un problema general detectado antes de empezar se informa una vez y no se envía nada', async () => {
     const { report, readText } = await demo();
     const provider = Object.assign(fakeProvider(reply, 'cloud'), {
