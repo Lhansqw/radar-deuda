@@ -5,6 +5,7 @@
  * interfaz se trata como no confiable.
  */
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
+import type { AccountState, SignUpResult } from './account.js';
 import type { JobState } from './jobs.js';
 import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
@@ -21,6 +22,20 @@ export interface AppInfo {
 }
 
 export interface IpcContract {
+  /** Estado de la cuenta (fase 13). Sin sesión, solo responden estos canales, app:info y app:openExternal. */
+  'account:state': { args: []; result: AccountState };
+  /** `remember`: seguir conectado al cerrar la aplicación (sesión cifrada en el equipo). */
+  'account:signIn': { args: [email: string, password: string, remember: boolean]; result: SignUpResult };
+  'account:signUp': { args: [email: string, password: string]; result: SignUpResult };
+  /** Confirma el correo con el código del mensaje de Supabase. */
+  'account:confirmEmail': { args: [email: string, code: string]; result: AccountState };
+  'account:resendConfirmation': { args: [email: string]; result: null };
+  /** Envía el código para elegir una contraseña nueva. */
+  'account:requestPasswordReset': { args: [email: string]; result: null };
+  'account:resetPassword': { args: [email: string, code: string, password: string]; result: AccountState };
+  /** Contraseña nueva cuando el código ya se comprobó (estado 'password-reset'). */
+  'account:setNewPassword': { args: [password: string]; result: AccountState };
+  'account:signOut': { args: []; result: AccountState };
   'app:info': { args: []; result: AppInfo };
   'app:openExternal': { args: [url: string]; result: boolean };
   /** Copia texto al portapapeles del sistema. */
@@ -75,12 +90,31 @@ export interface IpcContract {
 
 /** Canal de avisos del proceso principal a la interfaz (estado de los análisis). */
 export const JOB_EVENT_CHANNEL = 'jobs:event';
+/** Canal de avisos de la cuenta (sesión iniciada, cerrada o caducada). */
+export const ACCOUNT_EVENT_CHANNEL = 'account:event';
 
 export type Channel = keyof IpcContract;
 export type ArgsOf<C extends Channel> = IpcContract[C]['args'];
 export type ResultOf<C extends Channel> = IpcContract[C]['result'];
 
+export const ACCOUNT_CHANNELS = [
+  'account:state',
+  'account:signIn',
+  'account:signUp',
+  'account:confirmEmail',
+  'account:resendConfirmation',
+  'account:requestPasswordReset',
+  'account:resetPassword',
+  'account:setNewPassword',
+  'account:signOut',
+] as const satisfies readonly Channel[];
+export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
+
+/** Canales que responden sin sesión iniciada. */
+export const PUBLIC_CHANNELS: readonly Channel[] = [...ACCOUNT_CHANNELS, 'app:info', 'app:openExternal'];
+
 export const CHANNELS = [
+  ...ACCOUNT_CHANNELS,
   'app:info',
   'app:openExternal',
   'app:copyText',

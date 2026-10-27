@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import type { AccountState } from '../shared/account.js';
 import type { Project } from '../shared/model.js';
 import { AddGithubDialog } from './components/AddGithubDialog.js';
 import { Icon } from './components/Icon.js';
@@ -12,7 +13,8 @@ import { Welcome } from './views/Welcome.js';
 /** Vistas del proyecto que existen en esta versión de la interfaz. */
 const PROJECT_VIEWS = ['panel', 'hallazgos', 'archivos', 'historial', 'preguntar'] as const;
 
-export function App() {
+/** La aplicación con la sesión iniciada (Root.tsx muestra el acceso si no la hay). */
+export function App({ account }: { account: Extract<AccountState, { status: 'signed-in' }> }) {
   const { projects, jobs, revisions, reloadProjects, refresh } = useRadar();
   const [chosenId, setSelectedId] = useState<number | null>(null);
   const [view, setView] = useState<View>('panel');
@@ -61,6 +63,7 @@ export function App() {
         onView={setView}
         onAddFolder={addFolder}
         onAddGithub={() => setAddingGithub(true)}
+        account={account}
         settingsAvailable
       />
       <main className="workspace">

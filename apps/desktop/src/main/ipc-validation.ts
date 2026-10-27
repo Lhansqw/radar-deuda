@@ -1,5 +1,6 @@
 import { MAX_QUESTION_CHARS } from '@radar/ai';
 import { parseGitHubRepo } from '@radar/sources';
+import { MAX_EMAIL } from '../shared/account.js';
 import type { ArgsOf, Channel } from '../shared/ipc.js';
 import { SECRET_NAMES, type SecretName } from '../shared/secrets.js';
 import { validateSettings } from '../shared/settings.js';
@@ -36,6 +37,19 @@ const SAFE_BRANCH = /^(?!-)(?!.*\.\.)[\w./-]{1,200}$/;
 type Validators = { [C in Channel]: (args: unknown[]) => ArgsOf<C> };
 
 export const VALIDATORS: Validators = {
+  'account:state': (a) => (count(a, 0), []),
+  'account:signIn': (a) => {
+    count(a, 3);
+    if (typeof a[2] !== 'boolean') throw new IpcValidationError('Opción no válida.');
+    return [email(a[0]), password(a[1]), a[2]];
+  },
+  'account:signUp': (a) => (count(a, 2), [email(a[0]), password(a[1])]),
+  'account:confirmEmail': (a) => (count(a, 2), [email(a[0]), code(a[1])]),
+  'account:resendConfirmation': (a) => (count(a, 1), [email(a[0])]),
+  'account:requestPasswordReset': (a) => (count(a, 1), [email(a[0])]),
+  'account:resetPassword': (a) => (count(a, 3), [email(a[0]), code(a[1]), password(a[2])]),
+  'account:setNewPassword': (a) => (count(a, 1), [password(a[0])]),
+  'account:signOut': (a) => (count(a, 0), []),
   'app:info': (a) => (count(a, 0), []),
   'app:openExternal': (a) => (count(a, 1), [text(a[0], 'Enlace no válido.', 2000)]),
   'app:copyText': (a) => (count(a, 1), [text(a[0], 'Texto no válido.', 2_000_000)]),
@@ -133,4 +147,19 @@ function relPath(v: unknown): string {
 function secretName(v: unknown): SecretName {
   if (typeof v !== 'string' || !(SECRET_NAMES as readonly string[]).includes(v)) throw new IpcValidationError('Credencial desconocida.');
   return v as SecretName;
+}
+
+/** Las reglas del formulario (longitud, formato) las aplica el servicio de cuentas con mensajes propios. */
+function email(v: unknown): string {
+  return text(v, 'Correo no válido.', MAX_EMAIL + 20);
+}
+
+function password(v: unknown): string {
+  return text(v, 'Contraseña no válida.', 1000);
+}
+
+function code(v: unknown): string {
+  const c = text(v, 'Código no válido.', 20).trim();
+  if (!/^\d{6,10}$/.test(c)) throw new IpcValidationError('El código son los dígitos que llegaron a tu correo.');
+  return c;
 }
