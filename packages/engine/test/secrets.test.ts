@@ -80,6 +80,17 @@ describe('asignaciones genéricas', () => {
   it('baja la confianza en rutas de pruebas, ejemplos y documentación', () => {
     const [m] = scan('const DB_PASSWORD = "Xk9#mP2vL8qR4nT7";', 'test/fixtures/db.ts');
     expect(m).toMatchObject({ severity: 'low', confidence: 'low' });
+    // Pruebas de extremo a extremo y archivos de prueba por su nombre.
+    for (const file of ['apps/web/e2e/login.ts', 'src/login.e2e.ts', 'src/api.test.ts', 'src/ui.spec.tsx']) {
+      expect(scan('const DB_PASSWORD = "Xk9#mP2vL8qR4nT7";', file)[0]).toMatchObject({ severity: 'low', confidence: 'low' });
+    }
+  });
+
+  it('sin comillas, una expresión no es un secreto (fragmentos de PowerShell en la documentación)', () => {
+    expect(scan('$env:RADAR_OPENROUTER_API_KEY = (Read-Host "Pega la clave").Trim()', 'docs/IA.md')).toEqual([]);
+    expect(scan('$env:RADAR_GITHUB_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringAuto($b)', 'README.md')).toEqual([]);
+    expect(scan('SECRET_TOKEN={{vault.token.xyz}}', '.env')).toEqual([]);
+    expect(scan('API_TOKEN=Zq8vT2mW9xLp4RbN', '.env')).toHaveLength(1);
   });
 });
 
