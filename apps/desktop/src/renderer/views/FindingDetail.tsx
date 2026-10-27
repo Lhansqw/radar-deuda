@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { findingRefs } from '@radar/engine/refs';
 import type { AiExplanation, AnalysisReport, Evidence, Finding, Location } from '@radar/engine';
 import type { CodeSnippet } from '../../shared/model.js';
 import { Icon } from '../components/Icon.js';
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSettings }: Props) {
+  const ref = useMemo(() => findingRefs(report.findings).get(finding.id), [report.findings, finding.id]);
   const ai = report.ai?.explanations.find((e) => e.findingId === finding.id);
   const codeLocations = finding.locations.filter((l) => l.file !== '.' && l.startLine > 0);
   return (
@@ -30,6 +32,11 @@ export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSe
           <span>{CATEGORY_LABEL[finding.category]}</span>
           <span>Confianza {CONFIDENCE_LABEL[finding.confidence]}</span>
           <span className="mono">{finding.ruleId}</span>
+          {ref ? (
+            <span className="mono" title="Referencia del hallazgo en este análisis (la que cita la IA al preguntar)">
+              {ref}
+            </span>
+          ) : null}
         </div>
         <h2>{finding.title}</h2>
         <p className="detail-message">{finding.message}</p>

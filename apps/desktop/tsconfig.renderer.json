@@ -9,8 +9,9 @@
     "moduleResolution": "Bundler",
     "types": [],
     "paths": {
-      // La interfaz solo ve los tipos del motor (módulo puro, sin Node).
-      "@radar/engine": ["../../packages/engine/src/types.ts"]
+      // La interfaz solo ve módulos puros del motor (sin Node): sus tipos y las referencias.
+      "@radar/engine": ["../../packages/engine/src/types.ts"],
+      "@radar/engine/refs": ["../../packages/engine/src/refs.ts"]
     }
   },
   "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts"]

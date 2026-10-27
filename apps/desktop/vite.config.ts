@@ -9,8 +9,13 @@ export default defineConfig({
   root: here('./src/renderer'),
   base: './',
   plugins: [react()],
-  // La interfaz solo puede usar los tipos y constantes del motor (módulo puro, sin Node).
-  resolve: { alias: { '@radar/engine': here('../../packages/engine/src/types.ts') } },
+  // La interfaz solo puede usar módulos puros del motor (sin Node): sus tipos y las referencias H1, H2…
+  resolve: {
+    alias: [
+      { find: /^@radar\/engine$/, replacement: here('../../packages/engine/src/types.ts') },
+      { find: /^@radar\/engine\/refs$/, replacement: here('../../packages/engine/src/refs.ts') },
+    ],
+  },
   build: {
     outDir: here('./dist/renderer'),
     emptyOutDir: true,
