@@ -2,13 +2,14 @@ import type { JobState } from '../../shared/jobs.js';
 import type { Project } from '../../shared/model.js';
 import { BrandMark, Icon, type IconName } from './Icon.js';
 
-export type View = 'panel' | 'hallazgos' | 'archivos' | 'historial' | 'ajustes';
+export type View = 'panel' | 'hallazgos' | 'archivos' | 'historial' | 'preguntar' | 'ajustes';
 
 const PROJECT_VIEWS: Array<{ view: Exclude<View, 'ajustes'>; label: string; icon: IconName }> = [
   { view: 'panel', label: 'Panel', icon: 'panel' },
   { view: 'hallazgos', label: 'Hallazgos', icon: 'list' },
   { view: 'archivos', label: 'Archivos', icon: 'tree' },
   { view: 'historial', label: 'Historial', icon: 'history' },
+  { view: 'preguntar', label: 'Preguntar', icon: 'chat' },
 ];
 
 interface Props {
