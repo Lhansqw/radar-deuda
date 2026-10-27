@@ -1,4 +1,5 @@
 import { opendir, readFile, realpath, stat } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import path from 'node:path';
 import ignoreFactory, { type Ignore } from 'ignore';
 import { ALWAYS_EXCLUDED_DIRS } from './config.js';
@@ -121,52 +122,58 @@ export async function discoverFiles(
   const files: FileMeta[] = [];
   const skipped: SkippedFile[] = [];
   const stack: string[] = [''];
-
   while (stack.length > 0) {
     signal?.throwIfAborted();
     const relDir = stack.pop() as string;
-    let dir;
-    try {
-      dir = await opendir(path.join(root, relDir));
-    } catch {
-      continue;
-    }
-    for await (const entry of dir) {
+    for await (const entry of entries(path.join(root, relDir))) {
       const rel = relDir === '' ? entry.name : `${relDir}/${entry.name}`;
-      if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) {
-        if (ALWAYS_EXCLUDED_DIRS.has(entry.name) || ig.ignores(`${rel}/`)) continue;
-        stack.push(rel);
-        continue;
-      }
-      if (!entry.isFile() || ig.ignores(rel)) continue;
-      const cls = classify(rel);
-      if (!cls.include) continue;
-      const abs = path.join(root, rel);
-      let info;
-      try {
-        info = await stat(abs);
-      } catch {
-        skipped.push({ relPath: rel, reason: 'unreadable' });
-        continue;
-      }
-      if (info.size > config.hardMaxFileSizeBytes) {
-        skipped.push({ relPath: rel, reason: 'too-large' });
-        continue;
-      }
-      files.push({
-        absPath: abs,
-        relPath: toPosix(rel),
-        size: info.size,
-        mtimeMs: info.mtimeMs,
-        language: cls.language,
-        isCode: cls.isCode,
-        isTest: isTestPath(rel),
-      });
+      const kind = entryKind(entry, rel, ig);
+      if (kind === 'dir') stack.push(rel);
+      if (kind !== 'file') continue;
+      const found = await fileMeta(root, rel, config);
+      if (found && 'absPath' in found) files.push(found);
+      else if (found) skipped.push(found);
     }
   }
   files.sort((a, b) => a.relPath.localeCompare(b.relPath));
   return { root, files, skipped, radarignore };
+}
+
+/** Entradas de un directorio; ninguna si no se puede abrir. */
+async function* entries(dir: string): AsyncGenerator<Dirent> {
+  let handle;
+  try {
+    handle = await opendir(dir);
+  } catch {
+    return;
+  }
+  yield* handle;
+}
+
+/** Directorio en el que descender, archivo que considerar o nada (enlaces simbólicos y exclusiones). */
+function entryKind(entry: Dirent, rel: string, ig: Ignore): 'dir' | 'file' | null {
+  if (entry.isSymbolicLink()) return null;
+  if (entry.isDirectory()) return ALWAYS_EXCLUDED_DIRS.has(entry.name) || ig.ignores(`${rel}/`) ? null : 'dir';
+  return entry.isFile() && !ig.ignores(rel) ? 'file' : null;
+}
+
+/** Metadatos de un archivo que se analiza, el motivo si se omite, o null si no es de los que se analizan. */
+async function fileMeta(root: string, rel: string, config: AnalysisConfig): Promise<FileMeta | SkippedFile | null> {
+  const cls = classify(rel);
+  if (!cls.include) return null;
+  const abs = path.join(root, rel);
+  const info = await stat(abs).catch(() => null);
+  if (!info) return { relPath: rel, reason: 'unreadable' };
+  if (info.size > config.hardMaxFileSizeBytes) return { relPath: rel, reason: 'too-large' };
+  return {
+    absPath: abs,
+    relPath: toPosix(rel),
+    size: info.size,
+    mtimeMs: info.mtimeMs,
+    language: cls.language,
+    isCode: cls.isCode,
+    isTest: isTestPath(rel),
+  };
 }
 
 /** Heurística barata para binarios: un byte nulo en los primeros 8 KB. */
