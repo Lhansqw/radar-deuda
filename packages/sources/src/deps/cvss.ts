@@ -17,30 +17,64 @@ export function roundUp(value: number): number {
   return int % 10_000 === 0 ? int / 100_000 : (Math.floor(int / 10_000) + 1) / 10;
 }
 
-export function cvss3BaseScore(vector: string): number | null {
-  if (!/^CVSS:3\.[01]\//.test(vector)) return null;
+/** Métricas base ya convertidas a sus pesos numéricos. */
+interface BaseMetrics {
+  /** Alcance: sin cambio (U) o con cambio (C). */
+  scope: 'U' | 'C';
+  av: number;
+  ac: number;
+  pr: number;
+  ui: number;
+  c: number;
+  i: number;
+  a: number;
+}
+
+/** Métricas del vector «CVSS:3.1/AV:N/AC:L/…» (las que no son base se ignoran). */
+function parseVector(vector: string): Map<string, string> {
   const m = new Map<string, string>();
   for (const part of vector.split('/').slice(1)) {
     const [k, v] = part.split(':');
     if (k && v) m.set(k, v);
   }
+  return m;
+}
+
+/** El peso de los privilegios requeridos depende del alcance. */
+function privilegesRequired(value: string | undefined, scope: 'U' | 'C'): number | undefined {
+  if (value === 'N') return 0.85;
+  if (value === 'L') return scope === 'C' ? 0.68 : 0.62;
+  if (value === 'H') return scope === 'C' ? 0.5 : 0.27;
+  return undefined;
+}
+
+/** Las ocho métricas base o null si falta alguna o tiene un valor desconocido. */
+function baseMetrics(m: ReadonlyMap<string, string>): BaseMetrics | null {
   const scope = m.get('S');
-  const av = AV[m.get('AV') ?? ''];
-  const ac = AC[m.get('AC') ?? ''];
-  const ui = UI[m.get('UI') ?? ''];
-  const c = CIA[m.get('C') ?? ''];
-  const i = CIA[m.get('I') ?? ''];
-  const a = CIA[m.get('A') ?? ''];
-  const prKey = m.get('PR');
-  const pr = prKey === 'N' ? 0.85 : prKey === 'L' ? (scope === 'C' ? 0.68 : 0.62) : prKey === 'H' ? (scope === 'C' ? 0.5 : 0.27) : undefined;
-  if ((scope !== 'U' && scope !== 'C') || av === undefined || ac === undefined || ui === undefined || pr === undefined || c === undefined || i === undefined || a === undefined) {
-    return null;
-  }
-  const iss = 1 - (1 - c) * (1 - i) * (1 - a);
-  const impact = scope === 'U' ? 6.42 * iss : 7.52 * (iss - 0.029) - 3.25 * (iss - 0.02) ** 15;
-  const exploitability = 8.22 * av * ac * pr * ui;
+  if (scope !== 'U' && scope !== 'C') return null;
+  const values = {
+    scope,
+    av: AV[m.get('AV') ?? ''],
+    ac: AC[m.get('AC') ?? ''],
+    pr: privilegesRequired(m.get('PR'), scope),
+    ui: UI[m.get('UI') ?? ''],
+    c: CIA[m.get('C') ?? ''],
+    i: CIA[m.get('I') ?? ''],
+    a: CIA[m.get('A') ?? ''],
+  };
+  return Object.values(values).every((v) => v !== undefined) ? (values as BaseMetrics) : null;
+}
+
+export function cvss3BaseScore(vector: string): number | null {
+  if (!/^CVSS:3\.[01]\//.test(vector)) return null;
+  const b = baseMetrics(parseVector(vector));
+  if (!b) return null;
+  const iss = 1 - (1 - b.c) * (1 - b.i) * (1 - b.a);
+  const impact = b.scope === 'U' ? 6.42 * iss : 7.52 * (iss - 0.029) - 3.25 * (iss - 0.02) ** 15;
   if (impact <= 0) return 0;
-  return scope === 'U' ? roundUp(Math.min(impact + exploitability, 10)) : roundUp(Math.min(1.08 * (impact + exploitability), 10));
+  const exploitability = 8.22 * b.av * b.ac * b.pr * b.ui;
+  const base = b.scope === 'U' ? impact + exploitability : 1.08 * (impact + exploitability);
+  return roundUp(Math.min(base, 10));
 }
 
 /** Escala cualitativa de CVSS v3: ninguna, baja, media, alta, crítica. */
