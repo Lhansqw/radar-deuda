@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Finding, ReportComparison } from '@radar/engine';
 import type { AnalysisSummary } from '../../shared/model.js';
+import { FindingLine } from '../components/FindingLine.js';
 import { SeverityGlyph } from '../components/SeverityMark.js';
 import { formatDateTime, formatDuration, formatEffort } from '../lib/format.js';
 import { SEVERITY_LABEL } from '../lib/labels.js';
@@ -183,15 +184,7 @@ function ChangeList({ title, empty, findings, onOpen }: { title: string; empty: 
       ) : (
         <ul className="changes">
           {findings.map((f) => {
-            const loc = f.locations[0];
-            const content = (
-              <>
-                <SeverityGlyph severity={f.severity} />
-                <span className="priority-title">{f.title}</span>
-                <span className="priority-effort">{formatEffort(f.effort.minutes)}</span>
-                <span className="priority-loc mono">{loc && loc.file !== '.' ? `${loc.file}:${loc.startLine}` : 'Proyecto'}</span>
-              </>
-            );
+            const content = <FindingLine finding={f} />;
             return (
               <li key={f.id}>
                 {onOpen ? (
