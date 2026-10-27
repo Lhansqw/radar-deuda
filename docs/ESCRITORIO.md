@@ -1,4 +1,4 @@
-# Aplicación de escritorio (fases 8, 9 y 11)
+# Aplicación de escritorio (fases 8, 9, 11 y 12)
 
 La aplicación (`apps/desktop`) reúne en una ventana lo que hace la CLI: proyectos locales
 y de GitHub, análisis con progreso y cancelación, panel con el radar de hallazgos,
@@ -13,6 +13,7 @@ las dos.
 ```powershell
 npm ci
 npm run desktop        # compila y abre la aplicación
+npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md)
 ```
 
 1. **Añadir carpeta** o **Añadir de GitHub** (`propietario/repositorio`, rama opcional).
@@ -109,10 +110,11 @@ La prueba de extremo a extremo comprueba que la interfaz no tiene `require` ni `
 que solo ve `window.radar`, que una clave guardada no vuelve a aparecer en la página y que
 la petición a la IA no contiene código ni secretos con la privacidad por defecto.
 
-**Pendiente para el instalador (fase 12):** *fuses* de Electron (desactivar
-`RunAsNode`, `EnableNodeOptionsEnvironmentVariable` y `EnableNodeCliInspectArguments`;
-activar la validación de integridad del ASAR y `OnlyLoadAppFromAsar`), empaquetado en
-ASAR, firma del ejecutable y actualizaciones firmadas.
+**Aplicación instalada (fase 12):** va en un ASAR con su integridad comprobada y con los
+*fuses* de Electron que impiden usarla como Node (`ELECTRON_RUN_AS_NODE`), inyectarle
+código (`NODE_OPTIONS`) o depurarla (`--inspect`). `npm run dist` lo comprueba sobre el
+ejecutable generado; ver [INSTALADOR.md](INSTALADOR.md). Quedan pendientes la firma con un
+certificado y las actualizaciones automáticas firmadas.
 
 ## Datos
 

@@ -4,7 +4,7 @@ Aplicación de escritorio para Windows que analiza repositorios (locales o de Gi
 detecta deuda técnica con herramientas deterministas y usa inteligencia artificial
 para explicar, priorizar y proponer correcciones a los hallazgos.
 
-> Estado: en desarrollo por fases. Ver [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
+> Estado: las 12 fases del plan están completas (tabla siguiente). Arquitectura y decisiones en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
 
 ## Estado por fases
 
@@ -21,7 +21,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 9 | Propuestas de corrección como diferencias, preguntas sobre el análisis y deuda nueva entre versiones | ✅ |
 | 10 | Caché del historial, carga perezosa del compilador, límite de memoria, `.radarignore` y mantenimiento de la caché | ✅ |
 | 11 | Refactorización de la deuda propia, auditorías de seguridad y de rendimiento (repositorios reales), cobertura de pruebas e integración continua | ✅ |
-| 12 | Instalador para Windows | Pendiente |
+| 12 | Instalador para Windows: ASAR con integridad, *fuses* de Electron, licencias de terceros y prueba del paquete | ✅ |
 
 **El radar sobre sí mismo:** 99/100 (A), sin hallazgos altos ni críticos. La integración
 continua falla si aparece alguno (`npm run analyze -- . --fail-on high`).
@@ -80,6 +80,7 @@ npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archi
 npm run desktop   # compila y abre la aplicación de escritorio
 npm run desktop:dev   # aplicación con recarga en caliente de la interfaz
 npm run e2e:desktop   # prueba de extremo a extremo de la aplicación (abre una ventana; sin red)
+npm run dist      # instalador para Windows en apps/desktop/release (docs/INSTALADOR.md)
 npm run cache     # cuánto ocupa la caché (-- --limpiar [días] | --vaciar)
 ```
 
@@ -126,6 +127,7 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Fases 10 y 11: objetivos, benchmark, repositorios reales (hasta microsoft/vscode), caché y memoria |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
 | [docs/IA.md](docs/IA.md) | Fases 7 y 9: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad, cómo se evita que la IA invente, propuestas de corrección y preguntas |
-| [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fases 8, 9 y 11: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
+| [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fases 8, 9, 11 y 12: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
 | [docs/SEGURIDAD.md](docs/SEGURIDAD.md) | Fase 11: modelo de amenazas, controles, qué sale del equipo, auditoría y riesgos pendientes |
+| [docs/INSTALADOR.md](docs/INSTALADOR.md) | Fase 12: generar el instalador, qué instala, fuses, comprobación del paquete y firma |
 | [docs/CALIDAD.md](docs/CALIDAD.md) | Fase 11: pruebas, cobertura, integración continua y refactorización de la deuda propia |
