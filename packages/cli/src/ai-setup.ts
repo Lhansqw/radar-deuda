@@ -46,43 +46,78 @@ export const AI_ARGS = {
 
 type AiValues = { [K in keyof typeof AI_ARGS]?: (typeof AI_ARGS)[K]['type'] extends 'boolean' ? boolean : string };
 
+/** Opciones que no tienen sentido sin --ai. */
+const AI_ONLY = ['ai-url', 'ai-model', 'ai-plan-model', 'privacy', 'ai-limit', 'ai-budget', 'ai-reasoning', 'ai-fallback'] as const;
+const MAX_FALLBACKS = 3;
+
+/** Lista separada por comas, sin vacíos; undefined si no se indicó. */
+function splitList(value: string | undefined): string[] | undefined {
+  return value?.split(',').map((m) => m.trim()).filter((m) => m !== '');
+}
+
+const limitOf = (v: AiValues): number => (v['ai-limit'] !== undefined ? Number(v['ai-limit']) : 8);
+const budgetOf = (v: AiValues): number => (v['ai-budget'] !== undefined ? Number(v['ai-budget']) : 0.5);
+const isOpenRouterModel = (m: string | undefined): boolean => m === undefined || OpenRouterProvider.isValidModelId(m);
+
+/** Cada comprobación devuelve el problema o null. Se aplican en orden: el primer problema es el que se informa. */
+type Check = (v: AiValues & { ai: string }, fallback: string[] | undefined) => string | null;
+
+const CHECKS: readonly Check[] = [
+  (v) => (PROVIDERS.includes(v.ai as AiProviderName) ? null : `Proveedor de IA no válido: ${v.ai} (usa ${PROVIDERS.join(', ')}).`),
+  (v) => (v.ai === 'url' && !v['ai-url'] ? '--ai url requiere --ai-url <url>.' : null),
+  openRouterOnly,
+  (v) => (v['ai-zdr'] && v['ai-allow-data-collection'] ? '--ai-zdr y --ai-allow-data-collection son incompatibles.' : null),
+  (v) =>
+    v['ai-reasoning'] === undefined || REASONING_PREFERENCES.includes(v['ai-reasoning'] as ReasoningPreference)
+      ? null
+      : `Nivel de razonamiento no válido: ${v['ai-reasoning']} (usa ${REASONING_PREFERENCES.join(', ')}).`,
+  (_, fallback) => (fallback === undefined || (fallback.length > 0 && fallback.length <= MAX_FALLBACKS) ? null : `--ai-fallback necesita entre 1 y ${MAX_FALLBACKS} modelos separados por comas.`),
+  (_, fallback) => {
+    const bad = fallback?.find((m) => !isOpenRouterModel(m));
+    return bad ? `Id de modelo de respaldo no válido: ${bad} (formato proveedor/modelo).` : null;
+  },
+  (v) => (v.ai === 'openrouter' && !v['ai-model'] ? '--ai openrouter requiere --ai-model <proveedor/modelo> (lista los compatibles con: npm run models).' : null),
+  (v) => {
+    if (v.ai !== 'openrouter') return null;
+    const bad = [v['ai-model'], v['ai-plan-model']].find((m) => !isOpenRouterModel(m));
+    return bad ? `Id de modelo de OpenRouter no válido: ${bad} (formato proveedor/modelo).` : null;
+  },
+  (v) => (v.privacy === undefined || PRIVACY.includes(v.privacy as PrivacyMode) ? null : `Modo de privacidad no válido: ${v.privacy} (usa ${PRIVACY.join(', ')}).`),
+  (v) => {
+    const limit = limitOf(v);
+    return Number.isInteger(limit) && limit >= 1 && limit <= 50 ? null : '--ai-limit debe ser un entero entre 1 y 50.';
+  },
+  (v) => {
+    const budget = budgetOf(v);
+    return Number.isFinite(budget) && budget > 0 ? null : '--ai-budget debe ser un número positivo (USD).';
+  },
+];
+
+/** Opciones que solo aplican a OpenRouter. */
+function openRouterOnly(v: AiValues & { ai: string }): string | null {
+  if (v.ai === 'openrouter') return null;
+  if (v['ai-zdr'] || v['ai-allow-data-collection']) return '--ai-zdr y --ai-allow-data-collection solo aplican a --ai openrouter.';
+  if (v['ai-reasoning'] !== undefined) return '--ai-reasoning solo aplica a --ai openrouter.';
+  if (v['ai-fallback'] !== undefined) return '--ai-fallback solo aplica a --ai openrouter.';
+  return null;
+}
+
+/** Opciones de IA de la línea de comandos; undefined si no se pidió IA, o el primer problema. */
 export function parseAiOptions(v: AiValues): AiCliOptions | undefined | Error {
-  const usesAi = v.ai !== undefined;
-  const aiOnly = ['ai-url', 'ai-model', 'ai-plan-model', 'privacy', 'ai-limit', 'ai-budget', 'ai-reasoning', 'ai-fallback'] as const;
-  if (!usesAi) {
-    const stray = aiOnly.find((k) => v[k] !== undefined);
+  const ai = v.ai;
+  if (ai === undefined) {
+    const stray = AI_ONLY.find((k) => v[k] !== undefined);
     return stray ? new Error(`--${stray} requiere --ai.`) : undefined;
   }
-  if (!PROVIDERS.includes(v.ai as AiProviderName)) return new Error(`Proveedor de IA no válido: ${v.ai} (usa ${PROVIDERS.join(', ')}).`);
-  if (v.ai === 'url' && !v['ai-url']) return new Error('--ai url requiere --ai-url <url>.');
-  if ((v['ai-zdr'] || v['ai-allow-data-collection']) && v.ai !== 'openrouter') return new Error('--ai-zdr y --ai-allow-data-collection solo aplican a --ai openrouter.');
-  if (v['ai-zdr'] && v['ai-allow-data-collection']) return new Error('--ai-zdr y --ai-allow-data-collection son incompatibles.');
-  if (v['ai-reasoning'] !== undefined) {
-    if (v.ai !== 'openrouter') return new Error('--ai-reasoning solo aplica a --ai openrouter.');
-    if (!REASONING_PREFERENCES.includes(v['ai-reasoning'] as ReasoningPreference)) return new Error(`Nivel de razonamiento no válido: ${v['ai-reasoning']} (usa ${REASONING_PREFERENCES.join(', ')}).`);
+  const fallback = splitList(v['ai-fallback']);
+  for (const check of CHECKS) {
+    const problem = check({ ...v, ai }, fallback);
+    if (problem) return new Error(problem);
   }
-  const fallback = v['ai-fallback'] !== undefined ? v['ai-fallback'].split(',').map((m) => m.trim()).filter((m) => m !== '') : undefined;
-  if (fallback !== undefined) {
-    if (v.ai !== 'openrouter') return new Error('--ai-fallback solo aplica a --ai openrouter.');
-    if (fallback.length === 0 || fallback.length > 3) return new Error('--ai-fallback necesita entre 1 y 3 modelos separados por comas.');
-    const bad = fallback.find((m) => !OpenRouterProvider.isValidModelId(m));
-    if (bad) return new Error(`Id de modelo de respaldo no válido: ${bad} (formato proveedor/modelo).`);
-  }
-  if (v.ai === 'openrouter') {
-    if (!v['ai-model']) return new Error('--ai openrouter requiere --ai-model <proveedor/modelo> (lista los compatibles con: npm run models).');
-    for (const m of [v['ai-model'], v['ai-plan-model']]) {
-      if (m !== undefined && !OpenRouterProvider.isValidModelId(m)) return new Error(`Id de modelo de OpenRouter no válido: ${m} (formato proveedor/modelo).`);
-    }
-  }
-  if (v.privacy !== undefined && !PRIVACY.includes(v.privacy as PrivacyMode)) return new Error(`Modo de privacidad no válido: ${v.privacy} (usa ${PRIVACY.join(', ')}).`);
-  const limit = v['ai-limit'] !== undefined ? Number(v['ai-limit']) : 8;
-  const budget = v['ai-budget'] !== undefined ? Number(v['ai-budget']) : 0.5;
-  if (!Number.isInteger(limit) || limit < 1 || limit > 50) return new Error('--ai-limit debe ser un entero entre 1 y 50.');
-  if (!Number.isFinite(budget) || budget <= 0) return new Error('--ai-budget debe ser un número positivo (USD).');
   return {
-    provider: v.ai as AiProviderName,
-    limit,
-    budgetUsd: budget,
+    provider: ai as AiProviderName,
+    limit: limitOf(v),
+    budgetUsd: budgetOf(v),
     plan: !v['no-ai-plan'],
     ...(v['ai-zdr'] ? { zeroDataRetention: true } : {}),
     ...(v['ai-allow-data-collection'] ? { allowDataCollection: true } : {}),
