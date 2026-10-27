@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { cloudForBuild } from '../scripts/config.js';
 import { cloudConfig, ENV_KEY, ENV_URL } from '../src/main/cloud-config.js';
 import { codeProblem, emailProblem, newPasswordProblem, normalizeEmail } from '../src/shared/account.js';
 
@@ -41,6 +42,15 @@ describe('cloudConfig', () => {
     // El mensaje nunca repite la clave.
     const r = key('sb_secret_prueba_0123456789');
     expect(r.ok ? '' : r.message).not.toContain('prueba_0123456789');
+  });
+});
+
+describe('cloudForBuild', () => {
+  it('incrusta la conexión solo si está definida, y una clave secreta detiene la compilación', () => {
+    expect(cloudForBuild({})).toBeNull();
+    expect(cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: KEY })).toEqual({ url: 'https://abcd.supabase.co', publishableKey: KEY });
+    expect(() => cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: 'sb_secret_prueba_0123456789' })).toThrow(/No se puede incrustar.*clave secreta/);
+    expect(() => cloudForBuild({ [ENV_KEY]: KEY })).toThrow(/Falta RADAR_SUPABASE_URL/);
   });
 });
 

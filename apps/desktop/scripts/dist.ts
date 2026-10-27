@@ -13,7 +13,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { build, Platform } from 'electron-builder';
 import { compileApp } from './compile.js';
-import { appDir } from './config.js';
+import { appDir, cloudForBuild } from './config.js';
 import { verifyPackage } from './verify-package.js';
 
 const args = new Set(process.argv.slice(2));
@@ -22,8 +22,14 @@ const platform = process.platform === 'win32' ? Platform.WINDOWS : process.platf
 const releaseDir = path.join(appDir, 'release');
 
 const started = performance.now();
+const cloud = cloudForBuild();
 const packages = await compileApp();
 console.log(`Compilado. Software de terceros incluido: ${packages.join(', ')}.`);
+console.log(
+  cloud
+    ? `Conexión con Supabase incluida: ${cloud.url}.`
+    : 'Sin conexión con Supabase (RADAR_SUPABASE_URL y RADAR_SUPABASE_PUBLISHABLE_KEY no están definidas): la aplicación instalada no permitirá iniciar sesión. Ver docs/CUENTAS.md.',
+);
 
 await build({
   projectDir: appDir,
