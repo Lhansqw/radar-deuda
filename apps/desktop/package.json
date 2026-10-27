@@ -21,6 +21,7 @@
     "@radar/engine": "0.1.0",
     "@radar/pipeline": "0.1.0",
     "@radar/sources": "0.1.0",
+    "@supabase/supabase-js": "^2.118.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
