@@ -1,7 +1,8 @@
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { defaultCacheDir } from '@radar/engine';
 import { defaultReposDir } from '@radar/sources';
-import { app, BrowserWindow, dialog, nativeTheme, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell } from 'electron';
 import { JOB_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { AiService } from './ai-service.js';
@@ -109,6 +110,15 @@ function start(): void {
       openExternal,
       // Solo se muestra en el explorador: abrir el archivo con su programa asociado podría ejecutarlo (.js, .bat…).
       reveal: (abs) => shell.showItemInFolder(abs),
+      copyText: (text) => clipboard.writeText(text),
+      // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
+      savePatch: async (name, content) => {
+        const options = { title: 'Guardar el parche', defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Parche', extensions: ['patch', 'diff'] }] };
+        const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+        if (r.canceled || !r.filePath) return null;
+        await writeFile(r.filePath, content, 'utf8');
+        return r.filePath;
+      },
     }),
     devServerUrl,
   );

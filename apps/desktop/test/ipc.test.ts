@@ -24,11 +24,21 @@ function setup(over: Partial<HandlerDeps> = {}) {
     store,
     credentials: new CredentialStore(store, cipher, {}),
     jobs: { start: () => Promise.reject(new Error('no se usa')) as never, cancel: () => undefined, list: () => [] },
-    ai: { explain: () => Promise.reject(new Error('no se usa')), openRouterModels: async () => [], checkOpenRouterKey: () => Promise.reject(new Error('no se usa')) },
+    ai: {
+      explain: () => Promise.reject(new Error('no se usa')),
+      openRouterModels: async () => [],
+      checkOpenRouterKey: () => Promise.reject(new Error('no se usa')),
+      fixPreview: () => Promise.reject(new Error('no se usa')),
+      proposeFix: () => Promise.reject(new Error('no se usa')),
+      getFix: async () => null,
+      ask: () => Promise.reject(new Error('no se usa')),
+    },
     info: () => ({ versions: { app: '0.1.0', electron: '44', chrome: '152', node: '24' }, dataDir: '/datos', cacheDir: '/cache', reposDir: '/cache/repos' }),
     chooseFolder: async () => null,
     openExternal: async () => true,
     reveal: () => undefined,
+    copyText: () => undefined,
+    savePatch: async () => null,
     ...over,
   });
   const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, handlers, null);
@@ -127,6 +137,30 @@ describe('contrato IPC', () => {
     expect(c.ok && c.value).toMatchObject({ scoreDelta: 10, persisting: 1, added: [{ id: 'z' }], resolved: [{ id: 'x' }] });
     expect(await call('analyses:compare', a1.id, b1.id)).toEqual({ ok: false, error: 'Solo se pueden comparar análisis del mismo proyecto.' });
     expect(await call('analyses:compare', a1.id, a1.id)).toEqual({ ok: false, error: 'Elige dos análisis distintos.' });
+  });
+
+  it('propuestas y preguntas: valida hallazgo, confirmación y pregunta; el parche lo guarda el proceso principal', async () => {
+    const saved: Array<[string, string]> = [];
+    const copied: string[] = [];
+    const { call, store } = setup({ savePatch: async (name, content) => (saved.push([name, content]), `C:\\descargas\\${name}`), copyText: (t) => void copied.push(t) });
+    expect(await call('ai:proposeFix', 1, 'f1', 'sí')).toEqual({ ok: false, error: 'Confirmación no válida.' });
+    expect(await call('ai:fixPreview', 1, '../x')).toEqual({ ok: false, error: 'Hallazgo no válido.' });
+    expect(await call('chat:ask', 1, '   ')).toEqual({ ok: false, error: 'Escribe una pregunta.' });
+    expect(await call('chat:ask', 1, 'x'.repeat(2001))).toEqual({ ok: false, error: 'La pregunta es demasiado larga (máximo 2000 caracteres).' });
+    expect(await call('app:copyText', 'parche')).toEqual({ ok: true, value: null });
+    expect(copied).toEqual(['parche']);
+
+    const project = store.addProject({ name: 'mi tienda', kind: 'local', location: '/t' });
+    const analysis = store.saveAnalysis(project.id, { score: { score: 1, rating: 'E', debtRatio: 1, remediationMinutes: 1, developmentMinutes: 1, codeLines: 1 }, findings: [], summary: { bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 } } } as never, { startedAt: '', durationMs: 1 });
+    expect(await call('files:savePatch', analysis.id, 'abcdef1234567890')).toEqual({ ok: false, error: 'No hay ningún parche que guardar.' });
+    store.saveFixProposal(analysis.id, { findingId: 'abcdef1234567890', patch: 'diff --git a/x b/x\n', createdAt: '2026-10-26T00:00:00Z' } as never);
+    expect(await call('files:savePatch', analysis.id, 'abcdef1234567890')).toEqual({ ok: true, value: 'C:\\descargas\\mi-tienda-abcdef12.patch' });
+    expect(saved).toEqual([['mi-tienda-abcdef12.patch', 'diff --git a/x b/x\n']]);
+
+    store.addChatMessage(analysis.id, { role: 'user', content: 'hola' });
+    expect(await call('chat:list', analysis.id)).toMatchObject({ ok: true, value: [{ role: 'user', content: 'hola' }] });
+    expect(await call('chat:clear', analysis.id)).toEqual({ ok: true, value: null });
+    expect(store.listChatMessages(analysis.id)).toEqual([]);
   });
 
   it('un análisis inexistente da un mensaje claro', async () => {

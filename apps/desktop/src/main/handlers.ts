@@ -14,13 +14,16 @@ export interface HandlerDeps {
   store: Store;
   credentials: CredentialStore;
   jobs: Pick<JobManager, 'start' | 'cancel' | 'list'>;
-  ai: Pick<AiService, 'explain' | 'openRouterModels' | 'checkOpenRouterKey'>;
+  ai: Pick<AiService, 'explain' | 'openRouterModels' | 'checkOpenRouterKey' | 'fixPreview' | 'proposeFix' | 'getFix' | 'ask'>;
   info: () => AppInfo;
   /** Selector de carpetas del sistema. */
   chooseFolder: () => Promise<string | null>;
   openExternal: (url: string) => Promise<boolean>;
   /** Muestra un archivo en el explorador del sistema. */
   reveal: (absPath: string) => void;
+  copyText: (text: string) => void;
+  /** Diálogo para guardar un parche; devuelve la ruta elegida o null si se cancela. */
+  savePatch: (defaultName: string, content: string) => Promise<string | null>;
 }
 
 export type Handlers = { [C in Channel]: (...args: ArgsOf<C>) => Promise<ResultOf<C>> | ResultOf<C> };
@@ -48,6 +51,10 @@ export function createHandlers(d: HandlerDeps): Handlers {
   return {
     'app:info': () => d.info(),
     'app:openExternal': (url) => d.openExternal(url),
+    'app:copyText': (text) => {
+      d.copyText(text);
+      return null;
+    },
 
     'projects:list': () => d.store.listProjects(),
     'projects:addFolder': async () => {
@@ -102,8 +109,26 @@ export function createHandlers(d: HandlerDeps): Handlers {
       return null;
     },
 
+    'files:savePatch': async (analysisId, findingId) => {
+      const proposal = d.store.getFixProposal(analysisId, findingId);
+      if (!proposal || proposal.patch === '') throw new NotFoundError('No hay ningún parche que guardar.');
+      const project = d.store.getProject(d.store.getAnalysis(analysisId)?.projectId ?? 0);
+      const base = (project?.name ?? 'propuesta').replace(/[^\w.-]+/g, '-');
+      return d.savePatch(`${base}-${findingId.slice(0, 8)}.patch`, proposal.patch);
+    },
+
     'ai:explain': (analysisId, findingId) => d.ai.explain(analysisId, findingId),
     'ai:models': () => d.ai.openRouterModels(),
     'ai:checkKey': () => d.ai.checkOpenRouterKey(),
+    'ai:fixPreview': (analysisId, findingId) => d.ai.fixPreview(analysisId, findingId),
+    'ai:proposeFix': (analysisId, findingId, consent) => d.ai.proposeFix(analysisId, findingId, consent),
+    'ai:getFix': (analysisId, findingId) => d.ai.getFix(analysisId, findingId),
+
+    'chat:list': (analysisId) => d.store.listChatMessages(analysisId),
+    'chat:ask': (analysisId, question) => d.ai.ask(analysisId, question),
+    'chat:clear': (analysisId) => {
+      d.store.clearChat(analysisId);
+      return null;
+    },
   };
 }

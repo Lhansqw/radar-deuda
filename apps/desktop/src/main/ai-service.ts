@@ -1,8 +1,9 @@
-import { defaultCacheDir, type AnalysisReport } from '@radar/engine';
+import { readFile } from 'node:fs/promises';
+import { compareReports, defaultCacheDir, safeJoin, sha1, type AnalysisReport } from '@radar/engine';
 import { fetchOpenRouterModels, OpenRouterProvider, type OpenRouterModel } from '@radar/ai';
 import type { FetchLike } from '@radar/sources';
-import { runAiStep } from '@radar/pipeline';
-import type { CatalogModel, OpenRouterKeyCheck } from '../shared/model.js';
+import { askStep, previewFix, proposeFixStep, runAiStep } from '@radar/pipeline';
+import type { CatalogModel, ChatMessage, FixPreviewInfo, OpenRouterKeyCheck, StoredFixProposal } from '../shared/model.js';
 import type { AppSettings } from '../shared/settings.js';
 import { mergeAiSection } from './ai-merge.js';
 import type { CredentialStore } from './credentials.js';
@@ -45,6 +46,8 @@ function toCatalogModel(m: OpenRouterModel): CatalogModel {
 export class AiService {
   private catalog: { at: number; models: CatalogModel[] } | null = null;
   private readonly inFlight = new Map<string, Promise<AnalysisReport>>();
+  private readonly fixesInFlight = new Map<string, Promise<StoredFixProposal>>();
+  private readonly asking = new Set<number>();
 
   constructor(private readonly d: AiServiceDeps) {}
 
@@ -80,14 +83,29 @@ export class AiService {
     return p;
   }
 
-  private async doExplain(analysisId: number, findingId: string): Promise<AnalysisReport> {
+  private get cacheBase(): string | null {
+    return this.d.cacheBase === undefined ? defaultCacheDir() : this.d.cacheBase;
+  }
+
+  private report(analysisId: number, findingId?: string): AnalysisReport {
     const report = this.d.store.getReport(analysisId);
     if (!report) throw new AiServiceError('Ese análisis ya no existe.');
-    if (!report.findings.some((f) => f.id === findingId)) throw new AiServiceError('Ese hallazgo no está en el análisis.');
+    if (findingId !== undefined && !report.findings.some((f) => f.id === findingId)) throw new AiServiceError('Ese hallazgo no está en el análisis.');
+    return report;
+  }
+
+  /** Ajustes de la IA, si permiten hacer una consulta. */
+  private aiSettings(): AppSettings['ai'] {
     const s = this.d.settings().ai;
     if (s.provider === 'openrouter' && s.model === '') throw new AiServiceError('Elige un modelo de OpenRouter en Configuración.');
+    return s;
+  }
+
+  private async doExplain(analysisId: number, findingId: string): Promise<AnalysisReport> {
+    const report = this.report(analysisId, findingId);
+    const s = this.aiSettings();
     const warnings: string[] = [];
-    const cacheBase = this.d.cacheBase === undefined ? defaultCacheDir() : this.d.cacheBase;
+    const cacheBase = this.cacheBase;
     const { section } = await runAiStep(
       report,
       { ...aiOptionsFrom(s), findingIds: [findingId] },
@@ -102,5 +120,82 @@ export class AiService {
     report.ai = mergeAiSection(report.ai, section);
     this.d.store.updateReport(analysisId, report);
     return report;
+  }
+
+  // ── Propuestas de corrección ───────────────────────────────────────────
+
+  /** Lo que se enviaría para proponer una corrección (sin enviar nada). */
+  async fixPreview(analysisId: number, findingId: string): Promise<FixPreviewInfo> {
+    const report = this.report(analysisId, findingId);
+    return previewFix(report, findingId, aiOptionsFrom(this.aiSettings()), this.d.credentials.apiKeys());
+  }
+
+  /** Pide una propuesta a la IA y la guarda (sustituye la anterior del mismo hallazgo). */
+  proposeFix(analysisId: number, findingId: string, consent: boolean): Promise<StoredFixProposal> {
+    const k = `${analysisId}:${findingId}`;
+    const running = this.fixesInFlight.get(k);
+    if (running) return running;
+    const p = (async (): Promise<StoredFixProposal> => {
+      const report = this.report(analysisId, findingId);
+      const proposal = await proposeFixStep(report, findingId, aiOptionsFrom(this.aiSettings()), this.d.credentials.apiKeys(), {
+        consent,
+        cacheBase: this.cacheBase,
+        signal: new AbortController().signal,
+      });
+      this.d.store.saveFixProposal(analysisId, proposal);
+      return { proposal, stale: false };
+    })().finally(() => this.fixesInFlight.delete(k));
+    this.fixesInFlight.set(k, p);
+    return p;
+  }
+
+  /** Propuesta guardada, indicando si los archivos cambiaron desde que se hizo. */
+  async getFix(analysisId: number, findingId: string): Promise<StoredFixProposal | null> {
+    const proposal = this.d.store.getFixProposal(analysisId, findingId);
+    const report = this.d.store.getReport(analysisId);
+    if (!proposal || !report) return null;
+    let stale = false;
+    for (const [file, hash] of Object.entries(proposal.baseHashes)) {
+      const abs = safeJoin(report.root, file);
+      const text = abs ? await readFile(abs, 'utf8').catch(() => null) : null;
+      if (text === null || sha1(text) !== hash) stale = true;
+    }
+    return { proposal, stale };
+  }
+
+  // ── Preguntas sobre el análisis ────────────────────────────────────────
+
+  /** Pregunta sobre un análisis; guarda la pregunta y la respuesta solo si la IA responde. */
+  async ask(analysisId: number, question: string): Promise<ChatMessage[]> {
+    if (this.asking.has(analysisId)) throw new AiServiceError('Espera a que termine la respuesta anterior.');
+    this.asking.add(analysisId);
+    try {
+      const report = this.report(analysisId);
+      const s = this.aiSettings();
+      const history = this.d.store.listChatMessages(analysisId).map((m) => ({ role: m.role, content: m.content }));
+      const answer = await askStep(report, history, question, aiOptionsFrom(s), this.d.credentials.apiKeys(), {
+        comparison: this.previousComparison(analysisId, report),
+        signal: new AbortController().signal,
+      });
+      const user = this.d.store.addChatMessage(analysisId, { role: 'user', content: question.trim() });
+      const reply = this.d.store.addChatMessage(analysisId, {
+        role: 'assistant',
+        content: answer.text,
+        meta: { references: answer.references, unknownReferences: answer.unknownReferences, truncated: answer.truncated, model: answer.model, costUsd: answer.usage.costUsd },
+      });
+      return [user, reply];
+    } finally {
+      this.asking.delete(analysisId);
+    }
+  }
+
+  /** Deuda nueva y resuelta respecto al análisis anterior del mismo proyecto, si lo hay. */
+  private previousComparison(analysisId: number, report: AnalysisReport) {
+    const summary = this.d.store.getAnalysis(analysisId);
+    if (!summary) return null;
+    const list = this.d.store.listAnalyses(summary.projectId);
+    const previous = list[list.findIndex((a) => a.id === analysisId) + 1];
+    const before = previous ? this.d.store.getReport(previous.id) : null;
+    return before ? compareReports(before, report) : null;
   }
 }

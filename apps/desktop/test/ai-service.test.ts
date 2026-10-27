@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AiSection, AnalysisReport } from '@radar/engine';
 import { mergeAiSection } from '../src/main/ai-merge.js';
@@ -28,7 +31,7 @@ const explanation = (findingId: string, summary: string) => ({
   fromCache: false,
 });
 
-function setup(settings: AppSettings, withKey = true) {
+function setup(settings: AppSettings, withKey = true, root = '/no/existe') {
   const store = Store.open(':memory:');
   cleanup.push(() => store.close());
   const credentials = new CredentialStore(store, { isEncryptionAvailable: () => true, encryptString: (s) => Buffer.from(s), decryptString: (b) => b.toString() }, withKey ? { RADAR_OPENROUTER_API_KEY: KEY } : {});
@@ -36,7 +39,7 @@ function setup(settings: AppSettings, withKey = true) {
   const report = {
     schemaVersion: 1,
     engineVersion: '0.1.0',
-    root: '/no/existe',
+    root,
     generatedAt: new Date().toISOString(),
     config: {},
     score: { score: 70, rating: 'B', debtRatio: 0.1, remediationMinutes: 10, developmentMinutes: 100, codeLines: 10 },
@@ -51,7 +54,7 @@ function setup(settings: AppSettings, withKey = true) {
     ai: { privacy: 'metadatos', explanations: [explanation('f2', 'antigua de f2')], usage: usage(1), errors: [{ findingId: 'f1', message: 'falló antes' }] },
   } as unknown as AnalysisReport;
   const a = store.saveAnalysis(project.id, report, { startedAt: new Date().toISOString(), durationMs: 1 });
-  return { store, credentials, analysisId: a.id, service: new AiService({ store, credentials, settings: () => settings, cacheBase: null }) };
+  return { store, credentials, report, projectId: project.id, analysisId: a.id, service: new AiService({ store, credentials, settings: () => settings, cacheBase: null }) };
 }
 
 const openrouter = (model: string): AppSettings => ({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: 'openrouter', model, allowDataCollection: true } });
@@ -136,5 +139,74 @@ describe('AiService', () => {
     await expect(service.explain(999, 'f1')).rejects.toThrow(/ya no existe/);
     vi.stubGlobal('fetch', async () => Response.json({ error: { code: 401, message: 'User not found.' } }, { status: 401 }));
     await expect(service.explain(analysisId, 'f1')).rejects.toThrow(/rechazó la clave/);
+  });
+});
+
+/** OpenRouter simulado; devuelve las peticiones al modelo. */
+function stubOpenRouter(answer: (body: { model: string; messages: Array<{ content: string }> }) => string): Array<{ system: string; body: string }> {
+  const chats: Array<{ system: string; body: string }> = [];
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/models')) return Response.json({ data: [{ id: 'a/b:free', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['structured_outputs'] }] });
+    if (url.endsWith('/key')) return Response.json({ data: { limit_remaining: null, free_model_daily_requests: { used: 0, limit: 50, remaining: 50 } } });
+    const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
+    chats.push({ system: body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n'), body: String(init?.body) });
+    return Response.json({ model: body.model, choices: [{ message: { content: answer(body) }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, cost: 0 } });
+  });
+  return chats;
+}
+
+describe('AiService: propuestas de corrección', () => {
+  it('pide permiso para enviar código, guarda la propuesta y detecta si el archivo cambió después', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'radar-propuesta-'));
+    cleanup.push(() => void rm(root, { recursive: true, force: true }));
+    await writeFile(path.join(root, 'a.ts'), Array.from({ length: 12 }, (_, i) => `const a${i + 1} = ${i + 1};`).join('\n') + '\n');
+    const { service, analysisId } = setup(openrouter('a/b:free'), true, root);
+    const chats = stubOpenRouter((body) => {
+      const id = /El id del hallazgo es "([^"]+)"/.exec(body.messages.at(-1)?.content ?? '')?.[1];
+      return JSON.stringify({ id_hallazgo: id, aplicable: true, resumen: 'Cambiar a3.', cambios: [{ archivo: 'a.ts', linea_inicio: 3, linea_fin: 3, reemplazo: 'const a3 = 33;' }], riesgos: [], verificacion: [] });
+    });
+    const preview = await service.fixPreview(analysisId, 'f1');
+    expect(preview).toMatchObject({ provider: 'OpenRouter', cloud: true, needsConsent: true, mayRetain: true });
+    expect(preview.text).toContain('const a3 = 3;');
+    await expect(service.proposeFix(analysisId, 'f1', false)).rejects.toThrow(/Confirma el envío/);
+    expect(chats).toHaveLength(0);
+
+    const r = await service.proposeFix(analysisId, 'f1', true);
+    expect(r.stale).toBe(false);
+    expect(r.proposal.patch).toContain('-const a3 = 3;\n+const a3 = 33;');
+    expect(await service.getFix(analysisId, 'f1')).toMatchObject({ stale: false, proposal: { findingId: 'f1', summary: 'Cambiar a3.' } });
+    await writeFile(path.join(root, 'a.ts'), 'const otro = 1;\n');
+    expect((await service.getFix(analysisId, 'f1'))?.stale).toBe(true);
+    expect(await service.getFix(analysisId, 'f2')).toBeNull();
+    await expect(service.fixPreview(analysisId, 'no')).rejects.toThrow(/no está en el análisis/);
+  });
+});
+
+describe('AiService: preguntas sobre el análisis', () => {
+  it('guarda la pregunta y la respuesta, envía la deuda nueva y resuelta, y no guarda nada si falla', async () => {
+    const { service, store, report, projectId } = setup(openrouter('a/b:free'));
+    // Segundo análisis: f2 resuelto.
+    const later = store.saveAnalysis(projectId, { ...report, findings: report.findings.slice(0, 1) }, { startedAt: new Date().toISOString(), durationMs: 1 });
+    const chats = stubOpenRouter(() => 'Se resolvió el TODO; queda [H1].');
+    const [q, a] = await service.ask(later.id, '  ¿Qué cambió?  ');
+    expect(q).toMatchObject({ role: 'user', content: '¿Qué cambió?', meta: null });
+    expect(a).toMatchObject({ role: 'assistant', content: 'Se resolvió el TODO; queda [H1].', meta: { references: [{ alias: 'H1', findingId: 'f1' }], unknownReferences: [], truncated: false, model: 'a/b:free', costUsd: 0 } });
+    expect(chats[0]?.system).toContain('Resueltos (ya no aparecen): «TODO» (b.ts:2).');
+
+    // La segunda pregunta lleva el historial.
+    await service.ask(later.id, '¿Y ahora?');
+    expect(chats[1]?.body).toContain('Se resolvió el TODO');
+
+    vi.stubGlobal('fetch', async () => Response.json({ error: { code: 401, message: 'User not found.' } }, { status: 401 }));
+    await expect(service.ask(later.id, 'Otra')).rejects.toThrow(/credenciales no válidas/);
+    expect(store.listChatMessages(later.id)).toHaveLength(4);
+  });
+
+  it('una pregunta a la vez por análisis', async () => {
+    const { service, analysisId } = setup(openrouter('a/b:free'));
+    stubOpenRouter(() => 'Respuesta.');
+    const first = service.ask(analysisId, 'Una');
+    await expect(service.ask(analysisId, 'Otra')).rejects.toThrow(/Espera a que termine/);
+    await first;
   });
 });

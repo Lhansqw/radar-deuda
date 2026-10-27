@@ -6,7 +6,7 @@
  */
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { JobState } from './jobs.js';
-import type { AnalysisSummary, CatalogModel, CodeSnippet, OpenRouterKeyCheck, Project } from './model.js';
+import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, OpenRouterKeyCheck, Project, StoredFixProposal } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
 
@@ -23,6 +23,8 @@ export interface AppInfo {
 export interface IpcContract {
   'app:info': { args: []; result: AppInfo };
   'app:openExternal': { args: [url: string]; result: boolean };
+  /** Copia texto al portapapeles del sistema. */
+  'app:copyText': { args: [text: string]; result: null };
   'projects:list': { args: []; result: Project[] };
   /** Abre el selector de carpetas del sistema; null si se cancela. */
   'projects:addFolder': { args: []; result: Project | null };
@@ -46,12 +48,25 @@ export interface IpcContract {
   'files:snippet': { args: [analysisId: number, file: string, startLine: number, endLine: number]; result: CodeSnippet };
   /** Muestra el archivo en el explorador de archivos del sistema (sin abrirlo ni ejecutarlo). */
   'files:reveal': { args: [analysisId: number, file: string]; result: null };
+  /** Guarda el parche de la propuesta del hallazgo donde elija el usuario; devuelve la ruta o null si cancela. */
+  'files:savePatch': { args: [analysisId: number, findingId: string]; result: string | null };
   /** Explica un hallazgo con la IA configurada; devuelve el informe con la explicación añadida. */
   'ai:explain': { args: [analysisId: number, findingId: string]; result: AnalysisReport };
   /** Catálogo de modelos de OpenRouter. */
   'ai:models': { args: []; result: CatalogModel[] };
   /** Comprueba la clave de OpenRouter guardada (validez, crédito y cuota gratuita). */
   'ai:checkKey': { args: []; result: OpenRouterKeyCheck };
+  /** Lo que se enviaría para proponer una corrección (sin enviar nada). */
+  'ai:fixPreview': { args: [analysisId: number, findingId: string]; result: FixPreviewInfo };
+  /** Propone una corrección; `consent`: el usuario confirmó enviar el fragmento de código. */
+  'ai:proposeFix': { args: [analysisId: number, findingId: string, consent: boolean]; result: StoredFixProposal };
+  /** Propuesta guardada del hallazgo, si la hay. */
+  'ai:getFix': { args: [analysisId: number, findingId: string]; result: StoredFixProposal | null };
+  /** Conversación sobre un análisis. */
+  'chat:list': { args: [analysisId: number]; result: ChatMessage[] };
+  /** Pregunta a la IA; devuelve la pregunta y la respuesta guardadas. */
+  'chat:ask': { args: [analysisId: number, question: string]; result: ChatMessage[] };
+  'chat:clear': { args: [analysisId: number]; result: null };
 }
 
 /** Canal de avisos del proceso principal a la interfaz (estado de los análisis). */
@@ -64,6 +79,7 @@ export type ResultOf<C extends Channel> = IpcContract[C]['result'];
 export const CHANNELS = [
   'app:info',
   'app:openExternal',
+  'app:copyText',
   'projects:list',
   'projects:addFolder',
   'projects:addGithub',
@@ -81,9 +97,16 @@ export const CHANNELS = [
   'jobs:list',
   'files:snippet',
   'files:reveal',
+  'files:savePatch',
   'ai:explain',
   'ai:models',
   'ai:checkKey',
+  'ai:fixPreview',
+  'ai:proposeFix',
+  'ai:getFix',
+  'chat:list',
+  'chat:ask',
+  'chat:clear',
 ] as const satisfies readonly Channel[];
 
 /**

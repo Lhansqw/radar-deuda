@@ -10,13 +10,21 @@ import type { JobState } from './jobs.js';
 type Fn<C extends Channel> = (...args: ArgsOf<C>) => Promise<ResultOf<C>>;
 
 export interface RadarApi {
-  app: { info: Fn<'app:info'>; openExternal: Fn<'app:openExternal'> };
+  app: { info: Fn<'app:info'>; openExternal: Fn<'app:openExternal'>; copyText: Fn<'app:copyText'> };
   projects: { list: Fn<'projects:list'>; addFolder: Fn<'projects:addFolder'>; addGithub: Fn<'projects:addGithub'>; remove: Fn<'projects:remove'> };
   analyses: { list: Fn<'analyses:list'>; report: Fn<'analyses:report'>; compare: Fn<'analyses:compare'> };
   settings: { get: Fn<'settings:get'>; set: Fn<'settings:set'> };
   secrets: { status: Fn<'secrets:status'>; set: Fn<'secrets:set'>; delete: Fn<'secrets:delete'> };
-  files: { snippet: Fn<'files:snippet'>; reveal: Fn<'files:reveal'> };
-  ai: { explain: Fn<'ai:explain'>; models: Fn<'ai:models'>; checkKey: Fn<'ai:checkKey'> };
+  files: { snippet: Fn<'files:snippet'>; reveal: Fn<'files:reveal'>; savePatch: Fn<'files:savePatch'> };
+  ai: {
+    explain: Fn<'ai:explain'>;
+    models: Fn<'ai:models'>;
+    checkKey: Fn<'ai:checkKey'>;
+    fixPreview: Fn<'ai:fixPreview'>;
+    proposeFix: Fn<'ai:proposeFix'>;
+    getFix: Fn<'ai:getFix'>;
+  };
+  chat: { list: Fn<'chat:list'>; ask: Fn<'chat:ask'>; clear: Fn<'chat:clear'> };
   jobs: {
     start: Fn<'jobs:start'>;
     cancel: Fn<'jobs:cancel'>;
