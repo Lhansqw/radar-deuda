@@ -52,7 +52,7 @@ configuración ni del entorno, y cambiarlos invalida la firma.
 | Fuse | Valor | Por qué |
 |---|---|---|
 | `RunAsNode` | Desactivado | Con `ELECTRON_RUN_AS_NODE=1` el ejecutable dejaría de ser la aplicación y ejecutaría cualquier script como Node, con la identidad (y la firma) de la aplicación |
-| `EnableNodeOptionsEnvironmentVariable` | Desactivado | `NODE_OPTIONS` permitiría cargar código (`--require`) en el proceso principal |
+| `EnableNodeOptionsEnvironmentVariable` | Desactivado | Sin `NODE_OPTIONS` ni `NODE_EXTRA_CA_CERTS`: con este último, quien pudiera cambiar el entorno haría que la aplicación confiara en un certificado suyo e interceptara sus conexiones, claves de IA incluidas |
 | `EnableNodeCliInspectArguments` | Desactivado | `--inspect` o `SIGUSR1` abrirían un depurador con acceso total al proceso principal |
 | `OnlyLoadAppFromAsar` | Activado | Solo se carga la aplicación desde `app.asar`, no desde una carpeta `app` puesta al lado |
 | `EnableEmbeddedAsarIntegrityValidation` | Activado | Si alguien modifica `app.asar`, la aplicación no arranca (Windows y macOS) |
@@ -71,9 +71,11 @@ Al terminar, `npm run dist` comprueba el ejecutable empaquetado
    arranca desde el ASAR y analiza una carpeta temporal. Usa una carpeta de datos temporal
    y nunca toca la del usuario.
 3. Con `ELECTRON_RUN_AS_NODE=1` sigue arrancando como aplicación. Si se comportara como
-   Node, `--prueba-arranque` sería una opción desconocida; se ha comprobado que así
-   ocurre con el fuse activado en una copia.
-4. `NODE_OPTIONS=--require …` no ejecuta el script indicado.
+   Node, `--prueba-arranque` sería una opción desconocida. Se comprobó en una copia con los
+   fuses activados: esta comprobación y la de `--inspect` fallan, como deben.
+4. `NODE_OPTIONS=--require …` no ejecuta el script indicado. Una aplicación empaquetada
+   ya ignora casi todo `NODE_OPTIONS`; el fuse desactiva el resto, incluido
+   `NODE_EXTRA_CA_CERTS`.
 5. `--inspect` no abre el depurador.
 6. En Windows, una copia con un byte del código cambiado dentro de `app.asar` no arranca.
 
