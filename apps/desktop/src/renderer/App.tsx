@@ -9,6 +9,7 @@ import { useProjectData, useRadar } from './state.js';
 import { EMPTY_FILTER, type FindingFilter } from './lib/findings.js';
 import { Files } from './views/Files.js';
 import { Findings } from './views/Findings.js';
+import { Ask } from './views/Ask.js';
 import { History } from './views/History.js';
 import { NotAnalyzed } from './views/NotAnalyzed.js';
 import { Panel } from './views/Panel.js';
@@ -16,7 +17,7 @@ import { Settings } from './views/Settings.js';
 import { Welcome } from './views/Welcome.js';
 
 /** Vistas del proyecto que existen en esta versión de la interfaz. */
-const PROJECT_VIEWS = ['panel', 'hallazgos', 'archivos', 'historial'] as const;
+const PROJECT_VIEWS = ['panel', 'hallazgos', 'archivos', 'historial', 'preguntar'] as const;
 
 export function App() {
   const { projects, jobs, revisions, reloadProjects, refresh } = useRadar();
@@ -106,7 +107,19 @@ export function App() {
             {job && !dismissed.has(job.jobId) ? <JobStatus job={job} onDismiss={() => setDismissed((d) => new Set(d).add(job.jobId))} /> : null}
             <div className="workspace-body" data-view={view}>
               {data.report && data.analysisId !== null ? (
-                view === 'historial' ? (
+                view === 'preguntar' ? (
+                  <Ask
+                    key={data.analysisId}
+                    report={data.report}
+                    analysisId={data.analysisId}
+                    isOld={data.analysisId !== data.analyses[0]?.id}
+                    onOpenFinding={(id) => {
+                      setSelectedFinding((all) => ({ ...all, [project.id]: id }));
+                      setView('hallazgos');
+                    }}
+                    onOpenSettings={() => setView('ajustes')}
+                  />
+                ) : view === 'historial' ? (
                   <History
                     analyses={data.analyses}
                     viewingId={data.analysisId}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Finding, Severity, Category } from '@radar/engine';
 import { countBySeverity, EMPTY_FILTER, filterFindings, sortFindings } from '../src/renderer/lib/findings.js';
 import { diffStats, fixAvailability } from '../src/renderer/lib/fix.js';
+import { parseAnswer, parseInline } from '../src/renderer/lib/answer.js';
 import { formatEffort, formatPercent, formatRelative, fold } from '../src/renderer/lib/format.js';
 import { layoutRadar, RADAR_RINGS } from '../src/renderer/lib/radar.js';
 import { buildTree, flattenTree } from '../src/renderer/lib/tree.js';
@@ -144,5 +145,28 @@ describe('propuestas de corrección', () => {
     const line = (kind: 'context' | 'removed' | 'added') => ({ kind, text: '', oldLine: null, newLine: null });
     const hunk = (file: string, kinds: Array<'context' | 'removed' | 'added'>) => ({ file, oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: kinds.map(line) });
     expect(diffStats([hunk('a.ts', ['context', 'removed', 'removed', 'added']), hunk('a.ts', ['added']), hunk('b.ts', ['removed'])])).toEqual({ added: 2, removed: 3, files: 2 });
+  });
+});
+
+describe('respuestas de la IA', () => {
+  it('párrafos, listas con guiones o numeradas, negrita y referencias', () => {
+    expect(parseInline('Empieza por [H2] y **luego** [H1, H5]; [nota] no es referencia.')).toEqual([
+      { kind: 'text', text: 'Empieza por ' },
+      { kind: 'ref', alias: 'H2' },
+      { kind: 'text', text: ' y ' },
+      { kind: 'strong', text: 'luego' },
+      { kind: 'text', text: ' ' },
+      { kind: 'ref', alias: 'H1' },
+      { kind: 'ref', alias: 'H5' },
+      { kind: 'text', text: '; ' },
+      { kind: 'text', text: '[nota]' },
+      { kind: 'text', text: ' no es referencia.' },
+    ]);
+    const blocks = parseAnswer('Primero esto.\nY esto.\n\n- uno\n* dos\n\n1. a\n2) b\n\n\n');
+    expect(blocks.map((b) => b.kind)).toEqual(['p', 'ul', 'ol']);
+    expect(blocks[0]).toEqual({ kind: 'p', lines: [[{ kind: 'text', text: 'Primero esto.' }], [{ kind: 'text', text: 'Y esto.' }]] });
+    expect(blocks[1]).toEqual({ kind: 'ul', items: [[{ kind: 'text', text: 'uno' }], [{ kind: 'text', text: 'dos' }]] });
+    // El texto nunca se interpreta como HTML: llega tal cual a React, que lo escapa.
+    expect(parseInline('<img src=x onerror=alert(1)>')).toEqual([{ kind: 'text', text: '<img src=x onerror=alert(1)>' }]);
   });
 });
