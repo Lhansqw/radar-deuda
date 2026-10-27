@@ -3,8 +3,9 @@
 # - comprobar: tipos, lint y pruebas en Windows (la plataforma de destino) y
 #   Ubuntu, con Node 24 (.nvmrc) y la versión mínima admitida (22).
 # - dependencias: vulnerabilidades conocidas y firmas del registro de npm.
-# - autoanalisis: el radar se analiza a sí mismo y falla con hallazgos altos o
-#   críticos; el informe queda como artefacto. El rendimiento es informativo.
+# - calidad: el radar se analiza a sí mismo y falla con hallazgos altos o
+#   críticos; la cobertura de las pruebas no puede bajar de sus mínimos. El
+#   informe y la cobertura quedan como artefacto; el rendimiento es informativo.
 # - escritorio: la aplicación de Electron de extremo a extremo en Windows.
 #
 # Las acciones van fijadas por commit (no por etiqueta) para que una etiqueta
@@ -77,8 +78,8 @@ jobs:
       - name: Firmas del registro de npm
         run: npm audit signatures
 
-  autoanalisis:
-    name: Autoanálisis
+  calidad:
+    name: Calidad (autoanálisis y cobertura)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -96,15 +97,18 @@ jobs:
       - run: npm ci
       - name: Sin deuda alta ni crítica
         run: npm run analyze -- . --no-cache --fail-on high --top 20 --json radar-informe.json
+      - name: Cobertura de las pruebas
+        run: npm run test:coverage
       - name: Rendimiento (informativo)
         continue-on-error: true
         run: npm run bench
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: autoanalisis
+          name: calidad
           path: |
             radar-informe.json
+            coverage/
             bench-results/
           if-no-files-found: ignore
           retention-days: 30
