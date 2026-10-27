@@ -42,113 +42,146 @@ async function hasLockfile(ctx: ProjectContext, manifestRel: string): Promise<bo
   }
 }
 
+interface Declared {
+  section: string;
+  name: string;
+  spec: string;
+}
+
+/** Las dependencias declaradas con versión de texto, sección por sección. */
+function declared(manifest: Manifest): Declared[] {
+  return SECTIONS.flatMap((section) => {
+    const deps = manifest[section];
+    if (!deps || typeof deps !== 'object') return [];
+    return Object.entries(deps).flatMap(([name, spec]) => (typeof spec === 'string' ? [{ section, name, spec }] : []));
+  });
+}
+
+/** Una ubicación por dependencia afectada: la línea donde se declara. */
+function perDependency(rel: string, lines: readonly string[], names: readonly string[]): Finding['locations'] {
+  return names.map((name) => ({ file: rel, startLine: lineOf(lines, name), endLine: lineOf(lines, name), symbol: name }));
+}
+
+function specEvidence(deps: readonly Declared[]): Finding['evidence'] {
+  return deps.map((d) => ({ kind: 'fact' as const, tool: TOOL, description: `${d.section}.${d.name}`, snippet: `"${d.name}": "${d.spec}"` }));
+}
+
+const names = (deps: readonly Declared[]): string[] => deps.map((d) => d.name);
+
+function invalidManifest(rel: string): Finding {
+  return {
+    id: findingId('dependencies/invalid-manifest', rel, 'json'),
+    ruleId: 'dependencies/invalid-manifest',
+    category: 'dependencies',
+    severity: 'medium',
+    confidence: 'high',
+    title: 'package.json no es JSON válido',
+    message: 'El manifiesto no se puede interpretar; las herramientas de construcción y auditoría fallarán.',
+    locations: [{ file: rel, startLine: 1, endLine: 1 }],
+    evidence: [{ kind: 'fact', tool: TOOL, description: 'JSON.parse falló' }],
+    impact: 'Instalaciones y auditorías no reproducibles.',
+    effort: { minutes: 10, rationale: 'Corrección de sintaxis (estimación fija).' },
+  };
+}
+
+function noLockfile(rel: string, count: number): Finding {
+  return {
+    id: findingId('dependencies/no-lockfile', rel, 'lock'),
+    ruleId: 'dependencies/no-lockfile',
+    category: 'dependencies',
+    severity: 'medium',
+    confidence: 'high',
+    title: 'Dependencias sin archivo de bloqueo (lockfile)',
+    message: `El manifiesto declara ${count} dependencias pero no hay package-lock.json, yarn.lock, pnpm-lock.yaml ni bun.lock en su directorio ni en los superiores.`,
+    locations: [{ file: rel, startLine: 1, endLine: 1 }],
+    evidence: [{ kind: 'fact', tool: TOOL, description: `Lockfiles buscados: ${LOCKFILES.join(', ')}` }],
+    impact: 'Cada instalación puede resolver versiones distintas: builds no reproducibles y auditoría de vulnerabilidades imprecisa.',
+    effort: { minutes: 15, rationale: 'Generar y versionar el lockfile, verificar el build (estimación fija).' },
+  };
+}
+
+function unboundedRange(rel: string, lines: readonly string[], deps: readonly Declared[]): Finding {
+  return {
+    id: findingId('dependencies/unbounded-range', rel, names(deps).sort().join(',')),
+    ruleId: 'dependencies/unbounded-range',
+    category: 'dependencies',
+    severity: 'medium',
+    confidence: 'high',
+    title: `Versiones sin límite superior (${deps.length})`,
+    message: `Dependencias con rangos abiertos: ${deps.map((d) => `${d.name}@"${d.spec}"`).join(', ')}.`,
+    locations: perDependency(rel, lines, names(deps)),
+    evidence: specEvidence(deps),
+    impact: 'Una nueva versión mayor con cambios incompatibles puede instalarse sin aviso.',
+    effort: { minutes: 5 * deps.length, rationale: '5 min por dependencia para fijar un rango compatible (^ o ~).' },
+  };
+}
+
+function nonRegistry(rel: string, lines: readonly string[], deps: readonly Declared[]): Finding {
+  return {
+    id: findingId('dependencies/non-registry', rel, names(deps).sort().join(',')),
+    ruleId: 'dependencies/non-registry',
+    category: 'dependencies',
+    severity: 'low',
+    confidence: 'high',
+    title: `Dependencias fuera del registro npm (${deps.length})`,
+    message: `Se instalan desde Git, URL o rutas locales: ${names(deps).join(', ')}.`,
+    locations: perDependency(rel, lines, names(deps)),
+    evidence: specEvidence(deps),
+    impact: 'No reciben avisos de seguridad del registro y pueden cambiar sin control de versiones semántico.',
+    effort: { minutes: 20 * deps.length, rationale: '20 min por dependencia para migrar a una versión publicada o documentar la excepción.' },
+  };
+}
+
+/** `dupes` ya ordenadas: el id, el mensaje y las ubicaciones siguen ese orden. */
+function duplicated(rel: string, lines: readonly string[], dupes: readonly string[]): Finding {
+  return {
+    id: findingId('dependencies/duplicated', rel, dupes.join(',')),
+    ruleId: 'dependencies/duplicated',
+    category: 'dependencies',
+    severity: 'low',
+    confidence: 'high',
+    title: `Dependencias declaradas dos veces (${dupes.length})`,
+    message: `Aparecen en dependencies y devDependencies: ${dupes.join(', ')}.`,
+    locations: perDependency(rel, lines, dupes),
+    evidence: [{ kind: 'fact', tool: TOOL, description: 'Intersección de dependencies y devDependencies' }],
+    impact: 'Ambigüedad sobre qué versión se usa en producción.',
+    effort: { minutes: 5 * dupes.length, rationale: '5 min por dependencia.' },
+  };
+}
+
+/** Los hallazgos de un package.json. */
+async function analyzeManifest(ctx: ProjectContext, rel: string): Promise<Finding[]> {
+  const text = await ctx.readText(rel);
+  if (text === null) return [];
+  let manifest: Manifest;
+  try {
+    manifest = JSON.parse(text) as Manifest;
+  } catch {
+    return [invalidManifest(rel)];
+  }
+  const runtime = declared(manifest).filter((d) => d.section !== 'peerDependencies');
+  if (runtime.length === 0) return [];
+  const lines = splitLines(text);
+  const findings: Finding[] = [];
+  if (!(await hasLockfile(ctx, rel))) findings.push(noLockfile(rel, runtime.length));
+  const unbounded = runtime.filter((d) => isUnbounded(d.spec));
+  if (unbounded.length > 0) findings.push(unboundedRange(rel, lines, unbounded));
+  const outside = runtime.filter((d) => isNonRegistry(d.spec));
+  if (outside.length > 0) findings.push(nonRegistry(rel, lines, outside));
+  const prod = new Set(Object.keys(manifest.dependencies ?? {}));
+  const dupes = Object.keys(manifest.devDependencies ?? {}).filter((n) => prod.has(n)).sort();
+  if (dupes.length > 0) findings.push(duplicated(rel, lines, dupes));
+  return findings;
+}
+
 export const dependenciesAnalyzer: ProjectAnalyzer = {
   id: ID,
   version: VERSION,
   description: 'Manifiestos npm: lockfile ausente, rangos sin límite, fuentes fuera del registro, duplicados.',
   async analyzeProject(ctx) {
     const findings: Finding[] = [];
-    const manifests = ctx.files.filter((f) => path.posix.basename(f.relPath) === 'package.json');
-    for (const meta of manifests) {
-      const text = await ctx.readText(meta.relPath);
-      if (text === null) continue;
-      let manifest: Manifest;
-      try {
-        manifest = JSON.parse(text) as Manifest;
-      } catch {
-        findings.push({
-          id: findingId('dependencies/invalid-manifest', meta.relPath, 'json'),
-          ruleId: 'dependencies/invalid-manifest',
-          category: 'dependencies',
-          severity: 'medium',
-          confidence: 'high',
-          title: 'package.json no es JSON válido',
-          message: 'El manifiesto no se puede interpretar; las herramientas de construcción y auditoría fallarán.',
-          locations: [{ file: meta.relPath, startLine: 1, endLine: 1 }],
-          evidence: [{ kind: 'fact', tool: TOOL, description: 'JSON.parse falló' }],
-          impact: 'Instalaciones y auditorías no reproducibles.',
-          effort: { minutes: 10, rationale: 'Corrección de sintaxis (estimación fija).' },
-        });
-        continue;
-      }
-      const lines = splitLines(text);
-      const all: Array<{ section: string; name: string; spec: string }> = [];
-      for (const section of SECTIONS) {
-        const deps = manifest[section];
-        if (deps && typeof deps === 'object') {
-          for (const [name, spec] of Object.entries(deps)) if (typeof spec === 'string') all.push({ section, name, spec });
-        }
-      }
-      const runtime = all.filter((d) => d.section !== 'peerDependencies');
-      if (runtime.length === 0) continue;
-
-      if (!(await hasLockfile(ctx, meta.relPath))) {
-        findings.push({
-          id: findingId('dependencies/no-lockfile', meta.relPath, 'lock'),
-          ruleId: 'dependencies/no-lockfile',
-          category: 'dependencies',
-          severity: 'medium',
-          confidence: 'high',
-          title: 'Dependencias sin archivo de bloqueo (lockfile)',
-          message: `El manifiesto declara ${runtime.length} dependencias pero no hay package-lock.json, yarn.lock, pnpm-lock.yaml ni bun.lock en su directorio ni en los superiores.`,
-          locations: [{ file: meta.relPath, startLine: 1, endLine: 1 }],
-          evidence: [{ kind: 'fact', tool: TOOL, description: `Lockfiles buscados: ${LOCKFILES.join(', ')}` }],
-          impact: 'Cada instalación puede resolver versiones distintas: builds no reproducibles y auditoría de vulnerabilidades imprecisa.',
-          effort: { minutes: 15, rationale: 'Generar y versionar el lockfile, verificar el build (estimación fija).' },
-        });
-      }
-
-      const unbounded = runtime.filter((d) => isUnbounded(d.spec));
-      if (unbounded.length > 0) {
-        findings.push({
-          id: findingId('dependencies/unbounded-range', meta.relPath, unbounded.map((d) => d.name).sort().join(',')),
-          ruleId: 'dependencies/unbounded-range',
-          category: 'dependencies',
-          severity: 'medium',
-          confidence: 'high',
-          title: `Versiones sin límite superior (${unbounded.length})`,
-          message: `Dependencias con rangos abiertos: ${unbounded.map((d) => `${d.name}@"${d.spec}"`).join(', ')}.`,
-          locations: unbounded.map((d) => ({ file: meta.relPath, startLine: lineOf(lines, d.name), endLine: lineOf(lines, d.name), symbol: d.name })),
-          evidence: unbounded.map((d) => ({ kind: 'fact' as const, tool: TOOL, description: `${d.section}.${d.name}`, snippet: `"${d.name}": "${d.spec}"` })),
-          impact: 'Una nueva versión mayor con cambios incompatibles puede instalarse sin aviso.',
-          effort: { minutes: 5 * unbounded.length, rationale: '5 min por dependencia para fijar un rango compatible (^ o ~).' },
-        });
-      }
-
-      const nonRegistry = runtime.filter((d) => isNonRegistry(d.spec));
-      if (nonRegistry.length > 0) {
-        findings.push({
-          id: findingId('dependencies/non-registry', meta.relPath, nonRegistry.map((d) => d.name).sort().join(',')),
-          ruleId: 'dependencies/non-registry',
-          category: 'dependencies',
-          severity: 'low',
-          confidence: 'high',
-          title: `Dependencias fuera del registro npm (${nonRegistry.length})`,
-          message: `Se instalan desde Git, URL o rutas locales: ${nonRegistry.map((d) => d.name).join(', ')}.`,
-          locations: nonRegistry.map((d) => ({ file: meta.relPath, startLine: lineOf(lines, d.name), endLine: lineOf(lines, d.name), symbol: d.name })),
-          evidence: nonRegistry.map((d) => ({ kind: 'fact' as const, tool: TOOL, description: `${d.section}.${d.name}`, snippet: `"${d.name}": "${d.spec}"` })),
-          impact: 'No reciben avisos de seguridad del registro y pueden cambiar sin control de versiones semántico.',
-          effort: { minutes: 20 * nonRegistry.length, rationale: '20 min por dependencia para migrar a una versión publicada o documentar la excepción.' },
-        });
-      }
-
-      const prod = new Set(Object.keys(manifest.dependencies ?? {}));
-      const dupes = Object.keys(manifest.devDependencies ?? {}).filter((n) => prod.has(n));
-      if (dupes.length > 0) {
-        findings.push({
-          id: findingId('dependencies/duplicated', meta.relPath, dupes.sort().join(',')),
-          ruleId: 'dependencies/duplicated',
-          category: 'dependencies',
-          severity: 'low',
-          confidence: 'high',
-          title: `Dependencias declaradas dos veces (${dupes.length})`,
-          message: `Aparecen en dependencies y devDependencies: ${dupes.join(', ')}.`,
-          locations: dupes.map((n) => ({ file: meta.relPath, startLine: lineOf(lines, n), endLine: lineOf(lines, n), symbol: n })),
-          evidence: [{ kind: 'fact', tool: TOOL, description: 'Intersección de dependencies y devDependencies' }],
-          impact: 'Ambigüedad sobre qué versión se usa en producción.',
-          effort: { minutes: 5 * dupes.length, rationale: '5 min por dependencia.' },
-        });
-      }
+    for (const meta of ctx.files) {
+      if (path.posix.basename(meta.relPath) === 'package.json') findings.push(...(await analyzeManifest(ctx, meta.relPath)));
     }
     return findings;
   },
