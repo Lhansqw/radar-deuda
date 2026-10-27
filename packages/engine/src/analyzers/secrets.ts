@@ -6,7 +6,7 @@ import { findingId } from '../util.js';
  * se reutilizará en la capa de IA para que ningún secreto salga del equipo.
  */
 const ID = 'secrets';
-const VERSION = '1.2.0';
+const VERSION = '1.3.0';
 const TOOL = `${ID}@${VERSION}`;
 
 interface SecretRule {
@@ -73,7 +73,9 @@ export function redactSecrets(text: string): string {
   return out;
 }
 
-const LOW_CONFIDENCE_PATH = /(^|\/)(tests?|__tests__|spec|fixtures?|examples?|samples?|docs?|mocks?)\//i;
+const LOW_CONFIDENCE_PATH = /(^|\/)(tests?|__tests__|spec|e2e|fixtures?|examples?|samples?|docs?|mocks?)\//i;
+/** Archivos de prueba por su nombre (app.test.ts, login.spec.js, flujo.e2e.ts). */
+const TEST_FILE_NAME = /\.(?:test|spec|e2e)\.[cm]?[jt]sx?$/i;
 
 export interface SecretMatch {
   ruleId: string;
@@ -94,7 +96,7 @@ const CODE_FILE = /\.(?:[cm]?[jt]sx?|py|java|kt|go|rb|php|cs|rs|swift|scala|c|h|
 export function scanSecrets(lines: readonly string[], relPath: string): SecretMatch[] {
   const matches: SecretMatch[] = [];
   const isCodeFile = CODE_FILE.test(relPath);
-  const lowConfidencePath = LOW_CONFIDENCE_PATH.test(relPath) || /\.md$/i.test(relPath) || /\.example$|\.sample$/i.test(relPath);
+  const lowConfidencePath = LOW_CONFIDENCE_PATH.test(relPath) || TEST_FILE_NAME.test(relPath) || /\.md$/i.test(relPath) || /\.example$|\.sample$/i.test(relPath);
   lines.forEach((line, i) => {
     if (line.length > 2000) return;
     let matchedKnown = false;
@@ -135,6 +137,8 @@ export function scanSecrets(lines: readonly string[], relPath: string): SecretMa
     const value = (g[3] ?? '').replace(/["'`]+$/, '');
     if (value.length < 8 || PLACEHOLDER.test(value) || CODE_REFERENCE.test(value) || INTERPOLATION.test(value) || IDENTIFIER_LIKE.test(value)) return;
     if (!quoted && /^[a-z_$][\w$]*(\.[\w$]+)*\(/i.test(value)) return; // llamada a función, no un literal
+    // Sin comillas, un valor que empieza por ( [ o { es una expresión (p. ej. PowerShell en la documentación).
+    if (!quoted && /^[([{]/.test(value)) return;
     const entropy = shannonEntropy(value);
     if (entropy < 3.0) return;
     matches.push({
