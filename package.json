@@ -24,6 +24,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:live": "vitest run --config vitest.live.config.ts",
     "bench": "tsx packages/engine/scripts/bench.ts",
     "desktop": "npm run start -w @radar/desktop",
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.20.5",
+    "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "tsx": "^4.23.15",
