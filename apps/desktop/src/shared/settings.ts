@@ -93,82 +93,119 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 export type SettingsResult = { ok: true; value: AppSettings } | { ok: false; errors: string[] };
 
 /**
+ * Lee los campos de un objeto sin confiar en él: cada campo que no es válido
+ * añade su error (en español) y devuelve un valor sustituto para seguir.
+ */
+class FieldReader {
+  readonly errors: string[] = [];
+
+  bool(o: Record<string, unknown>, k: string, label: string): boolean {
+    if (typeof o[k] !== 'boolean') this.errors.push(`${label}: debe ser sí o no.`);
+    return o[k] === true;
+  }
+
+  int(o: Record<string, unknown>, k: string, min: number, max: number, label: string): number {
+    const v = o[k];
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) this.errors.push(`${label}: debe ser un número entero entre ${min} y ${max}.`);
+    return typeof v === 'number' ? v : min;
+  }
+
+  oneOf<T extends string>(o: Record<string, unknown>, k: string, values: readonly T[], label: string): T {
+    const v = o[k];
+    const ok = typeof v === 'string' && values.includes(v as T);
+    if (!ok) this.errors.push(`${label}: valor no válido.`);
+    return (ok ? v : values[0]) as T;
+  }
+
+  str(o: Record<string, unknown>, k: string, label: string): string {
+    const v = o[k];
+    if (typeof v !== 'string' || v.length > 500) this.errors.push(`${label}: texto no válido.`);
+    return typeof v === 'string' ? v.trim() : '';
+  }
+
+  /** Lista de textos sin vacíos. */
+  strings(o: Record<string, unknown>, k: string, label: string): string[] {
+    const v = o[k];
+    if (!Array.isArray(v)) {
+      this.errors.push(`${label}: lista no válida.`);
+      return [];
+    }
+    return v
+      .filter((m): m is string => typeof m === 'string')
+      .map((m) => m.trim())
+      .filter((m) => m !== '');
+  }
+}
+
+function readAnalysis(r: FieldReader, a: Record<string, unknown>): AnalysisSettings {
+  return {
+    history: r.bool(a, 'history', 'Historial de Git'),
+    historyMonths: r.int(a, 'historyMonths', 1, 120, 'Meses de historial'),
+    online: r.bool(a, 'online', 'Consultas en línea'),
+    memoryLimitMb: r.int(a, 'memoryLimitMb', MEMORY_LIMIT_RANGE.min, MEMORY_LIMIT_RANGE.max, 'Memoria del análisis (MB)'),
+  };
+}
+
+/** Campo a campo; el orden de lectura es el orden en que se muestran los errores. */
+function readAi(r: FieldReader, ai: Record<string, unknown>): AiSettings {
+  const provider = r.oneOf(ai, 'provider', AI_PROVIDER_NAMES, 'Proveedor de IA');
+  const model = r.str(ai, 'model', 'Modelo');
+  const fallbackModels = r.strings(ai, 'fallbackModels', 'Modelos de respaldo');
+  const budgetUsd = ai['budgetUsd'];
+  if (typeof budgetUsd !== 'number' || !Number.isFinite(budgetUsd) || budgetUsd <= 0 || budgetUsd > 50) r.errors.push('Presupuesto: debe ser mayor que 0 y como mucho 50 USD.');
+  const localUrl = r.str(ai, 'localUrl', 'Servidor local');
+  return {
+    auto: r.bool(ai, 'auto', 'IA automática'),
+    provider,
+    model,
+    fallbackModels,
+    privacy: r.oneOf(ai, 'privacy', PRIVACY_SETTINGS, 'Privacidad'),
+    limit: r.int(ai, 'limit', 1, 50, 'Hallazgos a explicar'),
+    budgetUsd: typeof budgetUsd === 'number' ? budgetUsd : DEFAULT_SETTINGS.ai.budgetUsd,
+    plan: r.bool(ai, 'plan', 'Plan de reducción'),
+    allowDataCollection: r.bool(ai, 'allowDataCollection', 'Permitir retención de datos'),
+    zeroDataRetention: r.bool(ai, 'zeroDataRetention', 'Retención cero'),
+    reasoning: r.oneOf(ai, 'reasoning', REASONING_LEVELS, 'Razonamiento'),
+    localUrl,
+  };
+}
+
+/** Reglas que relacionan campos de la IA. */
+function aiRuleErrors(s: AiSettings): string[] {
+  return [
+    ...(s.provider === 'openrouter' ? openRouterErrors(s) : otherProviderErrors(s)),
+    ...(s.auto && s.provider === 'openrouter' && s.model === '' ? ['Para usar la IA automáticamente con OpenRouter, elige un modelo.'] : []),
+    ...(!LOCAL_PROVIDERS.has(s.provider) && s.privacy === 'local' ? ['Privacidad "local" impide usar un proveedor en la nube.'] : []),
+    ...(s.localUrl !== '' && !isHttpUrlWithoutCredentials(s.localUrl) ? ['Servidor local: URL no válida (p. ej. http://localhost:1234/v1).'] : []),
+  ];
+}
+
+function openRouterErrors(s: AiSettings): string[] {
+  const errors: string[] = [];
+  if (s.model !== '' && !OPENROUTER_MODEL.test(s.model)) errors.push('Modelo: en OpenRouter el formato es proveedor/modelo.');
+  if (s.fallbackModels.length > 3) errors.push('Modelos de respaldo: como mucho 3.');
+  const bad = s.fallbackModels.find((m) => !OPENROUTER_MODEL.test(m));
+  if (bad) errors.push(`Modelo de respaldo no válido: ${bad} (formato proveedor/modelo).`);
+  if (s.allowDataCollection && s.zeroDataRetention) errors.push('Retención cero y permitir retención de datos son incompatibles.');
+  return errors;
+}
+
+function otherProviderErrors(s: AiSettings): string[] {
+  const errors: string[] = [];
+  if (s.model !== '' && !MODEL_ID.test(s.model)) errors.push('Modelo: identificador no válido.');
+  if (s.fallbackModels.length > 0) errors.push('Los modelos de respaldo solo existen en OpenRouter.');
+  return errors;
+}
+
+/**
  * Valida unos ajustes completos. Devuelve todos los errores a la vez, en
  * español, para mostrarlos junto al formulario.
  */
 export function validateSettings(input: unknown): SettingsResult {
-  const errors: string[] = [];
   if (!isObject(input) || !isObject(input['analysis']) || !isObject(input['ai'])) return { ok: false, errors: ['Formato de ajustes no válido.'] };
-  const a = input['analysis'];
-  const ai = input['ai'];
-  const bool = (o: Record<string, unknown>, k: string, label: string): boolean => {
-    if (typeof o[k] !== 'boolean') errors.push(`${label}: debe ser sí o no.`);
-    return o[k] === true;
-  };
-  const int = (o: Record<string, unknown>, k: string, min: number, max: number, label: string): number => {
-    const v = o[k];
-    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) errors.push(`${label}: debe ser un número entero entre ${min} y ${max}.`);
-    return typeof v === 'number' ? v : min;
-  };
-  const oneOf = <T extends string>(o: Record<string, unknown>, k: string, values: readonly T[], label: string): T => {
-    const v = o[k];
-    if (typeof v !== 'string' || !values.includes(v as T)) errors.push(`${label}: valor no válido.`);
-    return (typeof v === 'string' && values.includes(v as T) ? v : values[0]) as T;
-  };
-  const str = (o: Record<string, unknown>, k: string, label: string): string => {
-    const v = o[k];
-    if (typeof v !== 'string' || v.length > 500) errors.push(`${label}: texto no válido.`);
-    return typeof v === 'string' ? v.trim() : '';
-  };
-
-  const analysis: AnalysisSettings = {
-    history: bool(a, 'history', 'Historial de Git'),
-    historyMonths: int(a, 'historyMonths', 1, 120, 'Meses de historial'),
-    online: bool(a, 'online', 'Consultas en línea'),
-    memoryLimitMb: int(a, 'memoryLimitMb', MEMORY_LIMIT_RANGE.min, MEMORY_LIMIT_RANGE.max, 'Memoria del análisis (MB)'),
-  };
-  const provider = oneOf(ai, 'provider', AI_PROVIDER_NAMES, 'Proveedor de IA');
-  const model = str(ai, 'model', 'Modelo');
-  const fallbackRaw = ai['fallbackModels'];
-  const fallbackModels = Array.isArray(fallbackRaw) ? fallbackRaw.filter((m): m is string => typeof m === 'string').map((m) => m.trim()).filter((m) => m !== '') : [];
-  if (!Array.isArray(fallbackRaw)) errors.push('Modelos de respaldo: lista no válida.');
-  const budgetUsd = ai['budgetUsd'];
-  if (typeof budgetUsd !== 'number' || !Number.isFinite(budgetUsd) || budgetUsd <= 0 || budgetUsd > 50) errors.push('Presupuesto: debe ser mayor que 0 y como mucho 50 USD.');
-  const localUrl = str(ai, 'localUrl', 'Servidor local');
-
-  const settings: AppSettings = {
-    analysis,
-    ai: {
-      auto: bool(ai, 'auto', 'IA automática'),
-      provider,
-      model,
-      fallbackModels,
-      privacy: oneOf(ai, 'privacy', PRIVACY_SETTINGS, 'Privacidad'),
-      limit: int(ai, 'limit', 1, 50, 'Hallazgos a explicar'),
-      budgetUsd: typeof budgetUsd === 'number' ? budgetUsd : DEFAULT_SETTINGS.ai.budgetUsd,
-      plan: bool(ai, 'plan', 'Plan de reducción'),
-      allowDataCollection: bool(ai, 'allowDataCollection', 'Permitir retención de datos'),
-      zeroDataRetention: bool(ai, 'zeroDataRetention', 'Retención cero'),
-      reasoning: oneOf(ai, 'reasoning', REASONING_LEVELS, 'Razonamiento'),
-      localUrl,
-    },
-  };
-
-  // Reglas que relacionan campos.
-  const s = settings.ai;
-  if (s.provider === 'openrouter') {
-    if (s.model !== '' && !OPENROUTER_MODEL.test(s.model)) errors.push('Modelo: en OpenRouter el formato es proveedor/modelo.');
-    if (s.fallbackModels.length > 3) errors.push('Modelos de respaldo: como mucho 3.');
-    const bad = s.fallbackModels.find((m) => !OPENROUTER_MODEL.test(m));
-    if (bad) errors.push(`Modelo de respaldo no válido: ${bad} (formato proveedor/modelo).`);
-    if (s.allowDataCollection && s.zeroDataRetention) errors.push('Retención cero y permitir retención de datos son incompatibles.');
-  } else {
-    if (s.model !== '' && !MODEL_ID.test(s.model)) errors.push('Modelo: identificador no válido.');
-    if (s.fallbackModels.length > 0) errors.push('Los modelos de respaldo solo existen en OpenRouter.');
-  }
-  if (s.auto && s.provider === 'openrouter' && s.model === '') errors.push('Para usar la IA automáticamente con OpenRouter, elige un modelo.');
-  if (!LOCAL_PROVIDERS.has(s.provider) && s.privacy === 'local') errors.push('Privacidad "local" impide usar un proveedor en la nube.');
-  if (s.localUrl !== '' && !isHttpUrlWithoutCredentials(s.localUrl)) errors.push('Servidor local: URL no válida (p. ej. http://localhost:1234/v1).');
+  const r = new FieldReader();
+  const settings: AppSettings = { analysis: readAnalysis(r, input['analysis']), ai: readAi(r, input['ai']) };
+  const errors = [...r.errors, ...aiRuleErrors(settings.ai)];
   return errors.length > 0 ? { ok: false, errors } : { ok: true, value: settings };
 }
 
