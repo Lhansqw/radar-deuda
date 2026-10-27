@@ -31,6 +31,7 @@
     "desktop:dev": "npm run dev -w @radar/desktop",
     "desktop:build": "npm run build -w @radar/desktop",
     "e2e:desktop": "npm run desktop:build && tsx apps/desktop/e2e/app.e2e.ts",
+    "dist": "npm run dist -w @radar/desktop --",
     "check": "npm run typecheck && npm run lint && npm test"
   },
   "devDependencies": {

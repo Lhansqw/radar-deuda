@@ -1,0 +1,78 @@
+# Empaquetado e instalador (fase 12). Uso: npm run dist (desde la raíz del repositorio).
+#
+# La aplicación ya viene empaquetada por esbuild y Vite en dist/ (sin node_modules
+# en tiempo de ejecución): aquí solo se mete en un ASAR, se endurece el binario
+# de Electron con sus fuses y se genera el instalador.
+appId: io.github.lhansqw.radardeuda
+productName: Radar de Deuda Técnica
+executableName: radar-deuda
+copyright: © 2026 Lhansqw
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - package.json
+  - dist/**/*
+  - '!dist/**/*.map'
+  - '!dist/THIRD_PARTY_LICENSES.txt'
+# Junto al ejecutable, con las licencias de Electron y Chromium que añade electron-builder.
+extraFiles:
+  - from: dist/THIRD_PARTY_LICENSES.txt
+    to: THIRD_PARTY_LICENSES.txt
+
+asar: true
+# Sin actualizaciones automáticas ni servidor de publicación (ver docs/INSTALADOR.md).
+publish: null
+# Nada que compilar: la aplicación no tiene módulos nativos (SQLite viene con Node).
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
+# Fuses de Electron: se escriben en el binario y no se pueden cambiar sin
+# romper la firma. Ver docs/INSTALADOR.md.
+electronFuses:
+  # El ejecutable nunca se comporta como un Node normal (ELECTRON_RUN_AS_NODE).
+  runAsNode: false
+  # Sin NODE_OPTIONS ni NODE_EXTRA_CA_CERTS, ni --inspect o SIGUSR1 para depurar el proceso principal.
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  # Solo se carga la aplicación desde app.asar, y solo si su contenido coincide con el hash del ejecutable.
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
+  # Cookies cifradas con el sistema (la aplicación no usa cookies, pero no cuesta nada).
+  enableCookieEncryption: true
+  grantFileProtocolExtraPrivileges: false
+  loadBrowserProcessSpecificV8Snapshot: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  # La firma es opcional: se activa sola con WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD
+  # (certificado .pfx) o con la configuración de Azure Trusted Signing. Sin ellas,
+  # el instalador no va firmado y Windows SmartScreen avisará al abrirlo.
+  signAndEditExecutable: true
+
+nsis:
+  # Instalación para el usuario actual, sin permisos de administrador.
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Radar de Deuda Técnica
+  installerLanguages: [es_ES]
+  language: '3082'
+  # Desinstalar no borra los proyectos, el historial ni las credenciales (%APPDATA%\radar-deuda).
+  deleteAppDataOnUninstall: false
+  artifactName: radar-deuda-${version}-instalador-windows-x64.${ext}
+
+# Solo para comprobar el paquete en Linux (CI y desarrollo): carpeta sin instalador.
+linux:
+  target: dir
+  icon: build/icon.png
+  category: Development
