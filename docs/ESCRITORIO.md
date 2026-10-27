@@ -16,6 +16,9 @@ npm run desktop        # compila y abre la aplicación
 npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md)
 ```
 
+0. **Iniciar sesión** o **crear una cuenta** (correo y contraseña; el correo se confirma con
+   el código que envía Supabase). Hace falta configurar la conexión: ver
+   [CUENTAS.md](CUENTAS.md).
 1. **Añadir carpeta** o **Añadir de GitHub** (`propietario/repositorio`, rama opcional).
    Los repositorios privados necesitan un token de GitHub en Configuración.
 2. **Analizar**. El análisis corre en un proceso aparte: la ventana sigue respondiendo y
@@ -31,7 +34,7 @@ npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md
    deuda es nueva, cuál se resolvió y cuál cambió de severidad.
 6. **Preguntar**: conversación con la IA sobre el análisis (solo recibe sus datos, nunca
    código); las referencias de la respuesta (`H2`) llevan al hallazgo.
-7. **Configuración**: opciones del análisis (incluida la memoria máxima del proceso de
+7. **Configuración**: la cuenta (con «Cerrar sesión»), opciones del análisis (incluida la memoria máxima del proceso de
    análisis), proveedor y modelo de IA (con el catálogo de OpenRouter y sus modelos
    gratuitos), privacidad, presupuesto, credenciales y espacio en disco (vaciar la caché).
 
@@ -105,6 +108,7 @@ de amenazas completo y la auditoría de la fase 11 están en [SEGURIDAD.md](SEGU
 | Una sola instancia: una segunda apertura enfoca la ventana existente | `main.ts` |
 | El servidor de desarrollo (`RADAR_DEV_SERVER_URL`) solo se acepta sin empaquetar y en `http://localhost` o `127.0.0.1`; sin herramientas de desarrollo en la aplicación empaquetada | `policy.ts`, `main.ts` |
 | La interfaz no recibe líneas que el detector de secretos no puede examinar (más de 2000 caracteres) | `snippets.ts` |
+| Sin sesión, solo responden los canales de la cuenta, `app:info` y abrir enlaces: no hay base de datos abierta. La interfaz nunca recibe los tokens de Supabase | `workspace.ts`, `account-handlers.ts`, `account-service.ts` |
 
 La prueba de extremo a extremo comprueba que la interfaz no tiene `require` ni `process`,
 que solo ve `window.radar`, que una clave guardada no vuelve a aparecer en la página y que
@@ -120,7 +124,8 @@ certificado y las actualizaciones automáticas firmadas.
 
 | Qué | Dónde (Windows) |
 |---|---|
-| Proyectos, historial (hasta 100 análisis por proyecto, informe completo comprimido), propuestas, conversaciones (200 mensajes por análisis), ajustes y credenciales cifradas | `%APPDATA%\radar-deuda\radar.db` |
+| Proyectos, historial (hasta 100 análisis por proyecto, informe completo comprimido), propuestas, conversaciones (200 mensajes por análisis), ajustes y credenciales cifradas, de cada cuenta | `%APPDATA%\radar-deuda\usuarios\<id>\radar.db` |
+| Sesión de la cuenta (cifrada, solo con «Seguir conectado») | `%APPDATA%\radar-deuda\sesion.bin` |
 | Caché del motor, de la IA y de OSV/npm (compartida con la CLI) | `%LOCALAPPDATA%\radar-deuda\cache` |
 | Clones de GitHub | `%LOCALAPPDATA%\radar-deuda\repos` |
 
@@ -144,13 +149,14 @@ npm run e2e:desktop    # compila y ejecuta la prueba de extremo a extremo
 
 | Variable | Uso |
 |---|---|
+| `RADAR_SUPABASE_URL`, `RADAR_SUPABASE_PUBLISHABLE_KEY` | Conexión para las cuentas ([CUENTAS.md](CUENTAS.md)); sin ellas no se puede iniciar sesión |
 | `RADAR_DATA_DIR` | Carpeta de datos (base de datos) en lugar de `%APPDATA%\radar-deuda` |
 | `RADAR_CACHE_DIR` | Caché y clones en lugar de `%LOCALAPPDATA%\radar-deuda` |
 | `RADAR_E2E_ELECTRON` | Ejecutable de Electron para la prueba, si no es el de `node_modules` |
 | `RADAR_E2E_KEEP=1` | No borrar la carpeta temporal de la prueba |
 
-La prueba de extremo a extremo no sale a la red: simula OpenRouter dentro del proceso
-principal. En Linux no se puede ejecutar como `root` (el sandbox de Chromium no lo admite)
+La prueba de extremo a extremo no sale a la red: simula OpenRouter y Supabase Auth dentro
+del proceso principal. En Linux no se puede ejecutar como `root` (el sandbox de Chromium no lo admite)
 y necesita una pantalla (`xvfb-run`).
 
 ## Diseño

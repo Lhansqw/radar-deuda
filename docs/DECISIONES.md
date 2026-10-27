@@ -105,3 +105,40 @@ Node 22 y 24 (pruebas). Si la API cambiara, el acceso está concentrado en
 
 **Consecuencias:** las pruebas de la base de datos necesitan Node ≥ 22.13 (ya exigido en
 `engines`), y Node 22 muestra un aviso de función experimental al usarla.
+
+## D11. Cuentas de usuario: Supabase Auth (fase 13)
+
+La aplicación debe exigir inicio de sesión, con las cuentas en una base de datos en la nube
+(la misma cuenta en cualquier equipo) y acceso con correo y contraseña.
+
+| Criterio | Cuentas locales (SQLite) | Supabase (Auth + PostgreSQL) | Firebase Auth + Firestore | Servidor propio (API + PostgreSQL/MySQL) |
+|---|---|---|---|---|
+| La misma cuenta en varios equipos | No | Sí | Sí | Sí |
+| Base de datos | La actual | PostgreSQL con reglas por filas (RLS) | Documentos (NoSQL) | La que se elija |
+| Qué hay que mantener | Nada | Un proyecto en su panel | Un proyecto en su panel | El servidor, su despliegue y sus actualizaciones |
+| Correos (confirmación, recuperación) | No hay | Incluidos, con plantillas y código de un solo uso | Incluidos | Hay que montarlos |
+| Guardar contraseñas | Lo haría la aplicación | Supabase (bcrypt) | Google | Lo haría el servidor |
+| Coste para el proyecto | Ninguno | Plan gratuito suficiente | Plan gratuito suficiente | Alojamiento |
+
+**Decisión: Supabase.** Da autenticación probada (contraseñas, límites de intentos,
+correos) sin servidor propio, y la base de datos es PostgreSQL relacional, como el resto del
+proyecto (SQLite), con reglas por filas que la fase 13b usará para que cada usuario solo
+lea sus proyectos. El cliente oficial (`@supabase/supabase-js`, MIT) funciona en el proceso
+principal de Electron.
+
+**Cómo encaja con lo que ya había:**
+
+- El cliente vive en el proceso principal; la interfaz solo ve el estado de la cuenta
+  (mismo criterio que las credenciales de IA).
+- La conexión (URL y clave publicable) llega por variables de entorno o se incrusta al
+  compilar; la clave secreta se rechaza siempre.
+- Los datos locales siguen en SQLite, una base de datos por cuenta: la aplicación funciona
+  sin conexión con una sesión guardada. La fase 13b añadirá la copia en PostgreSQL de
+  proyectos e historial, nunca de las claves de IA ni del código.
+- Los correos llevan un código en lugar de un enlace, porque una aplicación de escritorio
+  no puede recibir el enlace.
+
+**Consecuencias:** hace falta un proyecto de Supabase (ver [CUENTAS.md](CUENTAS.md)), con
+servidor de correo propio para que se registre cualquier persona; sin conexión configurada
+la aplicación no deja entrar. La CLI sigue sin cuentas.
+

@@ -64,6 +64,14 @@ validación de cada argumento, credenciales cifradas con el sistema (DPAPI) que 
 nunca recibe, lectura de fragmentos solo de archivos citados por el análisis, parches
 generados por el proceso principal y respuestas de la IA mostradas como texto.
 
+### Cuentas (fase 13)
+
+Detalle en [CUENTAS.md](CUENTAS.md#4-seguridad). Las cuentas viven en Supabase Auth; el
+cliente está en el proceso principal y la interfaz nunca recibe los tokens. Sin sesión no hay
+ninguna base de datos abierta ni canal de datos que responda. La sesión se guarda solo
+cifrada con el sistema, y la contraseña nunca. La conexión exige `https`, y la clave secreta
+de Supabase se rechaza al ejecutar y al compilar.
+
 ### Red
 
 | Destino | Cuándo | Qué se envía |
@@ -71,6 +79,7 @@ generados por el proceso principal y respuestas de la IA mostradas como texto.
 | `api.osv.dev`, `registry.npmjs.org` | Con «Vulnerabilidades y versiones» (`--online`) | Nombres y versiones de paquetes |
 | `api.github.com`, `github.com` | Al añadir o analizar un repositorio de GitHub | El repositorio pedido; el token, si lo hay, en una cabecera |
 | `openrouter.ai`, `api.anthropic.com`, `api.openai.com` | Solo al usar la IA | Metadatos del análisis; código solo con «fragmentos» o con permiso explícito para una propuesta |
+| `<proyecto>.supabase.co` | Al iniciar sesión, registrarse, recuperar la contraseña y renovar la sesión | Correo, contraseña y códigos de la cuenta; nunca código ni datos de los análisis |
 
 No hay telemetría ni actualizaciones automáticas. Todas las peticiones tienen tiempo límite,
 reintentos solo para errores transitorios y tamaño máximo de respuesta. Una petición con
@@ -82,6 +91,8 @@ credenciales solo sigue redirecciones dentro del mismo servidor.
   aplicación, por el almacén cifrado con `safeStorage`. Nunca se escriben en archivos de
   configuración, informes, cachés ni registros.
 - El proceso de análisis las recibe por mensaje, no por su entorno.
+- Cada cuenta de la aplicación tiene sus propias credenciales (en su base de datos). La
+  sesión de Supabase se guarda aparte, cifrada igual, y solo si se pide seguir conectado.
 - Los mensajes de error nunca incluyen el valor: como mucho, su longitud y el prefijo
   esperado. Git redacta el token y cualquier `usuario:clave@` de las URL.
 - El token de GitHub va en `http.extraheader` mediante `GIT_CONFIG_*`, no en la línea de
@@ -139,4 +150,6 @@ actualizaciones cada semana.
 | El permiso para enviar código en una propuesta lo pide la interfaz | Una interfaz comprometida podría saltárselo, pero solo enviaría el fragmento del hallazgo al proveedor que el usuario configuró |
 | La caché de la IA (en `%LOCALAPPDATA%`) no está cifrada y puede contener código de las propuestas | Mismo nivel de protección que el propio código fuente en el disco; `npm run cache -- --vaciar` o Configuración → Vaciar la caché la borran |
 | En Linux sin llavero no hay almacén cifrado | La aplicación lo indica y solo acepta las claves por variables de entorno |
+| Cuentas de un mismo usuario de Windows | La separación entre cuentas la hace la aplicación, no el cifrado: con acceso a los archivos de ese usuario de Windows se puede abrir la base de datos de otra cuenta. Para separar del todo, un usuario de Windows por persona |
+| Correo de Supabase de serie | Solo escribe a los miembros del proyecto y 2 veces por hora; para usuarios reales hace falta un servidor SMTP propio ([CUENTAS.md](CUENTAS.md)) |
 | Los modelos gratuitos de OpenRouter suelen exigir permitir proveedores que guardan datos | Es una casilla explícita, desactivada por defecto; con «solo metadatos» no se envía código |
