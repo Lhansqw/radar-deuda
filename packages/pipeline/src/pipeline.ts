@@ -56,7 +56,7 @@ export async function runPipeline(req: PipelineRequest, hooks: PipelineHooks, si
       if (e.phase === 'project') hooks.progress?.({ phase: 'project', online: req.online });
     },
   });
-  await addGitContext(report, req, hooks, signal);
+  await addGitContext(report, req, hooks, signal, cacheBase);
 
   let aiLabel: string | undefined;
   if (req.ai) {

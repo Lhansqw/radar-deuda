@@ -91,3 +91,41 @@ describe('claves de IA', () => {
     expect(createProvider({ provider: 'lmstudio', limit: 1, budgetUsd: 1, plan: false }, {}).locality).toBe('local');
   });
 });
+
+describe('caché del historial', () => {
+  it('reutiliza la frecuencia de cambio mientras HEAD no cambie y la recalcula si cambia', async () => {
+    const { cachedFileChurn } = await import('../src/git-context.js');
+    const { getRepoInfo } = await import('@radar/sources');
+    const { readdir, writeFile: write } = await import('node:fs/promises');
+    const root = await gitRepo();
+    const cacheBase = await tmp();
+    const signal = new AbortController().signal;
+    const opts = async () => {
+      const info = await getRepoInfo(root);
+      return { head: info?.head ?? '', shallow: false, since: '2000-01-01', prefix: '', cacheBase };
+    };
+    const first = await cachedFileChurn(root, await opts(), signal);
+    expect(first.fromCache).toBe(false);
+    expect(first.churn.get('caliente.ts')?.commits).toBe(2);
+    const second = await cachedFileChurn(root, await opts(), signal);
+    expect(second.fromCache).toBe(true);
+    expect([...second.churn.values()]).toEqual([...first.churn.values()]);
+    // Una caché por repositorio, en su carpeta.
+    expect(await readdir(path.join(cacheBase, 'git'))).toHaveLength(1);
+
+    // Otro commit: se recalcula y sustituye a la anterior.
+    await writeFile(path.join(root, 'caliente.ts'), complex(9));
+    await runGit(['-c', 'user.name=t', '-c', 'user.email=t@x.co', 'commit', '-qam', 'c2'], { cwd: root });
+    const third = await cachedFileChurn(root, await opts(), signal);
+    expect(third.fromCache).toBe(false);
+    expect(third.churn.get('caliente.ts')?.commits).toBe(3);
+    expect(await readdir(path.join(cacheBase, 'git'))).toHaveLength(1);
+
+    // Dañada: se recalcula sin error.
+    const [name] = await readdir(path.join(cacheBase, 'git'));
+    await write(path.join(cacheBase, 'git', name as string), '{no es json');
+    expect((await cachedFileChurn(root, await opts(), signal)).fromCache).toBe(false);
+    // Sin caché, nunca escribe.
+    expect((await cachedFileChurn(root, { ...(await opts()), cacheBase: null }, signal)).fromCache).toBe(false);
+  });
+});
