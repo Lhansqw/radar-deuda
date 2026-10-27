@@ -3,7 +3,11 @@ import type { Finding, Severity, Category } from '@radar/engine';
 import { countBySeverity, EMPTY_FILTER, filterFindings, sortFindings } from '../src/renderer/lib/findings.js';
 import { diffStats, fixAvailability } from '../src/renderer/lib/fix.js';
 import { parseAnswer, parseInline } from '../src/renderer/lib/answer.js';
-import { formatEffort, formatPercent, formatRelative, fold } from '../src/renderer/lib/format.js';
+import { formatBytes, formatEffort, formatPercent, formatRelative, fold } from '../src/renderer/lib/format.js';
+import { fallbackBlocked, filterCatalog, modelContext, modelPrice } from '../src/renderer/lib/catalog.js';
+import { dataCollectionChange, providerChange } from '../src/renderer/lib/settings.js';
+import type { CatalogModel } from '../src/shared/model.js';
+import { DEFAULT_SETTINGS } from '../src/shared/settings.js';
 import { layoutRadar, RADAR_RINGS } from '../src/renderer/lib/radar.js';
 import { buildTree, flattenTree } from '../src/renderer/lib/tree.js';
 import { visibleRange } from '../src/renderer/lib/virtual.js';
@@ -39,6 +43,69 @@ describe('formato', () => {
     expect(formatRelative('2026-10-25T10:00:00Z', now)).toBe('ayer');
     expect(formatRelative('2026-10-22T10:00:00Z', now)).toBe('hace 4 días');
     expect(fold('Función CRÍTICA')).toBe('funcion critica');
+  });
+
+  it('tamaños en disco', () => {
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(1536)).toBe('1,5 KB');
+    expect(formatBytes(12.34 * 1024 * 1024)).toBe('12,3 MB');
+    expect(formatBytes(1.25 * 1024 ** 3)).toBe('1,25 GB');
+  });
+});
+
+describe('catálogo de modelos', () => {
+  const model = (id: string, extra: Partial<CatalogModel> = {}): CatalogModel => ({
+    id,
+    name: id,
+    free: false,
+    inputPerMTok: 0.2,
+    outputPerMTok: 0.6,
+    contextLength: 131072,
+    structuredOutputs: true,
+    reasoning: 'no',
+    ...extra,
+  });
+  const catalog = [
+    model('qwen/qwen3-coder:free', { free: true, inputPerMTok: 0, outputPerMTok: 0 }),
+    model('nvidia/nemotron-nano', { name: 'NVIDIA: Nemotrón Nano', reasoning: 'obligatorio' }),
+    model('meta/llama-4', { structuredOutputs: false }),
+    model('openai/gpt-x', { inputPerMTok: null }),
+  ];
+
+  it('solo modelos con salida estructurada, con los filtros', () => {
+    const ids = (f: Parameters<typeof filterCatalog>[1]): string[] => filterCatalog(catalog, f).map((m) => m.id);
+    expect(ids({ query: '', onlyFree: false, hideMandatory: false })).toEqual(['qwen/qwen3-coder:free', 'nvidia/nemotron-nano', 'openai/gpt-x']);
+    expect(ids({ query: '', onlyFree: false, hideMandatory: true })).toEqual(['qwen/qwen3-coder:free', 'openai/gpt-x']);
+    expect(ids({ query: '', onlyFree: true, hideMandatory: false })).toEqual(['qwen/qwen3-coder:free']);
+    // Busca en el id y en el nombre, sin tildes ni mayúsculas.
+    expect(ids({ query: ' NEMOTRON ', onlyFree: false, hideMandatory: false })).toEqual(['nvidia/nemotron-nano']);
+  });
+
+  it('precio, contexto y respaldos', () => {
+    expect(modelPrice(catalog[0]!)).toBe('Gratis');
+    expect(modelPrice(catalog[1]!)).toBe('0,2 / 0,6');
+    expect(modelPrice(catalog[3]!)).toBe('—');
+    expect(modelContext(catalog[0]!)).toBe('131k');
+    expect(modelContext(model('x/y', { contextLength: null }))).toBe('—');
+    expect(fallbackBlocked('a/b', 'a/b', [])).toBe('Es el modelo elegido');
+    expect(fallbackBlocked('c/d', 'a/b', ['c/d'])).toBe('Ya es un respaldo');
+    expect(fallbackBlocked('e/f', 'a/b', ['1/1', '2/2', '3/3'])).toBe('Como mucho 3 respaldos');
+    expect(fallbackBlocked('e/f', 'a/b', ['1/1'])).toBeNull();
+  });
+});
+
+describe('ajustes de la IA', () => {
+  const ai = { ...DEFAULT_SETTINGS.ai, model: 'qwen/qwen3-coder:free', fallbackModels: ['x/y'] };
+
+  it('cambiar de proveedor olvida el modelo y deja «solo en este equipo» si ya no es local', () => {
+    expect(providerChange(ai, 'anthropic')).toEqual({ provider: 'anthropic', model: '', fallbackModels: [] });
+    expect(providerChange({ ...ai, provider: 'ollama', privacy: 'local' }, 'openrouter')).toEqual({ provider: 'openrouter', model: '', fallbackModels: [], privacy: 'auto' });
+    expect(providerChange({ ...ai, provider: 'ollama', privacy: 'local' }, 'lmstudio')).toEqual({ provider: 'lmstudio', model: '', fallbackModels: [] });
+  });
+
+  it('permitir que guarden datos desactiva la retención cero', () => {
+    expect(dataCollectionChange(true)).toEqual({ allowDataCollection: true, zeroDataRetention: false });
+    expect(dataCollectionChange(false)).toEqual({ allowDataCollection: false });
   });
 });
 
