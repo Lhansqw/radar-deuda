@@ -93,7 +93,8 @@ export async function verifyPackage(unpacked: string, exe: string): Promise<void
     const marker = path.join(markerDir, 'inyectado.txt');
     const payload = path.join(markerDir, 'inyectar.cjs');
     await writeFile(payload, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'sí');\n`);
-    const injected = await run(exe, ['--prueba-arranque'], { NODE_OPTIONS: `--require "${payload}"` });
+    // Barras normales: en NODE_OPTIONS la barra invertida escapa el carácter siguiente.
+    const injected = await run(exe, ['--prueba-arranque'], { NODE_OPTIONS: `--require "${payload.replaceAll('\\', '/')}"` });
     const ran = await readFile(marker, 'utf8').then(() => true, () => false);
     check(injected.code === 0 && !ran, 'NODE_OPTIONS no inyecta código', injected.output);
   } finally {
