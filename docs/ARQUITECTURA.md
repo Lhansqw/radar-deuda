@@ -154,7 +154,7 @@ Resumen; el detalle se implementa en la fase 7.
 
 ## 6. Objetivos de rendimiento
 
-Medidos con `npm run bench` sobre repositorios sintéticos (fase 5) y reales (fase 11).
+Medidos con `npm run bench` sobre repositorios sintéticos (fase 5) y con la CLI sobre repositorios reales (fases 10 y 11).
 
 | Escenario | Objetivo |
 |---|---|

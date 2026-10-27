@@ -45,7 +45,11 @@ Medición de la fase 10 (mismo contenedor, otra sesión: sus tiempos absolutos v
 entre sesiones, compara proporciones): pequeño 0,46 s / 17 %, mediano 2,60 s / 20 %,
 grande 9,35 s / 15 %, 460 MB de RAM pico. Todos los objetivos se cumplen.
 
-## Repositorio real
+Fase 11 (otra sesión, más lenta): pequeño 0,93 s / 8 %, mediano 3,50 s / 19 %, grande
+11,1 s / 12 %, 417 MB de RAM pico. Todos los objetivos se cumplen; la misma medición antes de
+los cambios de esta fase dio 10,5 s / 17 % y 464 MB en el grande.
+
+## Repositorio real (fase 10)
 
 `expressjs/express` (6 183 commits, historial desde 2010), con la CLI de principio a fin:
 
@@ -58,6 +62,36 @@ grande 9,35 s / 15 %, 460 MB de RAM pico. Todos los objetivos se cumplen.
 Con la caché caliente, el motor tarda 0,09 s en ese repositorio: el resto era leer el
 historial (`git log --numstat`, 0,77 s) y cargar el compilador de TypeScript (≈0,35 s), que
 ya no se hace si nada cambió.
+
+## Repositorios reales (fase 11)
+
+Con la CLI de principio a fin (`--no-history`, clon superficial de la rama principal) en el
+mismo contenedor de 2 vCPU, después de las mejoras de memoria de esta fase:
+
+| Repositorio | Archivos | Líneas | Frío | RAM pico | Reanálisis | RAM pico | Hallazgos |
+|---|---|---|---|---|---|---|---|
+| expressjs/express | 178 | 18 004 | 1,71 s | 243 MB | 0,13 s (7 %) | 104 MB | 105 |
+| vitejs/vite | 2 556 | 99 076 | 4,82 s | 270 MB | 0,93 s (19 %) | 132 MB | 546 |
+| microsoft/vscode | 18 824 | 4 485 104 | 123 s | 1 649 MB | 10,9 s (9 %) | 765 MB | 29 405 |
+
+Tiempos del motor; la CLI añade unos 0,5 s de arranque. vscode es unas diez veces el
+escenario «grande» y mantiene el ritmo (≈36 000 líneas por segundo en frío). Los tres sin
+errores de analizadores.
+
+**Memoria en repositorios muy grandes.** La primera medición con vscode llegó a 2,4 GB en
+frío y a 1,8 GB en el reanálisis. Casi todo eran las huellas de la detección de duplicados
+(unos 3,4 millones). Dos cambios, con el mismo informe que antes:
+
+| Cambio | Frío | Reanálisis |
+|---|---|---|
+| Antes | 2 417 MB | 1 802 MB (16,5 s) |
+| El índice solo guarda las huellas que se repiten (contadas antes con un arreglo tipado ordenado) | 1 762 MB | 1 018 MB (13,7 s) |
+| Huellas en un arreglo plano de números en lugar de un arreglo por huella | 1 649 MB | 765 MB (12,1 s) |
+
+En el benchmark sintético grande, la RAM pico bajó de 464 a 417 MB y el reanálisis del
+17 % al 12 % del tiempo en frío. Para un repositorio de ese tamaño en la aplicación basta el
+límite de memoria por defecto (4 GB); si el equipo va justo, un `.radarignore` con las
+carpetas que no interesan (por ejemplo, `extensions/` en vscode) reduce las dos cifras.
 
 ## Dónde se va el tiempo
 
@@ -87,6 +121,8 @@ aplicación borra el de un proyecto al quitarlo).
 - El descubrimiento solo guarda metadatos; el contenido se lee archivo a archivo con
   concurrencia limitada (8 por defecto) y se libera tras analizarlo.
 - La verificación de clones mantiene como mucho ≈4 M tokens en memoria (≈56 MB).
+- Las huellas de duplicados van en un arreglo plano por archivo (4 números por huella) y el
+  índice entre archivos solo guarda las que se repiten.
 - Archivos > 1 MB solo se miden (líneas) y > 20 MB se ignoran; ambos límites son
   configurables.
 - **`.radarignore`** en la raíz del proyecto (sintaxis de `.gitignore`) excluye carpetas

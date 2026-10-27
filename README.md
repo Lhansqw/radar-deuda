@@ -20,12 +20,11 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 8 | Aplicación de escritorio: proyectos, panel con radar, hallazgos, historial, configuración e IA bajo demanda | ✅ |
 | 9 | Propuestas de corrección como diferencias, preguntas sobre el análisis y deuda nueva entre versiones | ✅ |
 | 10 | Caché del historial, carga perezosa del compilador, límite de memoria, `.radarignore` y mantenimiento de la caché | ✅ |
-| 11 | Pruebas, auditorías de seguridad y rendimiento | Pendiente |
+| 11 | Refactorización de la deuda propia, auditorías de seguridad y de rendimiento (repositorios reales), cobertura de pruebas e integración continua | ✅ |
 | 12 | Instalador para Windows | Pendiente |
 
-**Deuda conocida del propio motor** (la detecta al analizarse a sí mismo): algunas funciones
-orquestadoras superan el umbral de complejidad (`processFile`, `refineCandidates`, `main` de
-la CLI, `analyzeProject` de dependencias). Se refactorizarán en la fase 11.
+**El radar sobre sí mismo:** 99/100 (A), sin hallazgos altos ni críticos. La integración
+continua falla si aparece alguno (`npm run analyze -- . --fail-on high`).
 
 ## Principios
 
@@ -74,6 +73,7 @@ En desarrollo, los paquetes se importan entre sí desde su código fuente (`path
 ```powershell
 npm ci            # instala dependencias exactas del lockfile
 npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit; nunca sale a la red)
+npm run test:coverage # pruebas con cobertura (informe en coverage/index.html)
 npm run test:live # pruebas contra servicios reales (requieren RADAR_LIVE=1 o RADAR_LIVE_LLM)
 npm run build     # compila los paquetes en orden (engine → sources → ai → pipeline → cli) a packages/*/dist
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
@@ -123,7 +123,9 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/DECISIONES.md](docs/DECISIONES.md) | Fase 2: comparación de tecnologías y stack |
 | [docs/ENTORNO-WINDOWS.md](docs/ENTORNO-WINDOWS.md) | Fase 3: herramientas y preparación del entorno |
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | Puntuación, severidad, confianza y estimaciones de esfuerzo |
-| [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Fase 10: objetivos, benchmark, resultados medidos, caché y memoria |
+| [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Fases 10 y 11: objetivos, benchmark, repositorios reales (hasta microsoft/vscode), caché y memoria |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
 | [docs/IA.md](docs/IA.md) | Fases 7 y 9: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad, cómo se evita que la IA invente, propuestas de corrección y preguntas |
-| [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fases 8 y 9: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
+| [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fases 8, 9 y 11: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
+| [docs/SEGURIDAD.md](docs/SEGURIDAD.md) | Fase 11: modelo de amenazas, controles, qué sale del equipo, auditoría y riesgos pendientes |
+| [docs/CALIDAD.md](docs/CALIDAD.md) | Fase 11: pruebas, cobertura, integración continua y refactorización de la deuda propia |
