@@ -99,42 +99,65 @@ const MAX_LCS_CELLS = 4_000_000;
  * pocas líneas, así que la parte que se compara de verdad es pequeña.
  */
 export function diffOps(a: readonly string[], b: readonly string[]): Op[] {
+  const { pre, suf } = commonEnds(a, b);
+  const midA = a.slice(pre, a.length - suf);
+  const midB = b.slice(pre, b.length - suf);
+  const middle = midA.length * midB.length > MAX_LCS_CELLS ? replaceAll(midA.length, midB.length) : align(midA, midB);
+  const shift = (x: number | null): number | null => (x === null ? null : x + pre);
+  return [
+    ...Array.from({ length: pre }, (_, i): Op => ({ kind: 'context', a: i, b: i })),
+    ...middle.map((o): Op => ({ kind: o.kind, a: shift(o.a), b: shift(o.b) })),
+    ...Array.from({ length: suf }, (_, k): Op => ({ kind: 'context', a: a.length - suf + k, b: b.length - suf + k })),
+  ];
+}
+
+/** Líneas iguales al principio y al final, sin que se solapen. */
+function commonEnds(a: readonly string[], b: readonly string[]): { pre: number; suf: number } {
   let pre = 0;
   while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
   let suf = 0;
   while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
-  const n = a.length - pre - suf;
-  const m = b.length - pre - suf;
-  const ops: Op[] = [];
-  for (let i = 0; i < pre; i++) ops.push({ kind: 'context', a: i, b: i });
+  return { pre, suf };
+}
 
-  if (n * m > MAX_LCS_CELLS || n === 0 || m === 0) {
-    for (let i = 0; i < n; i++) ops.push({ kind: 'removed', a: pre + i, b: null });
-    for (let j = 0; j < m; j++) ops.push({ kind: 'added', a: null, b: pre + j });
-  } else {
-    // lcs[i][j]: longitud de la subsecuencia común de a[pre+i..] y b[pre+j..].
-    const w = m + 1;
-    const lcs = new Uint32Array((n + 1) * w);
-    for (let i = n - 1; i >= 0; i--) {
-      for (let j = m - 1; j >= 0; j--) {
-        lcs[i * w + j] = a[pre + i] === b[pre + j] ? (lcs[(i + 1) * w + j + 1] ?? 0) + 1 : Math.max(lcs[(i + 1) * w + j] ?? 0, lcs[i * w + j + 1] ?? 0);
-      }
-    }
-    let i = 0;
-    let j = 0;
-    while (i < n || j < m) {
-      if (i < n && j < m && a[pre + i] === b[pre + j]) {
-        ops.push({ kind: 'context', a: pre + i++, b: pre + j++ });
-      } else if (j === m || (i < n && (lcs[(i + 1) * w + j] ?? 0) >= (lcs[i * w + j + 1] ?? 0))) {
-        // Ante un empate, primero las eliminaciones: el bloque queda "- viejas / + nuevas".
-        ops.push({ kind: 'removed', a: pre + i++, b: null });
-      } else {
-        ops.push({ kind: 'added', a: null, b: pre + j++ });
-      }
+/** Sin buscar alineación: todo lo viejo eliminado y todo lo nuevo añadido. */
+function replaceAll(n: number, m: number): Op[] {
+  return [
+    ...Array.from({ length: n }, (_, i): Op => ({ kind: 'removed', a: i, b: null })),
+    ...Array.from({ length: m }, (_, j): Op => ({ kind: 'added', a: null, b: j })),
+  ];
+}
+
+/** Recorre la tabla de la subsecuencia común más larga de principio a fin. */
+function align(a: readonly string[], b: readonly string[]): Op[] {
+  const at = lcsTable(a, b);
+  const ops: Op[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      ops.push({ kind: 'context', a: i++, b: j++ });
+    } else if (j === b.length || (i < a.length && at(i + 1, j) >= at(i, j + 1))) {
+      // Ante un empate, primero las eliminaciones: el bloque queda "- viejas / + nuevas".
+      ops.push({ kind: 'removed', a: i++, b: null });
+    } else {
+      ops.push({ kind: 'added', a: null, b: j++ });
     }
   }
-  for (let k = 0; k < suf; k++) ops.push({ kind: 'context', a: a.length - suf + k, b: b.length - suf + k });
   return ops;
+}
+
+/** at(i, j): longitud de la subsecuencia común más larga de a[i..] y b[j..]. */
+function lcsTable(a: readonly string[], b: readonly string[]): (i: number, j: number) => number {
+  const w = b.length + 1;
+  const lcs = new Uint32Array((a.length + 1) * w);
+  const at = (i: number, j: number): number => lcs[i * w + j] ?? 0;
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      lcs[i * w + j] = a[i] === b[j] ? at(i + 1, j + 1) + 1 : Math.max(at(i + 1, j), at(i, j + 1));
+    }
+  }
+  return at;
 }
 
 /** Bloques con `context` líneas sin cambios alrededor de cada cambio; los cercanos se unen. */
@@ -143,48 +166,53 @@ export function buildHunks(file: string, before: TextLines, after: TextLines, co
   // si deja de ser la última, el parche debe mostrarla como cambiada.
   const ops = diffOps(comparable(before), comparable(after));
   const hunks: DiffHunk[] = [];
-  let k = 0;
-  while (k < ops.length) {
-    while (k < ops.length && ops[k]?.kind === 'context') k++;
-    if (k >= ops.length) break;
-    const start = Math.max(0, k - context);
-    // Fin del bloque: el cambio sigue mientras no haya más de 2·context líneas sin cambios seguidas.
-    let end = k;
-    let quiet = 0;
-    for (let x = k; x < ops.length; x++) {
-      if (ops[x]?.kind === 'context') {
-        if (++quiet > 2 * context) break;
-      } else {
-        quiet = 0;
-        end = x;
-      }
-    }
-    const stop = Math.min(ops.length, end + 1 + context);
-    const slice = ops.slice(start, stop);
-    const lines: DiffLine[] = slice.map((o) => ({
-      kind: o.kind,
-      text: o.a !== null ? (before.lines[o.a] ?? '') : (after.lines[o.b ?? 0] ?? ''),
-      oldLine: o.a !== null ? o.a + 1 : null,
-      newLine: o.b !== null ? o.b + 1 : null,
-    }));
-    const oldLines = slice.filter((o) => o.a !== null).length;
-    const newLines = slice.filter((o) => o.b !== null).length;
-    // Con 0 líneas, el inicio es la línea anterior al bloque (convención del formato unificado).
-    const firstOld = slice.find((o) => o.a !== null)?.a;
-    const firstNew = slice.find((o) => o.b !== null)?.b;
-    const prevOld = ops.slice(0, start).filter((o) => o.a !== null).length;
-    const prevNew = ops.slice(0, start).filter((o) => o.b !== null).length;
-    hunks.push({
-      file,
-      oldStart: firstOld !== undefined && firstOld !== null ? firstOld + 1 : prevOld,
-      oldLines,
-      newStart: firstNew !== undefined && firstNew !== null ? firstNew + 1 : prevNew,
-      newLines,
-      lines,
-    });
-    k = stop;
+  let k = ops.findIndex((o) => o.kind !== 'context');
+  while (k !== -1) {
+    const { start, stop } = hunkRange(ops, k, context);
+    hunks.push(toHunk(file, ops, start, stop, before, after));
+    const next = ops.slice(stop).findIndex((o) => o.kind !== 'context');
+    k = next === -1 ? -1 : stop + next;
   }
   return hunks;
+}
+
+/**
+ * Desde el cambio en `first`: el bloque sigue mientras no haya más de
+ * 2·context líneas sin cambios seguidas, y lleva `context` líneas a cada lado.
+ */
+function hunkRange(ops: readonly Op[], first: number, context: number): { start: number; stop: number } {
+  let end = first;
+  let quiet = 0;
+  for (let x = first; x < ops.length && quiet <= 2 * context; x++) {
+    if (ops[x]?.kind === 'context') quiet++;
+    else {
+      quiet = 0;
+      end = x;
+    }
+  }
+  return { start: Math.max(0, first - context), stop: Math.min(ops.length, end + 1 + context) };
+}
+
+function toHunk(file: string, ops: readonly Op[], start: number, stop: number, before: TextLines, after: TextLines): DiffHunk {
+  const slice = ops.slice(start, stop);
+  const lines: DiffLine[] = slice.map((o) => ({
+    kind: o.kind,
+    text: o.a !== null ? (before.lines[o.a] ?? '') : (after.lines[o.b ?? 0] ?? ''),
+    oldLine: o.a !== null ? o.a + 1 : null,
+    newLine: o.b !== null ? o.b + 1 : null,
+  }));
+  const olds = slice.flatMap((o) => (o.a === null ? [] : [o.a]));
+  const news = slice.flatMap((o) => (o.b === null ? [] : [o.b]));
+  // Con 0 líneas, el inicio es la línea anterior al bloque (convención del formato unificado).
+  const before0 = ops.slice(0, start);
+  return {
+    file,
+    oldStart: olds[0] !== undefined ? olds[0] + 1 : before0.filter((o) => o.a !== null).length,
+    oldLines: olds.length,
+    newStart: news[0] !== undefined ? news[0] + 1 : before0.filter((o) => o.b !== null).length,
+    newLines: news.length,
+    lines,
+  };
 }
 
 function comparable(t: TextLines): string[] {
@@ -200,23 +228,30 @@ export interface FilePatch {
 }
 
 const NO_NEWLINE = '\\ No newline at end of file';
+const PREFIX: Record<DiffLine['kind'], string> = { added: '+', removed: '-', context: ' ' };
 
 /** Parche unificado que acepta `git apply` (rutas relativas a la raíz del repositorio). */
 export function formatPatch(files: readonly FilePatch[]): string {
-  const out: string[] = [];
-  for (const f of files) {
-    if (f.hunks.length === 0) continue;
-    out.push(`diff --git a/${f.file} b/${f.file}`, `--- a/${f.file}`, `+++ b/${f.file}`);
-    for (const h of f.hunks) {
-      out.push(`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`);
-      for (const l of h.lines) {
-        const cr = l.kind === 'added' ? f.after.crlf[(l.newLine ?? 1) - 1] : f.before.crlf[(l.oldLine ?? 1) - 1];
-        out.push(`${l.kind === 'added' ? '+' : l.kind === 'removed' ? '-' : ' '}${l.text}${cr ? '\r' : ''}`);
-        const lastOld = l.oldLine === f.before.lines.length && !f.before.finalNewline;
-        const lastNew = l.newLine === f.after.lines.length && !f.after.finalNewline;
-        if ((l.kind !== 'added' && lastOld) || (l.kind === 'added' && lastNew)) out.push(NO_NEWLINE);
-      }
-    }
-  }
+  const out = files.filter((f) => f.hunks.length > 0).flatMap(fileLines);
   return out.length > 0 ? `${out.join('\n')}\n` : '';
+}
+
+function fileLines(f: FilePatch): string[] {
+  const out = [`diff --git a/${f.file} b/${f.file}`, `--- a/${f.file}`, `+++ b/${f.file}`];
+  for (const h of f.hunks) {
+    out.push(`@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`);
+    for (const l of h.lines) out.push(...patchLine(l, f));
+  }
+  return out;
+}
+
+/**
+ * Una línea del parche con su \r si lo tenía y, si es la última del archivo y
+ * no termina en salto de línea, la marca que lo indica. Las añadidas se miran
+ * en la versión nueva; las demás, en la original.
+ */
+function patchLine(l: DiffLine, f: FilePatch): string[] {
+  const [side, n] = l.kind === 'added' ? [f.after, l.newLine] : [f.before, l.oldLine];
+  const line = `${PREFIX[l.kind]}${l.text}${side.crlf[(n ?? 1) - 1] ? '\r' : ''}`;
+  return n === side.lines.length && !side.finalNewline ? [line, NO_NEWLINE] : [line];
 }
