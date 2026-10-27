@@ -1,3 +1,4 @@
+import { findingRefs } from './refs.js';
 import type { ReportComparison } from './types.js';
 import type { AnalysisReport, Category, Confidence, Finding, Severity } from './types.js';
 
@@ -48,14 +49,20 @@ export function formatReport(report: AnalysisReport, maxFindings = 15): string {
   if (cats) out.push(`Por categoría: ${cats}`);
   out.push('');
 
-  const shown = report.findings.filter((f) => f.severity !== 'info').slice(0, maxFindings);
+  // En el orden de sus referencias (H1, H2…), las mismas que se citan al preguntar a la IA.
+  const refs = findingRefs(report.findings);
+  const rank = (f: Finding): number => Number((refs.get(f.id) ?? 'H0').slice(1));
+  const shown = report.findings
+    .filter((f) => f.severity !== 'info')
+    .sort((a, b) => rank(a) - rank(b))
+    .slice(0, maxFindings);
   if (shown.length > 0) {
     out.push(`Principales hallazgos (${shown.length} de ${report.findings.length}):`);
     for (const f of shown) {
       const loc = f.locations[0];
       const where = loc ? `${loc.file}:${loc.startLine}${loc.endLine !== loc.startLine ? `-${loc.endLine}` : ''}` : '';
-      out.push(`  [${SEVERITY_LABEL[f.severity]}] ${f.title}`);
-      out.push(`      ${where}${f.locations.length > 1 ? ` (+${f.locations.length - 1} ubicaciones)` : ''} · confianza ${CONFIDENCE_LABEL[f.confidence]} · ~${hours(f.effort.minutes)}`);
+      out.push(`  ${(refs.get(f.id) ?? '').padEnd(4)}[${SEVERITY_LABEL[f.severity]}] ${f.title}`);
+      out.push(`          ${where}${f.locations.length > 1 ? ` (+${f.locations.length - 1} ubicaciones)` : ''} · confianza ${CONFIDENCE_LABEL[f.confidence]} · ~${hours(f.effort.minutes)}`);
     }
     out.push('');
   }

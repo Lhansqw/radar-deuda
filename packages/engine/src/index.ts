@@ -12,4 +12,5 @@ export { defaultCacheDir } from './cache.js';
 export { redactSecrets, redactValue, scanSecrets } from './analyzers/secrets.js';
 export * from './analyzers/index.js';
 export { formatReport, formatComparison } from './report.js';
+export { findingRefs, findFindingByRef } from './refs.js';
 export { compareReports, hasNewAtLeast, parseReport, type ReportComparison } from './compare.js';

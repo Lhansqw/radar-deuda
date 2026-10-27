@@ -1,4 +1,4 @@
-import { SEVERITY_ORDER, sha1, type AiUsage, type AnalysisReport, type Finding, type ReportComparison } from '@radar/engine';
+import { findingRefs, SEVERITY_ORDER, sha1, type AiUsage, type AnalysisReport, type Finding, type ReportComparison } from '@radar/engine';
 import { assertProviderAllowed, sanitizeLine, type PrivacyMode } from './context.js';
 import { CHAT_SYSTEM } from './prompts.js';
 import { ProviderError, type ChatMessage, type LlmProvider } from './provider.js';
@@ -36,9 +36,9 @@ function ordered(findings: readonly Finding[]): Finding[] {
   return [...findings].sort((a, b) => SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity] || b.effort.minutes - a.effort.minutes || a.id.localeCompare(b.id));
 }
 
-/** Referencia corta de cada hallazgo del informe ([H1] es el más grave). */
+/** Referencia corta → id de cada hallazgo del informe ([H1] es el más grave; las mismas que muestra la CLI). */
 export function findingAliases(report: AnalysisReport): Map<string, string> {
-  return new Map(ordered(report.findings).map((f, i) => [`H${i + 1}`, f.id]));
+  return new Map([...findingRefs(report.findings)].map(([id, alias]) => [alias, id]));
 }
 
 const hours = (minutes: number): string => (minutes < 60 ? `${Math.round(minutes)} min` : `${(minutes / 60).toFixed(1).replace('.', ',')} h`);
