@@ -1,0 +1,134 @@
+# Integración continua: cada push a main y cada pull request.
+#
+# - comprobar: tipos, lint y pruebas en Windows (la plataforma de destino) y
+#   Ubuntu, con Node 24 (.nvmrc) y la versión mínima admitida (22).
+# - dependencias: vulnerabilidades conocidas y firmas del registro de npm.
+# - autoanalisis: el radar se analiza a sí mismo y falla con hallazgos altos o
+#   críticos; el informe queda como artefacto. El rendimiento es informativo.
+# - escritorio: la aplicación de Electron de extremo a extremo en Windows.
+#
+# Las acciones van fijadas por commit (no por etiqueta) para que una etiqueta
+# movida no cambie lo que se ejecuta; Dependabot las mantiene al día.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  npm_config_fund: 'false'
+
+jobs:
+  comprobar:
+    name: Comprobar (${{ matrix.os }}, Node ${{ matrix.node }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            node: '24'
+          - os: ubuntu-latest
+            node: '24'
+          - os: ubuntu-latest
+            node: '22'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      # Las pruebas no abren la aplicación: no hace falta descargar Electron.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Tipos, lint y pruebas
+        run: npm run check
+
+  dependencias:
+    name: Dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Vulnerabilidades conocidas (producción y desarrollo)
+        run: npm audit --audit-level=moderate
+      - name: Firmas del registro de npm
+        run: npm audit signatures
+
+  autoanalisis:
+    name: Autoanálisis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Historial completo para los puntos críticos.
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Sin deuda alta ni crítica
+        run: npm run analyze -- . --no-cache --fail-on high --top 20 --json radar-informe.json
+      - name: Rendimiento (informativo)
+        continue-on-error: true
+        run: npm run bench
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: autoanalisis
+          path: |
+            radar-informe.json
+            bench-results/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  escritorio:
+    name: Aplicación de escritorio (Windows)
+    needs: comprobar
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Prueba de extremo a extremo
+        run: npm run e2e:desktop
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: capturas-escritorio
+          path: apps/desktop/e2e/capturas/
+          if-no-files-found: ignore
+          retention-days: 14
