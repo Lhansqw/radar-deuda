@@ -1,4 +1,4 @@
-import { findingRefs, type AiFixProposal, type AiSection, type AnalysisReport, type ClaimKind, type Finding } from '@radar/engine';
+import { findingRefs, type AiClaim, type AiExplanation, type AiFixProposal, type AiPlan, type AiSection, type AiUsage, type AnalysisReport, type ClaimKind, type Finding } from '@radar/engine';
 import type { ChatAnswer } from './chat.js';
 
 const KIND: Record<ClaimKind, string> = { evidencia: 'Evidencia', inferencia: 'Inferencia', recomendacion: 'Recomendación' };
@@ -32,49 +32,61 @@ function groupMessages(messages: readonly string[]): Array<[string, number]> {
 
 /** Sección de IA para la terminal. Siempre separa evidencia, inferencia y recomendación. */
 export function formatAiSection(ai: AiSection, report: AnalysisReport, label: string): string {
-  const out: string[] = [];
   const byId = new Map(report.findings.map((f) => [f.id, f]));
-  out.push(`Análisis con IA — ${label} · privacidad: ${PRIVACY[ai.privacy]}`);
-  out.push('Las explicaciones son orientativas: la evidencia verificable es la de los hallazgos.');
-  out.push('');
-  for (const e of ai.explanations) {
-    const f = byId.get(e.findingId);
-    const loc = f?.locations[0];
-    out.push(`  [${SEV[f?.severity ?? ''] ?? '?'}] ${f?.title ?? e.findingId}${loc ? ` — ${loc.file}:${loc.startLine}` : ''}${e.fromCache ? ' (caché)' : ''}`);
-    out.push(wrap(`Qué ocurre: ${e.summary}`, '      '));
-    out.push(wrap(`Causa raíz (inferencia): ${e.rootCause}`, '      '));
-    out.push(wrap(`Recomendación: ${e.recommendation}`, '      '));
-    for (const c of e.claims.slice(0, 6)) {
-      const where = c.lines ? ` (${c.lines.file}:${c.lines.startLine}-${c.lines.endLine})` : '';
-      out.push(wrap(`· ${KIND[c.kind]}: ${c.text}${where}`, '      '));
-    }
-    const conf = `Confianza: ${e.confidence}${e.insufficientInformation ? ' · el modelo indica que la información no basta' : ''}`;
-    out.push(`      ${conf}`);
-    for (const n of e.validationNotes.slice(0, 3)) out.push(wrap(`Validación: ${n}`, '      '));
-    out.push('');
-  }
-  if (ai.plan) {
-    out.push('  Plan de reducción de deuda:');
-    for (const s of ai.plan.steps) {
-      out.push(wrap(`${s.order}. [${s.horizon}] ${s.title} (${s.findingIds.length} hallazgo(s)) — ${s.rationale}`, '    '));
-    }
-    for (const n of ai.plan.notes) out.push(wrap(`Nota: ${n}`, '    '));
-    out.push('');
-  }
-  const u = ai.usage;
+  return [
+    `Análisis con IA — ${label} · privacidad: ${PRIVACY[ai.privacy]}`,
+    'Las explicaciones son orientativas: la evidencia verificable es la de los hallazgos.',
+    '',
+    ...ai.explanations.flatMap((e) => explanationLines(e, byId.get(e.findingId))),
+    ...(ai.plan ? planLines(ai.plan) : []),
+    usageLine(ai.usage),
+    ...(ai.notes ?? []).map((n) => wrap(`Aviso: ${n}`, '  ')),
+    ...errorLines(ai.errors),
+    '',
+  ].join('\n');
+}
+
+const INDENT = '      ';
+
+function explanationLines(e: AiExplanation, f: Finding | undefined): string[] {
+  const loc = f?.locations[0];
+  const where = (c: AiClaim): string => (c.lines ? ` (${c.lines.file}:${c.lines.startLine}-${c.lines.endLine})` : '');
+  return [
+    `  [${SEV[f?.severity ?? ''] ?? '?'}] ${f?.title ?? e.findingId}${loc ? ` — ${loc.file}:${loc.startLine}` : ''}${e.fromCache ? ' (caché)' : ''}`,
+    wrap(`Qué ocurre: ${e.summary}`, INDENT),
+    wrap(`Causa raíz (inferencia): ${e.rootCause}`, INDENT),
+    wrap(`Recomendación: ${e.recommendation}`, INDENT),
+    ...e.claims.slice(0, 6).map((c) => wrap(`· ${KIND[c.kind]}: ${c.text}${where(c)}`, INDENT)),
+    `${INDENT}Confianza: ${e.confidence}${e.insufficientInformation ? ' · el modelo indica que la información no basta' : ''}`,
+    ...e.validationNotes.slice(0, 3).map((n) => wrap(`Validación: ${n}`, INDENT)),
+    '',
+  ];
+}
+
+function planLines(plan: AiPlan): string[] {
+  return [
+    '  Plan de reducción de deuda:',
+    ...plan.steps.map((s) => wrap(`${s.order}. [${s.horizon}] ${s.title} (${s.findingIds.length} hallazgo(s)) — ${s.rationale}`, '    ')),
+    ...plan.notes.map((n) => wrap(`Nota: ${n}`, '    ')),
+    '',
+  ];
+}
+
+function usageLine(u: AiUsage): string {
   const cost = u.costUsd === null ? 'coste desconocido' : u.costUsd === 0 ? 'sin coste' : `~${u.costUsd.toFixed(4)} USD`;
-  out.push(
-    `  Consumo de IA: ${u.requests} petición(es) · ${u.inputTokens} tokens de entrada / ${u.outputTokens} de salida${u.reasoningTokens ? ` (${u.reasoningTokens} razonando)` : ''} · ${cost} · latencia máx. ${(u.latencyMsMax / 1000).toFixed(1)} s · ${u.cacheHits} desde caché`,
-  );
-  for (const n of ai.notes ?? []) out.push(wrap(`Aviso: ${n}`, '  '));
-  if (ai.errors.length > 0) {
-    out.push(`  Sin completar (${ai.errors.length}):`);
-    const groups = groupMessages(ai.errors.map((e) => e.message));
-    for (const [message, count] of groups.slice(0, 8)) out.push(wrap(`- ${message}${count > 1 ? ` (×${count})` : ''}`, '    '));
-    if (groups.length > 8) out.push(`    … y ${groups.length - 8} motivo(s) más (ver el informe JSON).`);
-  }
-  out.push('');
-  return out.join('\n');
+  const reasoning = u.reasoningTokens ? ` (${u.reasoningTokens} razonando)` : '';
+  return `  Consumo de IA: ${u.requests} petición(es) · ${u.inputTokens} tokens de entrada / ${u.outputTokens} de salida${reasoning} · ${cost} · latencia máx. ${(u.latencyMsMax / 1000).toFixed(1)} s · ${u.cacheHits} desde caché`;
+}
+
+/** Los motivos repetidos se agrupan («×3») y se muestran como mucho ocho. */
+function errorLines(errors: AiSection['errors']): string[] {
+  if (errors.length === 0) return [];
+  const groups = groupMessages(errors.map((e) => e.message));
+  return [
+    `  Sin completar (${errors.length}):`,
+    ...groups.slice(0, 8).map(([message, count]) => wrap(`- ${message}${count > 1 ? ` (×${count})` : ''}`, '    ')),
+    ...(groups.length > 8 ? [`    … y ${groups.length - 8} motivo(s) más (ver el informe JSON).`] : []),
+  ];
 }
 
 /** Propuesta de corrección para la terminal: resumen, diferencia, riesgos y cómo comprobarla. */
