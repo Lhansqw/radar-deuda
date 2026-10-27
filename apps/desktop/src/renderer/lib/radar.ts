@@ -79,16 +79,34 @@ export function layoutRadar(findings: readonly Finding[], size: number, maxPerCe
   const band = radius / RADAR_RINGS.length;
   const rings = RADAR_RINGS.map((severity, i) => ({ severity, inner: i * band, outer: (i + 1) * band }));
   const step = (2 * Math.PI) / CATEGORIES.length;
+  const sectors = CATEGORIES.map((category, i) => sectorAt(category, i, step, center, radius));
+  const { cells, info } = groupByCell(findings, sectors);
 
-  const sectors: RadarSector[] = CATEGORIES.map((category, i) => {
-    const start = i * step;
-    const end = start + step;
-    const mid = start + step / 2;
-    const [labelX, labelY] = polar(center, radius + 14, mid);
-    const s = Math.sin(mid);
-    return { category, start, end, count: 0, labelX, labelY, anchor: Math.abs(s) < 0.2 ? 'middle' : s > 0 ? 'start' : 'end' };
-  });
+  const blips: RadarBlip[] = [];
+  const overflow: RadarOverflow[] = [];
+  for (const [key, list] of cells) {
+    const [category, severity] = key.split('|') as [Category, Exclude<Severity, 'info'>];
+    const sector = sectors.find((s) => s.category === category);
+    const ring = rings.find((r) => r.severity === severity);
+    if (!sector || !ring) continue;
+    const cell = placeCell(list, { sector, ring, band, step, center, maxPerCell });
+    blips.push(...cell.blips);
+    if (cell.overflow) overflow.push(cell.overflow);
+  }
+  return { size, center, radius, rings, sectors, blips, overflow, info };
+}
 
+/** Un sector por categoría, con su etiqueta fuera del círculo alineada según el lado. */
+function sectorAt(category: Category, i: number, step: number, center: number, radius: number): RadarSector {
+  const start = i * step;
+  const mid = start + step / 2;
+  const [labelX, labelY] = polar(center, radius + 14, mid);
+  const s = Math.sin(mid);
+  return { category, start, end: start + step, count: 0, labelX, labelY, anchor: Math.abs(s) < 0.2 ? 'middle' : s > 0 ? 'start' : 'end' };
+}
+
+/** Hallazgos por celda «categoría|severidad» (cuenta los de cada sector); los informativos solo se cuentan. */
+function groupByCell(findings: readonly Finding[], sectors: RadarSector[]): { cells: Map<string, Finding[]>; info: number } {
   const cells = new Map<string, Finding[]>();
   let info = 0;
   for (const f of findings) {
@@ -103,44 +121,61 @@ export function layoutRadar(findings: readonly Finding[], size: number, maxPerCe
     const sector = sectors.find((s) => s.category === f.category);
     if (sector) sector.count++;
   }
+  return { cells, info };
+}
 
-  const blips: RadarBlip[] = [];
-  const overflow: RadarOverflow[] = [];
-  for (const [key, list] of cells) {
-    const [category, severity] = key.split('|') as [Category, Exclude<Severity, 'info'>];
-    const sector = sectors.find((s) => s.category === category);
-    const ring = rings.find((r) => r.severity === severity);
-    if (!sector || !ring) continue;
-    // Primero los de más esfuerzo: si la celda se llena, los que quedan fuera son los menores.
-    const sorted = [...list].sort((a, b) => b.effort.minutes - a.effort.minutes || a.id.localeCompare(b.id));
-    const shown = sorted.slice(0, maxPerCell);
-    const placed: Array<[number, number]> = [];
-    const padA = step * 0.12;
-    const innerR = ring.inner + band * (ring.inner === 0 ? 0.35 : 0.2);
-    const outerR = ring.outer - band * 0.2;
-    for (const f of shown) {
-      const rand = rng(hash(f.id));
-      // Varios candidatos y se queda el más alejado de los ya colocados (evita solapes).
-      let best: [number, number] = [center, center];
-      let bestDist = -1;
-      for (let k = 0; k < 16; k++) {
-        const a = sector.start + padA + rand() * (step - 2 * padA);
-        const r = innerR + rand() * Math.max(0, outerR - innerR);
-        const p = polar(center, r, a);
-        const d = placed.length === 0 ? Infinity : Math.min(...placed.map(([x, y]) => Math.hypot(x - p[0], y - p[1])));
-        if (d > bestDist) {
-          best = p;
-          bestDist = d;
-        }
-        if (d > 18) break;
-      }
-      placed.push(best);
-      blips.push({ findingId: f.id, severity, category, x: best[0], y: best[1] });
+interface Cell {
+  sector: RadarSector;
+  ring: RadarLayout['rings'][number];
+  band: number;
+  step: number;
+  center: number;
+  maxPerCell: number;
+}
+
+/** Coloca los hallazgos de una celda; si no caben todos, un indicador con cuántos faltan. */
+function placeCell(list: readonly Finding[], cell: Cell): { blips: RadarBlip[]; overflow: RadarOverflow | null } {
+  const { sector, ring, band, step, center, maxPerCell } = cell;
+  const severity = ring.severity;
+  // Primero los de más esfuerzo: si la celda se llena, los que quedan fuera son los menores.
+  const sorted = [...list].sort((a, b) => b.effort.minutes - a.effort.minutes || a.id.localeCompare(b.id));
+  const shown = sorted.slice(0, maxPerCell);
+  const padA = step * 0.12;
+  const area = {
+    fromAngle: sector.start + padA,
+    angleSpan: step - 2 * padA,
+    innerR: ring.inner + band * (ring.inner === 0 ? 0.35 : 0.2),
+    outerR: ring.outer - band * 0.2,
+  };
+  const placed: Array<[number, number]> = [];
+  const blips = shown.map((f): RadarBlip => {
+    const [x, y] = placeBlip(f.id, area, center, placed);
+    placed.push([x, y]);
+    return { findingId: f.id, severity, category: sector.category, x, y };
+  });
+  if (sorted.length === shown.length) return { blips, overflow: null };
+  const [x, y] = polar(center, (ring.inner + ring.outer) / 2, sector.end - padA * 1.6);
+  return { blips, overflow: { category: sector.category, severity, x, y, extra: sorted.length - shown.length } };
+}
+
+/**
+ * Prueba varias posiciones (deterministas a partir del id) dentro de la celda
+ * y se queda con la más alejada de los puntos ya colocados, para evitar solapes.
+ */
+function placeBlip(id: string, area: { fromAngle: number; angleSpan: number; innerR: number; outerR: number }, center: number, placed: ReadonlyArray<[number, number]>): [number, number] {
+  const rand = rng(hash(id));
+  let best: [number, number] = [center, center];
+  let bestDist = -1;
+  for (let k = 0; k < 16; k++) {
+    const a = area.fromAngle + rand() * area.angleSpan;
+    const r = area.innerR + rand() * Math.max(0, area.outerR - area.innerR);
+    const p = polar(center, r, a);
+    const d = placed.length === 0 ? Infinity : Math.min(...placed.map(([x, y]) => Math.hypot(x - p[0], y - p[1])));
+    if (d > bestDist) {
+      best = p;
+      bestDist = d;
     }
-    if (sorted.length > shown.length) {
-      const [x, y] = polar(center, (ring.inner + ring.outer) / 2, sector.end - padA * 1.6);
-      overflow.push({ category, severity, x, y, extra: sorted.length - shown.length });
-    }
+    if (d > 18) break;
   }
-  return { size, center, radius, rings, sectors, blips, overflow, info };
+  return best;
 }
