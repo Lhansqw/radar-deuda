@@ -9,7 +9,7 @@ export { computeHotspots, type HotspotOptions } from './git/hotspots.js';
 export { requestJson, requestText, HttpError, defaultRetryable, type FetchLike, type HttpOptions } from './http.js';
 export { parseGitHubRepo, cloneUrl, webUrl, type GitHubRepoRef } from './github/url.js';
 export { GitHubClient, tokenFromEnv, type GitHubClientOptions, type GitHubRepository, type TokenCheck } from './github/api.js';
-export { cloneOrUpdate, defaultReposDir, listClones, authEnv, type CloneOptions, type CloneResult } from './github/clone.js';
+export { cloneOrUpdate, cloneName, defaultReposDir, listClones, removeClone, authEnv, type CloneOptions, type CloneResult } from './github/clone.js';
 export { parseNpmLockfile, nameFromPath, lockfileLine, type InstalledPackage, type Inventory } from './deps/lockfile.js';
 export { cvss3BaseScore, severityFromScore } from './deps/cvss.js';
 export { OsvClient, recordSeverity, fixedVersions, type OsvClientOptions, type OsvRecord, type PackageQuery, type Vulnerability } from './deps/osv.js';

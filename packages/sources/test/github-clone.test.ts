@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { authEnv, cloneInternal, cloneOrUpdate, defaultReposDir } from '../src/github/clone.js';
+import { authEnv, cloneInternal, cloneOrUpdate, defaultReposDir, removeClone } from '../src/github/clone.js';
 import { runGit } from '../src/git/run.js';
 import { createGitRepo, type TestRepo } from './helpers/git-repo.js';
 
@@ -59,6 +59,10 @@ describe('cloneOrUpdate', () => {
     expect(await readFile(path.join(r.dir, 'a.ts'), 'utf8')).toBe('v2');
     expect((await runGit(['rev-list', '--count', 'HEAD'], { cwd: r.dir })).trim()).toBe('1'); // --depth 1
     expect(await readdir(base)).toEqual(['prueba__demo']);
+    // Quitar el clon (al quitar el proyecto de la aplicación).
+    expect(await removeClone(ref, base)).toBe(true);
+    expect(await readdir(base)).toEqual([]);
+    expect(await removeClone(ref, base)).toBe(false);
   });
 
   it('con shallowSince descarga solo el historial del periodo (y basta con el último si no hay ninguno)', async () => {

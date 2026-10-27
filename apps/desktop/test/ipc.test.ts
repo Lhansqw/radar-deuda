@@ -39,6 +39,9 @@ function setup(over: Partial<HandlerDeps> = {}) {
     reveal: () => undefined,
     copyText: () => undefined,
     savePatch: async () => null,
+    storage: async () => ({ cache: { files: 0, bytes: 0, parts: [] }, clones: { files: 0, bytes: 0 } }),
+    clearCache: async () => ({ files: 0, bytes: 0 }),
+    removeClone: async () => undefined,
     ...over,
   });
   const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, handlers, null);
@@ -161,6 +164,24 @@ describe('contrato IPC', () => {
     expect(await call('chat:list', analysis.id)).toMatchObject({ ok: true, value: [{ role: 'user', content: 'hola' }] });
     expect(await call('chat:clear', analysis.id)).toEqual({ ok: true, value: null });
     expect(store.listChatMessages(analysis.id)).toEqual([]);
+  });
+
+  it('quitar un proyecto de GitHub borra su clon; nunca la carpeta de uno local, ni con un análisis en curso', async () => {
+    const removed: string[] = [];
+    let running: number | null = null;
+    const { call, store } = setup({
+      removeClone: async (repo) => void removed.push(repo),
+      jobs: { start: () => Promise.reject(new Error('no se usa')) as never, cancel: () => undefined, list: () => (running === null ? [] : [{ projectId: running, status: 'running' } as never]) },
+    });
+    const gh = store.addProject({ name: 'demo', kind: 'github', location: 'owner/demo' });
+    const local = store.addProject({ name: 'local', kind: 'local', location: '/mi/carpeta' });
+    running = gh.id;
+    expect(await call('projects:remove', gh.id)).toEqual({ ok: false, error: 'Hay un análisis en curso de este proyecto: cancélalo antes de quitarlo.' });
+    running = null;
+    expect(await call('projects:remove', gh.id)).toEqual({ ok: true, value: null });
+    expect(await call('projects:remove', local.id)).toEqual({ ok: true, value: null });
+    expect(removed).toEqual(['owner/demo']);
+    expect(store.listProjects()).toEqual([]);
   });
 
   it('un análisis inexistente da un mensaje claro', async () => {

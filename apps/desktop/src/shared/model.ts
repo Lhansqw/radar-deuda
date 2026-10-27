@@ -99,6 +99,12 @@ export interface ChatMessage {
   meta: ChatMeta | null;
 }
 
+/** Espacio en disco de la caché (por partes) y de los clones de GitHub. */
+export interface StorageInfo {
+  cache: { files: number; bytes: number; parts: Array<{ label: string; files: number; bytes: number }> };
+  clones: { files: number; bytes: number };
+}
+
 /** Estado de la clave de OpenRouter según el propio servicio. */
 export interface OpenRouterKeyCheck {
   limitRemaining: number | null;
