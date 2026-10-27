@@ -6,7 +6,9 @@
 # - calidad: el radar se analiza a sí mismo y falla con hallazgos altos o
 #   críticos; la cobertura de las pruebas no puede bajar de sus mínimos. El
 #   informe y la cobertura quedan como artefacto; el rendimiento es informativo.
-# - escritorio: la aplicación de Electron de extremo a extremo en Windows.
+# - escritorio: la aplicación de Electron de extremo a extremo en Windows, y el
+#   instalador (con los fuses y el ASAR comprobados) como artefacto.
+# - paquete-linux: el mismo paquete en Linux, comprobado con una pantalla virtual.
 #
 # Las acciones van fijadas por commit (no por etiqueta) para que una etiqueta
 # movida no cambie lo que se ejecuta; Dependabot las mantiene al día.
@@ -114,10 +116,10 @@ jobs:
           retention-days: 30
 
   escritorio:
-    name: Aplicación de escritorio (Windows)
+    name: Aplicación de escritorio e instalador (Windows)
     needs: comprobar
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,3 +138,34 @@ jobs:
           path: apps/desktop/e2e/capturas/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Instalador (con la comprobación del paquete)
+        run: npm run dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: instalador-windows
+          path: apps/desktop/release/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  paquete-linux:
+    name: Paquete (Linux)
+    needs: comprobar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # electron-builder descarga su propia copia de Electron.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Ubuntu 24.04 restringe los espacios de nombres de usuario que usa el sandbox de Chromium.
+      - name: Permitir el sandbox de Chromium
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Paquete y su comprobación
+        run: xvfb-run -a npm run dist
