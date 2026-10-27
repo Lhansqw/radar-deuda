@@ -120,6 +120,8 @@ function toChatMessage(r: Row): ChatMessage {
 }
 
 export class Store {
+  private closed = false;
+
   private constructor(private readonly db: DatabaseSync) {}
 
   /** Abre (o crea) la base de datos y aplica las migraciones pendientes. Usa ':memory:' en pruebas. */
@@ -168,7 +170,14 @@ export class Store {
     }
   }
 
+  /**
+   * Cierra la base de datos. Se puede llamar más de una vez (al salir, la
+   * aplicación la cierra en will-quit aunque ya estuviera cerrada): node:sqlite
+   * lanzaría «database is not open» y Electron lo mostraría como un error.
+   */
   close(): void {
+    if (this.closed) return;
+    this.closed = true;
     this.db.close();
   }
 

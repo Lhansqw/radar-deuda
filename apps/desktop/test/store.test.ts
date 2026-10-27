@@ -172,6 +172,12 @@ describe('Store', () => {
     expect(s.listChatMessages(a.id)).toEqual([]);
   });
 
+  it('cerrarla dos veces no es un error (al salir de la aplicación ya puede estar cerrada)', () => {
+    const s = Store.open(':memory:');
+    s.close();
+    expect(() => s.close()).not.toThrow();
+  });
+
   it('rechaza una base de datos de una versión más reciente', async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'radar-store-'));
     dirs.push(dir);
