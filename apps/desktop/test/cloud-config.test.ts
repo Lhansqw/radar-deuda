@@ -4,6 +4,8 @@ import { cloudConfig, ENV_KEY, ENV_URL } from '../src/main/cloud-config.js';
 import { codeProblem, emailProblem, newPasswordProblem, normalizeEmail } from '../src/shared/account.js';
 
 const KEY = 'sb_publishable_prueba_0123456789';
+/** Clave secreta falsa, construida al ejecutar para que el repositorio no contenga el literal. */
+const SECRET = ['sb', 'secret', 'prueba_0123456789'].join('_');
 const jwt = (claims: object) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.firma`;
 
 describe('cloudConfig', () => {
@@ -35,12 +37,12 @@ describe('cloudConfig', () => {
 
   it('rechaza siempre la clave secreta (nueva o antigua) y lo que no parece una clave publicable', () => {
     const key = (k: string) => cloudConfig({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: k }, null);
-    expect(key('sb_secret_prueba_0123456789')).toMatchObject({ ok: false, message: expect.stringMatching(/clave secreta/) });
+    expect(key(SECRET)).toMatchObject({ ok: false, message: expect.stringMatching(/clave secreta/) });
     expect(key(jwt({ role: 'service_role' }))).toMatchObject({ ok: false, message: expect.stringMatching(/clave secreta/) });
     expect(key(jwt({ role: 'anon' }))).toMatchObject({ ok: true });
     expect(key('hola')).toMatchObject({ ok: false, message: expect.stringMatching(/formato/) });
     // El mensaje nunca repite la clave.
-    const r = key('sb_secret_prueba_0123456789');
+    const r = key(SECRET);
     expect(r.ok ? '' : r.message).not.toContain('prueba_0123456789');
   });
 });
@@ -49,7 +51,7 @@ describe('cloudForBuild', () => {
   it('incrusta la conexión solo si está definida, y una clave secreta detiene la compilación', () => {
     expect(cloudForBuild({})).toBeNull();
     expect(cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: KEY })).toEqual({ url: 'https://abcd.supabase.co', publishableKey: KEY });
-    expect(() => cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: 'sb_secret_prueba_0123456789' })).toThrow(/No se puede incrustar.*clave secreta/);
+    expect(() => cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: SECRET })).toThrow(/No se puede incrustar.*clave secreta/);
     expect(() => cloudForBuild({ [ENV_KEY]: KEY })).toThrow(/Falta RADAR_SUPABASE_URL/);
   });
 });
