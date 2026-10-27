@@ -4,6 +4,7 @@ coverage/
 *.log
 .radar-cache/
 bench-results/
+radar-informe.json
 apps/desktop/e2e/capturas/
 .env
 .env.*
