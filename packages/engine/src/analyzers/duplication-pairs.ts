@@ -52,17 +52,45 @@ export function findCandidates(artifacts: ReadonlyMap<string, DuplicationArtifac
   return { files, candidates };
 }
 
-/** Huella → dónde aparece. */
+/**
+ * Huella → dónde aparece, solo para las que pueden formar un clon (las que se
+ * repiten, sin llegar a ser código repetitivo). Las demás, la gran mayoría,
+ * no entran en el índice. El orden es el de la primera aparición.
+ */
 function fingerprintIndex(files: readonly string[], artifacts: ReadonlyMap<string, DuplicationArtifact>): Map<number, Occurrence[]> {
+  const candidates = repeatedHashes(files, artifacts);
   const index = new Map<number, Occurrence[]>();
   files.forEach((file, fi) => {
     for (const [hash, pos, s, e] of artifacts.get(file)?.fps ?? []) {
+      if (!candidates.has(hash)) continue;
       let list = index.get(hash);
       if (!list) index.set(hash, (list = []));
       list.push([fi, pos, s, e]);
     }
   });
   return index;
+}
+
+/**
+ * Huellas que aparecen entre 2 y MAX_OCCURRENCES veces. Se cuentan ordenando
+ * un arreglo tipado (8 bytes por huella) en lugar de un mapa con una entrada
+ * por huella: en un repositorio grande son millones y casi todas únicas.
+ */
+function repeatedHashes(files: readonly string[], artifacts: ReadonlyMap<string, DuplicationArtifact>): Set<number> {
+  let n = 0;
+  for (const file of files) n += artifacts.get(file)?.fps.length ?? 0;
+  const all = new Float64Array(n);
+  let i = 0;
+  for (const file of files) for (const fp of artifacts.get(file)?.fps ?? []) all[i++] = fp[0];
+  all.sort();
+  const repeated = new Set<number>();
+  for (let a = 0; a < n; ) {
+    let b = a + 1;
+    while (b < n && all[b] === all[a]) b++;
+    if (b - a >= 2 && b - a <= MAX_OCCURRENCES) repeated.add(all[a] as number);
+    a = b;
+  }
+  return repeated;
 }
 
 /**
