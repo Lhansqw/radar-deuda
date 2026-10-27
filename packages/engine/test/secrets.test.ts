@@ -13,6 +13,8 @@ const fake = {
   github: `gh${'p'}_${'aB3dE6gH9jK2mN5pQ8sT1vW4yZ7cF0hJ3kL6'}`,
   anthropic: ['sk', 'ant', 'api03', 'Zx8Qw2Er5Ty7Ui9Op1As3Df'].join('-'),
   privateKey: ['-----BEGIN', 'RSA', 'PRIVATE', 'KEY-----'].join(' '),
+  supabaseSecret: ['sb', 'secret', 'Q7rZx2LmP9wDk4Tb8NvY3cHs'].join('_'),
+  supabasePublishable: ['sb', 'publishable', 'Q7rZx2LmP9wDk4Tb8NvY3cHs'].join('_'),
 };
 
 const scan = (line: string, file = 'src/config.ts') => scanSecrets([line], file);
@@ -23,10 +25,15 @@ describe('formatos conocidos', () => {
     ['github-token', `token: ${fake.github}`],
     ['anthropic-key', `ANTHROPIC_API_KEY=${fake.anthropic}`],
     ['private-key', fake.privateKey],
+    ['supabase-secret-key', `SUPABASE_SECRET_KEY=${fake.supabaseSecret}`],
   ])('%s', (ruleId, line) => {
     const [m] = scan(line, 'config/.env');
     expect(m?.ruleId).toBe(ruleId);
     expect(m?.confidence).toBe('high');
+  });
+
+  it('la clave publicable de Supabase no es un secreto', () => {
+    expect(scan(`const key = '${fake.supabasePublishable}';`)).toEqual([]);
   });
 
   it('cadena de conexión con contraseña real', () => {
