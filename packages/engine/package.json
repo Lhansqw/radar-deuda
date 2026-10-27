@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "ignore": "^7.0.14",
-    "typescript": "~6.0.3"
+    "typescript": "~7.0.2"
   },
   "engines": {
     "node": ">=22.13"
