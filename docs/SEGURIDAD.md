@@ -26,8 +26,9 @@ conjunto: motor, fuentes, IA, CLI y aplicación.
 3. **La interfaz.** Muestra todo lo anterior, así que se trata como no confiable aunque sea
    código propio. Nunca tiene acceso directo a Node, al disco ni a las credenciales.
 4. **El entorno local.** Variables de entorno y carpetas de datos. Quien controla la cuenta del
-   usuario ya controla la aplicación; aun así, la versión instalada no debe aceptar
-   configuraciones de desarrollo (ver la fase 12 para los *fuses* de Electron).
+   usuario ya controla la aplicación; aun así, la versión instalada no acepta
+   configuraciones de desarrollo y sus *fuses* impiden alterarla desde el entorno
+   (ver [INSTALADOR.md](INSTALADOR.md)).
 
 ## Controles
 
@@ -118,8 +119,7 @@ corrección (que fallan con la versión anterior).
   (`esbuild` y `fsevents`).
 - En ejecución, la aplicación solo usa `react`, `react-dom` (`scheduler`), `ignore`,
   `semver`, `typescript` (el compilador, para el análisis) y las dos fuentes tipográficas.
-- Electron 44.9.3, la última versión de la rama 44, que sigue con soporte. La 45 se evaluará
-  al preparar el instalador.
+- Electron 44.9.3 (fijado), la última versión de la rama 44, que sigue con soporte.
 
 ### Integración continua
 
@@ -134,7 +134,8 @@ actualizaciones cada semana.
 
 | Riesgo | Situación |
 |---|---|
-| *Fuses* de Electron (`RunAsNode`, `NODE_OPTIONS`, `--inspect`), ASAR con integridad y firma del ejecutable | Fase 12, con el instalador. Hasta entonces, quien controla el entorno del usuario puede alterar la aplicación |
+| El ejecutable y el instalador no van firmados | Firmar necesita un certificado; sin él, SmartScreen avisa al instalar. Los *fuses* y la integridad del ASAR sí están (fase 12) y `npm run dist` los comprueba ([INSTALADOR.md](INSTALADOR.md)) |
+| Actualizaciones | No hay automáticas: cada versión se instala a mano. Añadirlas exige publicar versiones firmadas y comprobar la firma antes de instalar |
 | El permiso para enviar código en una propuesta lo pide la interfaz | Una interfaz comprometida podría saltárselo, pero solo enviaría el fragmento del hallazgo al proveedor que el usuario configuró |
 | La caché de la IA (en `%LOCALAPPDATA%`) no está cifrada y puede contener código de las propuestas | Mismo nivel de protección que el propio código fuente en el disco; `npm run cache -- --vaciar` o Configuración → Vaciar la caché la borran |
 | En Linux sin llavero no hay almacén cifrado | La aplicación lo indica y solo acepta las claves por variables de entorno |
