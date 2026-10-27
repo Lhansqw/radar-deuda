@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import type { AnalysisReport, Finding, ReportComparison } from '@radar/engine';
 import type { AnalysisSummary } from '../../shared/model.js';
+import { FindingLine } from '../components/FindingLine.js';
 import { Radar } from '../components/Radar.js';
 import { SeverityBar } from '../components/SeverityBar.js';
-import { SeverityGlyph } from '../components/SeverityMark.js';
 import { TrendChart } from '../components/TrendChart.js';
 import { sortFindings } from '../lib/findings.js';
 import { formatDateTime, formatEffort, formatNumber, formatPercent, formatRelative } from '../lib/format.js';
@@ -189,13 +189,9 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
 }
 
 function PriorityRow({ finding: f, onOpen }: { finding: Finding; onOpen: (id: string) => void }) {
-  const loc = f.locations[0];
   return (
     <button type="button" className="priority" onClick={() => onOpen(f.id)}>
-      <SeverityGlyph severity={f.severity} />
-      <span className="priority-title">{f.title}</span>
-      <span className="priority-effort">{formatEffort(f.effort.minutes)}</span>
-      <span className="priority-loc mono">{loc && loc.file !== '.' ? `${loc.file}:${loc.startLine}` : 'Proyecto'}</span>
+      <FindingLine finding={f} />
     </button>
   );
 }
