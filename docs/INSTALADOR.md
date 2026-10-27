@@ -79,6 +79,11 @@ Al terminar, `npm run dist` comprueba el ejecutable empaquetado
 5. `--inspect` no abre el depurador.
 6. En Windows, una copia con un byte del código cambiado dentro de `app.asar` no arranca.
 
+Cada comprobación superada se muestra con ✓ (seis en Windows; cinco en Linux, que no
+comprueba la integridad del ASAR) y la salida termina con «Paquete comprobado.». Si una
+falla, `npm run dist` se detiene con su mensaje y las últimas líneas de la salida de la
+aplicación.
+
 La prueba de extremo a extremo (`npm run e2e:desktop`) usa la aplicación sin empaquetar:
 los fuses impiden que Playwright controle la empaquetada, y por eso existe la prueba de
 arranque.
