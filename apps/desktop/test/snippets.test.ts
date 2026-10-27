@@ -13,7 +13,22 @@ afterEach(async () => {
 
 const SECRET = ['Zq8v', 'T2mW', '9xLp', '4RbN', '7cYd'].join('');
 
-async function project(): Promise<{ root: string; report: AnalysisReport }> {
+/**
+ * Enlace simbólico a un archivo. En Windows crearlo exige el modo de
+ * desarrollador o permisos de administrador: sin ellos, esa parte de la prueba
+ * no se puede hacer (la de la carpeta enlazada, sí).
+ */
+async function fileSymlink(target: string, link: string): Promise<boolean> {
+  try {
+    await symlink(target, link, 'file');
+    return true;
+  } catch (err) {
+    if (process.platform === 'win32' && (err as NodeJS.ErrnoException).code === 'EPERM') return false;
+    throw err;
+  }
+}
+
+async function project(): Promise<{ root: string; report: AnalysisReport; fileLink: boolean }> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'radar-snippet-'));
   dirs.push(root);
   await mkdir(path.join(root, 'src'));
@@ -25,14 +40,16 @@ async function project(): Promise<{ root: string; report: AnalysisReport }> {
   const outside = await mkdtemp(path.join(os.tmpdir(), 'radar-fuera-'));
   dirs.push(outside);
   await writeFile(path.join(outside, 'x.ts'), 'fuera');
-  await symlink(path.join(outside, 'x.ts'), path.join(root, 'enlace.ts'));
+  const fileLink = await fileSymlink(path.join(outside, 'x.ts'), path.join(root, 'enlace.ts'));
+  // Una carpeta enlazada (en Windows, una unión, que no necesita permisos especiales).
+  await symlink(outside, path.join(root, 'carpeta-enlazada'), 'junction');
   const loc = (file: string) => ({ id: file, locations: [{ file, startLine: 1, endLine: 1 }] });
   const report = {
     root,
     generatedAt: new Date(Date.now() + 60_000).toISOString(),
-    findings: [loc('src/a.ts'), loc('enlace.ts'), loc('bin.dat'), loc('../fuera.ts'), loc('src/borrado.ts')],
+    findings: [loc('src/a.ts'), loc('enlace.ts'), loc('carpeta-enlazada/x.ts'), loc('bin.dat'), loc('../fuera.ts'), loc('src/borrado.ts')],
   } as unknown as AnalysisReport;
-  return { root, report };
+  return { root, report, fileLink };
 }
 
 describe('fragmentos de código', () => {
@@ -70,10 +87,12 @@ describe('fragmentos de código', () => {
   });
 
   it('solo lee archivos citados por el análisis, dentro del proyecto, reales y de texto', async () => {
-    const { report } = await project();
+    const { report, fileLink } = await project();
     await expect(resolveReportFile(report, 'src/no-citado.ts')).rejects.toThrow(/no aparece en los hallazgos/);
     await expect(resolveReportFile(report, '../fuera.ts')).rejects.toThrow(/Ruta no válida/);
-    await expect(resolveReportFile(report, 'enlace.ts')).rejects.toThrow(/enlaces simbólicos/);
+    if (fileLink) await expect(resolveReportFile(report, 'enlace.ts')).rejects.toThrow(/enlaces simbólicos/);
+    // A través de una carpeta enlazada, el archivo real está fuera del proyecto.
+    await expect(resolveReportFile(report, 'carpeta-enlazada/x.ts')).rejects.toThrow(/fuera de la carpeta del proyecto/);
     await expect(resolveReportFile(report, 'src/borrado.ts')).rejects.toThrow(/ya no existe/);
     await expect(readSnippet(report, 'bin.dat', 1, 2)).rejects.toThrow(/binario/);
   });
