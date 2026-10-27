@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { AnalysisReport, Finding } from '@radar/engine';
+import type { AnalysisReport, Finding, ReportComparison } from '@radar/engine';
 import type { AnalysisSummary } from '../../shared/model.js';
 import { Radar } from '../components/Radar.js';
 import { SeverityBar } from '../components/SeverityBar.js';
@@ -16,11 +16,15 @@ interface Props {
   onOpenFinding: (id: string) => void;
   onOpenFiles?: () => void;
   onShowLatest?: () => void;
+  /** Respecto al análisis anterior (null si es el primero). */
+  comparison?: ReportComparison | null;
+  onShowNew?: () => void;
+  onOpenHistory?: () => void;
 }
 
 const HORIZON: Record<'inmediato' | 'corto' | 'medio', string> = { inmediato: 'Ya', corto: 'Pronto', medio: 'Más adelante' };
 
-export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest }: Props) {
+export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest, comparison, onShowNew, onOpenHistory }: Props) {
   const s = report.score;
   const latest = analyses[0]?.id === analysisId;
   const byId = useMemo(() => new Map(report.findings.map((f) => [f.id, f])), [report.findings]);
@@ -75,6 +79,7 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
             </div>
           </dl>
           <SeverityBar counts={report.summary.bySeverity} />
+          {comparison ? <SinceLast c={comparison} onShowNew={onShowNew} onOpenHistory={onOpenHistory} /> : null}
           <p className="muted small">
             Puntuación según el método SQALE: esfuerzo de corrección frente al coste estimado de escribir el código. Análisis de {formatRelative(report.generatedAt)}.
           </p>
@@ -192,5 +197,39 @@ function PriorityRow({ finding: f, onOpen }: { finding: Finding; onOpen: (id: st
       <span className="priority-effort">{formatEffort(f.effort.minutes)}</span>
       <span className="priority-loc mono">{loc && loc.file !== '.' ? `${loc.file}:${loc.startLine}` : 'Proyecto'}</span>
     </button>
+  );
+}
+
+/** Una línea con lo que cambió desde el análisis anterior, con acceso a la deuda nueva. */
+function SinceLast({ c, onShowNew, onOpenHistory }: { c: ReportComparison; onShowNew?: (() => void) | undefined; onOpenHistory?: (() => void) | undefined }) {
+  const delta = c.scoreDelta === 0 ? 'misma puntuación' : `${c.scoreDelta > 0 ? '+' : '−'}${Math.abs(c.scoreDelta)} puntos`;
+  const unchanged = c.added.length === 0 && c.resolved.length === 0 && c.changed.length === 0;
+  return (
+    <div className="since">
+      <p>
+        Desde el análisis anterior ({formatRelative(c.baseline.generatedAt)}):{' '}
+        {unchanged ? (
+          'sin cambios en los hallazgos'
+        ) : (
+          <>
+            <strong>{c.added.length}</strong> {c.added.length === 1 ? 'nuevo' : 'nuevos'}, <strong>{c.resolved.length}</strong> {c.resolved.length === 1 ? 'resuelto' : 'resueltos'}
+            {c.changed.length > 0 ? `, ${c.changed.length} con otra severidad` : ''}
+          </>
+        )}
+        , {delta}.
+      </p>
+      <div className="since-actions">
+        {c.added.length > 0 && onShowNew ? (
+          <button type="button" className="btn btn-small" onClick={onShowNew}>
+            Ver la deuda nueva
+          </button>
+        ) : null}
+        {onOpenHistory ? (
+          <button type="button" className="btn btn-quiet btn-small" onClick={onOpenHistory}>
+            Comparar en el historial
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }

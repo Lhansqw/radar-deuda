@@ -59,6 +59,10 @@ describe('hallazgos', () => {
     expect(filterFindings(list, { ...EMPTY_FILTER, path: 'src/a' })).toHaveLength(0); // no confunde src/a con src/a.ts
     expect(filterFindings(list, { ...EMPTY_FILTER, text: 'PROCESARpedido' })).toHaveLength(1);
     expect(filterFindings(list, { ...EMPTY_FILTER, text: 'funcion dificil' })).toHaveLength(4);
+    // Solo la deuda nueva; sin análisis anterior, el filtro no oculta nada.
+    const nuevo = list[1]?.id ?? '';
+    expect(filterFindings(list, { ...EMPTY_FILTER, onlyNew: true }, new Set([nuevo])).map((x) => x.id)).toEqual([nuevo]);
+    expect(filterFindings(list, { ...EMPTY_FILTER, onlyNew: true })).toHaveLength(4);
   });
 
   it('ordena por severidad, esfuerzo o archivo', () => {
