@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { contentSecurityPolicy, isAllowedExternalUrl, resolveAppPath } from '../src/main/policy.js';
+import { contentSecurityPolicy, devServerFromEnv, isAllowedExternalUrl, resolveAppPath } from '../src/main/policy.js';
 import { APP_ENTRY, isAppUrl } from '../src/shared/origin.js';
 
 describe('origen de la interfaz', () => {
@@ -48,6 +48,20 @@ describe('archivos servidos por app://', () => {
       expect(file === null || file.startsWith(root + path.sep)).toBe(true);
     },
   );
+});
+
+describe('servidor de desarrollo', () => {
+  it('solo en la aplicación sin empaquetar y en http://localhost o 127.0.0.1', () => {
+    expect(devServerFromEnv('http://localhost:5173', false)).toBe('http://localhost:5173');
+    expect(devServerFromEnv('http://127.0.0.1:5173/ruta', false)).toBe('http://127.0.0.1:5173');
+    expect(devServerFromEnv('http://localhost:5173', true)).toBeNull();
+    expect(devServerFromEnv(undefined, false)).toBeNull();
+    expect(devServerFromEnv('https://localhost:5173', false)).toBeNull();
+    expect(devServerFromEnv('http://atacante.example:5173', false)).toBeNull();
+    expect(devServerFromEnv('http://localhost.atacante.example', false)).toBeNull();
+    expect(devServerFromEnv('http://usuario:clave@localhost:5173', false)).toBeNull();
+    expect(devServerFromEnv('no es una url', false)).toBeNull();
+  });
 });
 
 describe('política de seguridad de contenido', () => {

@@ -7,6 +7,23 @@ import { APP_HOST, APP_SCHEME } from '../shared/origin.js';
  */
 
 /**
+ * Servidor de Vite del modo desarrollo (npm run desktop:dev). Solo se acepta
+ * en la aplicación sin empaquetar y en http://localhost o 127.0.0.1: una
+ * variable de entorno no puede hacer que la aplicación instalada cargue una
+ * página remota ni relajar su política de contenido.
+ */
+export function devServerFromEnv(value: string | undefined, packaged: boolean): string | null {
+  if (packaged || !value) return null;
+  try {
+    const u = new URL(value);
+    const loopback = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    return u.protocol === 'http:' && loopback && u.username === '' && u.password === '' ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Política de seguridad de contenido. La interfaz no carga nada de fuera: ni
  * scripts, ni estilos, ni fuentes, ni conexiones. En desarrollo se permite el
  * servidor de Vite (recarga en caliente) y los estilos que inyecta.
