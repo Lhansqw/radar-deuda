@@ -35,6 +35,7 @@ export interface RadarApi {
     explain: Fn<'ai:explain'>;
     models: Fn<'ai:models'>;
     checkKey: Fn<'ai:checkKey'>;
+    includedQuota: Fn<'ai:includedQuota'>;
     fixPreview: Fn<'ai:fixPreview'>;
     proposeFix: Fn<'ai:proposeFix'>;
     getFix: Fn<'ai:getFix'>;

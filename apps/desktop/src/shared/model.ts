@@ -109,5 +109,12 @@ export interface StorageInfo {
 export interface OpenRouterKeyCheck {
   limitRemaining: number | null;
   usage: number | null;
-  freeDaily: { used: number; limit: number; remaining: number } | null;
+  freeDaily: IncludedQuota | null;
+}
+
+/** Consultas gratuitas del día (de una clave de OpenRouter o de la IA incluida). */
+export interface IncludedQuota {
+  used: number;
+  limit: number;
+  remaining: number;
 }

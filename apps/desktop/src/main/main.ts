@@ -162,6 +162,7 @@ function start(): void {
           return db ? new SupabaseRepo(db) : null;
         },
         emitSync: (state) => broadcast(SYNC_EVENT_CHANNEL, state),
+        includedAi: () => account.includedAi(),
       }),
     notify: (state) => broadcast(ACCOUNT_EVENT_CHANNEL, state),
   });

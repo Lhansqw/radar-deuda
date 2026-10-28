@@ -109,6 +109,43 @@ describe('AiService', () => {
     await expect(sinClave.service.checkOpenRouterKey()).rejects.toThrow(/No hay ninguna clave/);
   });
 
+  it('IA incluida: cupo del día con el token de la sesión; sin sesión lo explica', async () => {
+    const seen: string[] = [];
+    const fetch = async (url: string, init?: RequestInit) => {
+      seen.push(`${url} ${new Headers(init?.headers).get('authorization')}`);
+      return Response.json({ data: { limit: null, usage: 0, free_model_daily_requests: { used: 4, limit: 30, remaining: 26 } } });
+    };
+    const { store, credentials } = setup(DEFAULT_SETTINGS, false);
+    const included = { url: 'https://p.supabase.co/functions/v1/ia', token: 'token-de-sesion' };
+    expect(await new AiService({ store, credentials, settings: () => DEFAULT_SETTINGS, fetch, includedAi: () => included }).includedQuota()).toEqual({ used: 4, limit: 30, remaining: 26 });
+    expect(seen).toEqual(['https://p.supabase.co/functions/v1/ia/key Bearer token-de-sesion']);
+    const sinSesion = new AiService({ store, credentials, settings: () => DEFAULT_SETTINGS, fetch, includedAi: () => null });
+    await expect(sinSesion.includedQuota()).rejects.toThrow(/Inicia sesión/);
+  });
+
+  it('IA incluida: explica sin modelo ni clave, a través de la función «ia»', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      urls.push(url);
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer token-de-sesion');
+      if (url.endsWith('/models')) return Response.json({ data: [{ id: 'radar/predeterminado', pricing: { prompt: '0', completion: '0' }, supported_parameters: ['structured_outputs'] }] });
+      if (url.endsWith('/key')) return Response.json({ data: { free_model_daily_requests: { used: 0, limit: 30, remaining: 30 } } });
+      const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ content: string }> };
+      expect(body.model).toBe('radar/predeterminado');
+      const id = /El id del hallazgo es "([^"]+)"/.exec(body.messages.map((m) => m.content).join('\n'))?.[1];
+      const content = JSON.stringify({ id_hallazgo: id, resumen: 'Con la IA incluida.', causa_raiz: 'x', recomendacion: 'y', afirmaciones: [], confianza: 'media', informacion_insuficiente: false });
+      return Response.json({ model: 'qwen/qwen3-coder:free', choices: [{ message: { content }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 5, cost: 0 } });
+    });
+    const { store, credentials, analysisId } = setup(DEFAULT_SETTINGS, false);
+    const included = { url: 'https://p.supabase.co/functions/v1/ia', token: 'token-de-sesion' };
+    const service = new AiService({ store, credentials, settings: () => DEFAULT_SETTINGS, cacheBase: null, includedAi: () => included });
+    const report = await service.explain(analysisId, 'f1');
+    expect(report.ai?.explanations.find((e) => e.findingId === 'f1')?.summary).toBe('Con la IA incluida.');
+    expect(urls.every((u) => u.startsWith(included.url))).toBe(true);
+    const sinSesion = new AiService({ store, credentials, settings: () => DEFAULT_SETTINGS, cacheBase: null, includedAi: () => null });
+    await expect(sinSesion.explain(analysisId, 'f1')).rejects.toThrow(/necesita la sesión iniciada/);
+  });
+
   it('explica un hallazgo y lo añade al análisis guardado sin perder lo anterior', async () => {
     const bodies: Array<Record<string, unknown>> = [];
     vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {

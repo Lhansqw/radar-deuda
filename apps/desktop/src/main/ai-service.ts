@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { compareReports, defaultCacheDir, safeJoin, sha1, type AnalysisReport } from '@radar/engine';
-import { fetchOpenRouterModels, OpenRouterProvider, type OpenRouterModel } from '@radar/ai';
+import { fetchOpenRouterModels, IncludedAiProvider, OpenRouterProvider, type OpenRouterModel } from '@radar/ai';
 import type { FetchLike } from '@radar/sources';
-import { askStep, previewFix, proposeFixStep, runAiStep } from '@radar/pipeline';
-import type { CatalogModel, ChatMessage, FixPreviewInfo, OpenRouterKeyCheck, StoredFixProposal } from '../shared/model.js';
+import { askStep, previewFix, proposeFixStep, runAiStep, type AiOptions, type ApiKeys } from '@radar/pipeline';
+import type { CatalogModel, ChatMessage, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, StoredFixProposal } from '../shared/model.js';
 import type { AppSettings } from '../shared/settings.js';
 import { mergeAiSection } from './ai-merge.js';
 import type { CredentialStore } from './credentials.js';
-import { aiOptionsFrom } from './jobs.js';
+import { aiKeysFrom, aiOptionsFrom, includedProblem, type IncludedAccess } from './jobs.js';
 import type { Store } from './store.js';
 
 export interface AiServiceDeps {
@@ -17,6 +17,8 @@ export interface AiServiceDeps {
   /** Para pruebas. */
   fetch?: FetchLike;
   cacheBase?: string | null;
+  /** IA incluida: la función «ia» y el token de la sesión (null sin sesión). */
+  includedAi?: () => IncludedAccess | null;
 }
 
 const CATALOG_TTL_MS = 10 * 60_000;
@@ -73,6 +75,16 @@ export class AiService {
     return provider.keyStatus();
   }
 
+  /** Consultas de IA incluida que quedan hoy a la cuenta. */
+  async includedQuota(): Promise<IncludedQuota> {
+    const included = this.d.includedAi?.() ?? null;
+    if (!included) throw new AiServiceError('Inicia sesión con conexión para ver tu cupo de IA incluida.');
+    const provider = new IncludedAiProvider({ baseUrl: included.url, sessionToken: included.token, ...(this.d.fetch ? { fetch: this.d.fetch } : {}) });
+    const status = await provider.keyStatus();
+    if (!status.freeDaily) throw new AiServiceError('La función «ia» no devolvió el cupo.');
+    return status.freeDaily;
+  }
+
   /** Explica un hallazgo con la IA configurada y guarda la explicación en el análisis. */
   explain(analysisId: number, findingId: string): Promise<AnalysisReport> {
     const k = `${analysisId}:${findingId}`;
@@ -98,18 +110,30 @@ export class AiService {
   private aiSettings(): AppSettings['ai'] {
     const s = this.d.settings().ai;
     if (s.provider === 'openrouter' && s.model === '') throw new AiServiceError('Elige un modelo de OpenRouter en Configuración.');
+    const problem = includedProblem(s, this.included());
+    if (problem) throw new AiServiceError(problem);
     return s;
+  }
+
+  private included(): IncludedAccess | null {
+    return this.d.includedAi?.() ?? null;
+  }
+
+  /** Opciones y claves de una consulta con los ajustes dados. */
+  private request(s: AppSettings['ai']): { options: AiOptions; keys: ApiKeys } {
+    const included = this.included();
+    return { options: aiOptionsFrom(s, included), keys: aiKeysFrom(this.d.credentials, s, included) };
   }
 
   private async doExplain(analysisId: number, findingId: string): Promise<AnalysisReport> {
     const report = this.report(analysisId, findingId);
-    const s = this.aiSettings();
+    const req = this.request(this.aiSettings());
     const warnings: string[] = [];
     const cacheBase = this.cacheBase;
     const { section } = await runAiStep(
       report,
-      { ...aiOptionsFrom(s), findingIds: [findingId] },
-      this.d.credentials.apiKeys(),
+      { ...req.options, findingIds: [findingId] },
+      req.keys,
       { info: () => undefined, warn: (m) => warnings.push(m) },
       new AbortController().signal,
       cacheBase,
@@ -127,7 +151,8 @@ export class AiService {
   /** Lo que se enviaría para proponer una corrección (sin enviar nada). */
   async fixPreview(analysisId: number, findingId: string): Promise<FixPreviewInfo> {
     const report = this.report(analysisId, findingId);
-    return previewFix(report, findingId, aiOptionsFrom(this.aiSettings()), this.d.credentials.apiKeys());
+    const req = this.request(this.aiSettings());
+    return previewFix(report, findingId, req.options, req.keys);
   }
 
   /** Pide una propuesta a la IA y la guarda (sustituye la anterior del mismo hallazgo). */
@@ -139,7 +164,8 @@ export class AiService {
       const report = this.report(analysisId, findingId);
       // Si ya había una, se pide otra distinta: sin la caché de respuestas.
       const again = this.d.store.getFixProposal(analysisId, findingId) !== null;
-      const proposal = await proposeFixStep(report, findingId, aiOptionsFrom(this.aiSettings()), this.d.credentials.apiKeys(), {
+      const req = this.request(this.aiSettings());
+      const proposal = await proposeFixStep(report, findingId, req.options, req.keys, {
         consent,
         cacheBase: again ? null : this.cacheBase,
         signal: new AbortController().signal,
@@ -173,9 +199,9 @@ export class AiService {
     this.asking.add(analysisId);
     try {
       const report = this.report(analysisId);
-      const s = this.aiSettings();
+      const req = this.request(this.aiSettings());
       const history = this.d.store.listChatMessages(analysisId).map((m) => ({ role: m.role, content: m.content }));
-      const answer = await askStep(report, history, question, aiOptionsFrom(s), this.d.credentials.apiKeys(), {
+      const answer = await askStep(report, history, question, req.options, req.keys, {
         comparison: this.previousComparison(analysisId, report),
         signal: new AbortController().signal,
       });

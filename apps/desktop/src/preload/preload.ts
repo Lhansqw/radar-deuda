@@ -72,6 +72,7 @@ const api: RadarApi = {
     explain: (analysisId, findingId) => invoke('ai:explain', analysisId, findingId),
     models: () => invoke('ai:models'),
     checkKey: () => invoke('ai:checkKey'),
+    includedQuota: () => invoke('ai:includedQuota'),
     fixPreview: (analysisId, findingId) => invoke('ai:fixPreview', analysisId, findingId),
     proposeFix: (analysisId, findingId, consent) => invoke('ai:proposeFix', analysisId, findingId, consent),
     getFix: (analysisId, findingId) => invoke('ai:getFix', analysisId, findingId),

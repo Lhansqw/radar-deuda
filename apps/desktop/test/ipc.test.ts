@@ -53,6 +53,7 @@ function setup(over: Partial<HandlerDeps> = {}) {
       explain: () => Promise.reject(new Error('no se usa')),
       openRouterModels: async () => [],
       checkOpenRouterKey: () => Promise.reject(new Error('no se usa')),
+      includedQuota: () => Promise.reject(new Error('no se usa')),
       fixPreview: () => Promise.reject(new Error('no se usa')),
       proposeFix: () => Promise.reject(new Error('no se usa')),
       getFix: async () => null,
@@ -151,7 +152,7 @@ describe('contrato IPC', () => {
     const next = { ...DEFAULT_SETTINGS, analysis: { ...DEFAULT_SETTINGS.analysis, online: true } };
     expect(await call('settings:set', next)).toEqual({ ok: true, value: next });
     expect(await call('settings:get')).toEqual({ ok: true, value: next });
-    const r = await call('settings:set', { ...next, ai: { ...next.ai, limit: 0, model: 'sin-barra' } });
+    const r = await call('settings:set', { ...next, ai: { ...next.ai, provider: 'openrouter', limit: 0, model: 'sin-barra' } });
     expect(r).toMatchObject({ ok: false, error: expect.stringMatching(/Hallazgos a explicar.*Modelo: en OpenRouter/) as unknown });
   });
 

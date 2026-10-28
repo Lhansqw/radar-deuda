@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import type { IncludedQuota } from '../../../shared/model.js';
 import { LOCAL_PROVIDERS, type AiProviderName, type AiSettings, type PrivacySetting, type ReasoningLevel } from '../../../shared/settings.js';
 import { dataCollectionChange, providerChange } from '../../lib/settings.js';
 import { OpenRouterModels } from './OpenRouterModels.js';
@@ -6,7 +8,12 @@ import { CheckField, SettingsSection } from './SettingsSection.js';
 type Patch = (patch: Partial<AiSettings>) => void;
 
 const PROVIDERS: Array<{ value: AiProviderName; label: string; hint: string }> = [
-  { value: 'openrouter', label: 'OpenRouter', hint: 'Muchos modelos con una sola clave, incluidos algunos gratuitos.' },
+  {
+    value: 'incluida',
+    label: 'IA incluida (gratuita)',
+    hint: 'Sin claves: modelos gratuitos con la cuenta de la aplicación y un número de consultas al día. Sus proveedores pueden guardar lo que reciben; con «solo metadatos» no se envía código.',
+  },
+  { value: 'openrouter', label: 'OpenRouter (tu clave)', hint: 'Muchos modelos con una sola clave, incluidos algunos gratuitos.' },
   { value: 'anthropic', label: 'Anthropic (Claude)', hint: 'Si no eliges modelo: claude-haiku-5-5 para explicar y claude-sonnet-5-5 para el plan.' },
   { value: 'openai', label: 'OpenAI', hint: 'Indica el modelo.' },
   { value: 'lmstudio', label: 'LM Studio (en este equipo)', hint: 'Nada sale del equipo. Usa el primer modelo cargado si no eliges otro.' },
@@ -32,17 +39,20 @@ const REASONING: Array<{ value: ReasoningLevel; label: string }> = [
 /** Proveedor, modelo, privacidad, límites y opciones de OpenRouter. */
 export function AiSection({ value: ai, onChange }: { value: AiSettings; onChange: Patch }) {
   const local = LOCAL_PROVIDERS.has(ai.provider);
+  const included = ai.provider === 'incluida';
   return (
     <SettingsSection id="s-ia" title="Inteligencia artificial" intro="Opcional. Explica los hallazgos y propone un plan; la evidencia siempre viene de las herramientas del análisis.">
       <ProviderField ai={ai} onChange={onChange} />
-      {ai.provider === 'openrouter' ? (
+      {included ? (
+        <IncludedQuotaField />
+      ) : ai.provider === 'openrouter' ? (
         <OpenRouterModels model={ai.model} fallback={ai.fallbackModels} onModel={(model) => onChange({ model })} onFallback={(fallbackModels) => onChange({ fallbackModels })} />
       ) : (
         <ModelField ai={ai} local={local} onChange={onChange} />
       )}
       {local ? <LocalUrlField ai={ai} onChange={onChange} /> : null}
       <PrivacyField ai={ai} local={local} onChange={onChange} />
-      <LimitFields ai={ai} local={local} onChange={onChange} />
+      <LimitFields ai={ai} showBudget={!local && !included} onChange={onChange} />
       <CheckField checked={ai.plan} onChange={(plan) => onChange({ plan })} label="Proponer un plan de reducción de la deuda" />
       {ai.provider === 'openrouter' ? <OpenRouterOptions ai={ai} onChange={onChange} /> : null}
       <CheckField
@@ -69,6 +79,31 @@ function ProviderField({ ai, onChange }: { ai: AiSettings; onChange: Patch }) {
       </select>
       {provider ? <span className="hint">{provider.hint}</span> : null}
     </div>
+  );
+}
+
+/** Consultas de IA incluida que quedan hoy (las cuenta el servidor). */
+function IncludedQuotaField() {
+  const [quota, setQuota] = useState<{ value: IncludedQuota | null; error: string | null }>({ value: null, error: null });
+  useEffect(() => {
+    let alive = true;
+    window.radar.ai.includedQuota().then(
+      (value) => alive && setQuota({ value, error: null }),
+      (err: unknown) => alive && setQuota({ value: null, error: err instanceof Error ? err.message : String(err) }),
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const { value, error } = quota;
+  return (
+    <p className="hint" id="cupo-ia" role="status">
+      {value
+        ? `Te quedan ${value.remaining} de ${value.limit} consultas hoy. Se renuevan a las 00:00 UTC.`
+        : error
+          ? `No se pudo consultar tu cupo: ${error}`
+          : 'Consultando tu cupo de hoy…'}
+    </p>
   );
 }
 
@@ -119,14 +154,14 @@ function PrivacyField({ ai, local, onChange }: { ai: AiSettings; local: boolean;
   );
 }
 
-function LimitFields({ ai, local, onChange }: { ai: AiSettings; local: boolean; onChange: Patch }) {
+function LimitFields({ ai, showBudget, onChange }: { ai: AiSettings; showBudget: boolean; onChange: Patch }) {
   return (
     <div className="field-row">
       <div className="field field-inline">
         <label htmlFor="limite">Hallazgos a explicar por análisis</label>
         <input id="limite" className="input input-num" type="number" min={1} max={50} value={ai.limit} onChange={(e) => onChange({ limit: Number(e.target.value) })} />
       </div>
-      {local ? null : (
+      {!showBudget ? null : (
         <div className="field field-inline">
           <label htmlFor="presupuesto">Coste máximo por análisis (USD)</label>
           <input
