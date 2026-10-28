@@ -51,9 +51,15 @@ export interface AiSettings {
   localUrl: string;
 }
 
+export interface CloudSettings {
+  /** Guardar proyectos e historial (sin código) en la nube de la cuenta (fase 13b). */
+  sync: boolean;
+}
+
 export interface AppSettings {
   analysis: AnalysisSettings;
   ai: AiSettings;
+  cloud: CloudSettings;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -72,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     reasoning: 'auto',
     localUrl: '',
   },
+  cloud: { sync: true },
 };
 
 /** Mismo formato que valida la CLI: proveedor/modelo con variante opcional (":free"). */
@@ -170,6 +177,10 @@ function readAi(r: FieldReader, ai: Record<string, unknown>): AiSettings {
   };
 }
 
+function readCloud(r: FieldReader, c: Record<string, unknown>): CloudSettings {
+  return { sync: r.bool(c, 'sync', 'Copia en la nube') };
+}
+
 /** Reglas que relacionan campos de la IA. */
 function aiRuleErrors(s: AiSettings): string[] {
   return [
@@ -202,9 +213,9 @@ function otherProviderErrors(s: AiSettings): string[] {
  * español, para mostrarlos junto al formulario.
  */
 export function validateSettings(input: unknown): SettingsResult {
-  if (!isObject(input) || !isObject(input['analysis']) || !isObject(input['ai'])) return { ok: false, errors: ['Formato de ajustes no válido.'] };
+  if (!isObject(input) || !isObject(input['analysis']) || !isObject(input['ai']) || !isObject(input['cloud'])) return { ok: false, errors: ['Formato de ajustes no válido.'] };
   const r = new FieldReader();
-  const settings: AppSettings = { analysis: readAnalysis(r, input['analysis']), ai: readAi(r, input['ai']) };
+  const settings: AppSettings = { analysis: readAnalysis(r, input['analysis']), ai: readAi(r, input['ai']), cloud: readCloud(r, input['cloud']) };
   const errors = [...r.errors, ...aiRuleErrors(settings.ai)];
   return errors.length > 0 ? { ok: false, errors } : { ok: true, value: settings };
 }
@@ -218,13 +229,14 @@ export function normalizeSettings(stored: unknown): AppSettings {
   const merged = {
     analysis: { ...DEFAULT_SETTINGS.analysis, ...(isObject(stored['analysis']) ? stored['analysis'] : {}) },
     ai: { ...DEFAULT_SETTINGS.ai, ...(isObject(stored['ai']) ? stored['ai'] : {}) },
+    cloud: { ...DEFAULT_SETTINGS.cloud, ...(isObject(stored['cloud']) ? stored['cloud'] : {}) },
   };
   const full = validateSettings(merged);
   if (full.ok) return full.value;
-  const analysisOnly = validateSettings({ analysis: merged.analysis, ai: DEFAULT_SETTINGS.ai });
-  const aiOnly = validateSettings({ analysis: DEFAULT_SETTINGS.analysis, ai: merged.ai });
-  return {
-    analysis: analysisOnly.ok ? analysisOnly.value.analysis : structuredClone(DEFAULT_SETTINGS.analysis),
-    ai: aiOnly.ok ? aiOnly.value.ai : structuredClone(DEFAULT_SETTINGS.ai),
+  // Cada sección por separado, con las demás por defecto.
+  const only = <K extends keyof AppSettings>(key: K): AppSettings[K] => {
+    const r = validateSettings({ ...DEFAULT_SETTINGS, [key]: merged[key] });
+    return r.ok ? r.value[key] : structuredClone(DEFAULT_SETTINGS[key]);
   };
+  return { analysis: only('analysis'), ai: only('ai'), cloud: only('cloud') };
 }

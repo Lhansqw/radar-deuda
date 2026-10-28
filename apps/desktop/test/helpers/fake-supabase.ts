@@ -44,6 +44,8 @@ export class FakeSupabase {
   private readonly codes = new Map<string, { type: 'signup' | 'recovery'; code: string }>();
   /** Sin conexión: cada petición falla como si no hubiera red. */
   offline = false;
+  /** Si devuelve true, la petición se atiende pero la respuesta «se pierde» por la red (una sola vez por llamada). */
+  loseResponse: ((method: string, path: string) => boolean) | null = null;
   /** La base de datos (las tablas de supabase/migrations), con las reglas de cada usuario. */
   readonly db = new FakePostgrest((headers) => this.bearer(headers)?.id);
   /** Duración de los tokens de acceso que emite (segundos). */
@@ -73,7 +75,11 @@ export class FakeSupabase {
     this.requests.push({ method, path: url.pathname, body });
     const headers = new Headers(init?.headers);
     if (headers.get('apikey') !== FAKE_KEY) return json({ message: 'Invalid API key' }, 401);
-    if (url.pathname.startsWith('/rest/v1/')) return this.db.handle(url, method, headers, body);
+    if (url.pathname.startsWith('/rest/v1/')) {
+      const response = this.db.handle(url, method, headers, body);
+      if (this.loseResponse?.(method, url.pathname)) throw new TypeError('fetch failed');
+      return response;
+    }
     const handler = this.routes[route];
     if (!handler) return json({ message: `Ruta no simulada: ${route}` }, 404);
     return handler({ body, headers, email: text(body['email']), password: text(body['password']) });
