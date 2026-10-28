@@ -133,8 +133,9 @@ principal de Electron.
 - La conexión (URL y clave publicable) llega por variables de entorno o se incrusta al
   compilar; la clave secreta se rechaza siempre.
 - Los datos locales siguen en SQLite, una base de datos por cuenta: la aplicación funciona
-  sin conexión con una sesión guardada. La fase 13b añadirá la copia en PostgreSQL de
-  proyectos e historial, nunca de las claves de IA ni del código.
+  sin conexión con una sesión guardada. La fase 13b añade la copia en PostgreSQL de
+  proyectos e historial (local primero: la nube es una copia que se sincroniza), nunca de las
+  claves de IA, de lo que dice la IA ni del código.
 - Los correos llevan un código en lugar de un enlace, porque una aplicación de escritorio
   no puede recibir el enlace.
 

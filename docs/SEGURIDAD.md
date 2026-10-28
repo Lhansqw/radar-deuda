@@ -66,11 +66,16 @@ generados por el proceso principal y respuestas de la IA mostradas como texto.
 
 ### Cuentas (fase 13)
 
-Detalle en [CUENTAS.md](CUENTAS.md#4-seguridad). Las cuentas viven en Supabase Auth; el
+Detalle en [CUENTAS.md](CUENTAS.md#5-seguridad). Las cuentas viven en Supabase Auth; el
 cliente está en el proceso principal y la interfaz nunca recibe los tokens. Sin sesión no hay
 ninguna base de datos abierta ni canal de datos que responda. La sesión se guarda solo
 cifrada con el sistema, y la contraseña nunca. La conexión exige `https`, y la clave secreta
 de Supabase se rechaza al ejecutar y al compilar.
+
+La copia en la nube (13b) sube los proyectos y el historial sin código (sin los fragmentos
+de la evidencia ni lo que añade la IA) a dos tablas con seguridad por filas: cada usuario solo
+lee y escribe lo suyo, y el rol anónimo no tiene permisos. `npm run test:db` comprueba esas
+reglas en PostgreSQL en la integración continua.
 
 ### Red
 
@@ -79,7 +84,7 @@ de Supabase se rechaza al ejecutar y al compilar.
 | `api.osv.dev`, `registry.npmjs.org` | Con «Vulnerabilidades y versiones» (`--online`) | Nombres y versiones de paquetes |
 | `api.github.com`, `github.com` | Al añadir o analizar un repositorio de GitHub | El repositorio pedido; el token, si lo hay, en una cabecera |
 | `openrouter.ai`, `api.anthropic.com`, `api.openai.com` | Solo al usar la IA | Metadatos del análisis; código solo con «fragmentos» o con permiso explícito para una propuesta |
-| `<proyecto>.supabase.co` | Al iniciar sesión, registrarse, recuperar la contraseña y renovar la sesión | Correo, contraseña y códigos de la cuenta; nunca código ni datos de los análisis |
+| `<proyecto>.supabase.co` | Al iniciar sesión, registrarse, recuperar la contraseña y renovar la sesión; con la copia en la nube activada, al sincronizar | Correo, contraseña y códigos de la cuenta. La copia: lista de proyectos (con su carpeta) y resultados de cada análisis, sin código ni nada de la IA |
 
 No hay telemetría ni actualizaciones automáticas. Todas las peticiones tienen tiempo límite,
 reintentos solo para errores transitorios y tamaño máximo de respuesta. Una petición con

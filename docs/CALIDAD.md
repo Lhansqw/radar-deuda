@@ -7,33 +7,41 @@ npm run check          # tipos + lint + pruebas; debe pasar antes de cada commit
 npm run test:coverage  # lo mismo con cobertura (informe en coverage/index.html)
 npm run e2e:desktop    # la aplicación de Electron de extremo a extremo (abre una ventana)
 npm run test:live      # contra servicios reales, solo con RADAR_LIVE=1 o RADAR_LIVE_LLM
+npm run test:db        # esquema de la nube y sus políticas en un PostgreSQL (RADAR_TEST_DATABASE_URL)
 npm run bench          # rendimiento con repositorios sintéticos (-- --large para 5 000 archivos)
 ```
 
 | Parte | Archivos de prueba | Pruebas | Qué cubren |
 |---|---|---|---|
-| `packages/engine` | 19 | 173 | Cada analizador, caché, configuración, puntuación, comparación entre informes, referencias, `.radarignore`, carga perezosa del compilador |
-| `packages/sources` | 8 | 95 (+3 en vivo) | Git endurecido, historial y puntos críticos, GitHub (URL, API, clonado), OSV, versiones de npm, CVSS, redirecciones con servidores HTTP reales |
+| `packages/engine` | 19 | 175 | Cada analizador, caché, configuración, puntuación, comparación entre informes, referencias, `.radarignore`, carga perezosa del compilador |
+| `packages/sources` | 8 | 97 (+3 en vivo) | Git endurecido, historial y puntos críticos, GitHub (URL, API, clonado), OSV, versiones de npm, CVSS, redirecciones con servidores HTTP reales |
 | `packages/ai` | 12 | 120 (+2 en vivo) | Proveedores con `fetch` simulado, privacidad, redacción de secretos, validación contra inyecciones, propuestas y parches, preguntas, presupuesto |
 | `packages/pipeline` | 3 | 18 | Análisis completo, origen de GitHub (con GitHub simulado), caché del historial, pasos de IA, mantenimiento de la caché |
 | `packages/cli` | 5 | 27 | Opciones, códigos de salida, comparación, IA, caché |
-| `apps/desktop` | 9 | 94 | IPC (remitente y argumentos), credenciales, ajustes, base de datos y migraciones, trabajos, fragmentos, seguridad, lógica de la interfaz |
-| **Total** | **56** | **527** (+5 en vivo) | |
+| `apps/desktop` | 18 | 159 | IPC (remitente y argumentos), cuentas y sesión (con Supabase simulado), datos por cuenta, copia en la nube (dos equipos y otra cuenta contra la API simulada), credenciales, ajustes, base de datos y migraciones, trabajos, fragmentos, seguridad, lógica de la interfaz |
+| **Total** | **65** | **596** (+5 en vivo) | |
+
+Además, `npm run test:db` aplica la migración de `supabase/migrations` en un PostgreSQL real y
+comprueba sus políticas de seguridad por filas y sus permisos como los vería la aplicación
+(ver [CUENTAS.md](CUENTAS.md#6-pruebas)).
 
 Las pruebas «en vivo» llaman a servicios reales. `npm run check` las desactiva aunque
 queden variables olvidadas en la terminal, para no salir a la red ni gastar cuota.
 
 La prueba de extremo a extremo abre la aplicación compilada con Playwright, simula OpenRouter
-dentro del proceso principal (sin red) y recorre el flujo completo:
+y Supabase dentro del proceso principal (sin red) y recorre el flujo completo:
 
-1. añadir un proyecto y analizarlo dos veces;
+0. crear una cuenta y confirmar el correo con el código (también uno erróneo);
+1. añadir un proyecto y analizarlo dos veces; el proyecto y el análisis suben a la nube sin código;
 2. abrir el panel, los hallazgos, los archivos y el historial;
 3. elegir un modelo gratuito y guardar la clave; se comprueba que no vuelve a aparecer;
 4. pedir una explicación y comprobar que no se envía código;
 5. proponer una corrección con el permiso explícito y aplicar el parche con `git apply`;
-6. preguntar sobre el análisis y abrir la referencia de la respuesta.
+6. preguntar sobre el análisis y abrir la referencia de la respuesta;
+7. cerrar la sesión, probar una contraseña equivocada y volver a entrar.
 
-También comprueba que la interfaz no tiene `require` ni `process`.
+También comprueba que la interfaz no tiene `require` ni `process`, que sin sesión no llega a
+ningún dato y que no guarda nada de la sesión.
 
 ## Cobertura
 
@@ -58,7 +66,9 @@ request:
 | Comprobar | `npm run check` en Windows y Ubuntu con Node 24, y en Ubuntu con Node 22 (la mínima) |
 | Dependencias | `npm audit` (moderada o superior) y `npm audit signatures` |
 | Calidad | Autoanálisis con el historial completo (`--fail-on high`), cobertura con sus mínimos y benchmark informativo; publica el informe JSON, la cobertura y el rendimiento |
-| Aplicación de escritorio | La prueba de extremo a extremo en Windows, con las capturas como artefacto |
+| Base de datos | `npm run test:db` con PostgreSQL 17: el esquema de la nube y sus políticas de seguridad por filas |
+| Aplicación de escritorio e instalador | La prueba de extremo a extremo en Windows (capturas como artefacto) y el instalador con la comprobación del paquete (artefacto `instalador-windows`) |
+| Paquete (Linux) | El mismo paquete en Linux, comprobado con una pantalla virtual |
 
 Dependabot propone cada semana las actualizaciones de npm (agrupadas) y de las acciones. Los
 detalles de seguridad de la propia integración continua están en [SEGURIDAD.md](SEGURIDAD.md).

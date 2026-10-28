@@ -4,7 +4,7 @@ Aplicación de escritorio para Windows que analiza repositorios (locales o de Gi
 detecta deuda técnica con herramientas deterministas y usa inteligencia artificial
 para explicar, priorizar y proponer correcciones a los hallazgos.
 
-> Estado: las 12 fases del plan están completas y la 13 (cuentas de usuario) está en curso (tabla siguiente). Arquitectura y decisiones en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
+> Estado: las 13 fases del plan están completas (tabla siguiente). Arquitectura y decisiones en [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md).
 
 ## Estado por fases
 
@@ -23,7 +23,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 11 | Refactorización de la deuda propia, auditorías de seguridad y de rendimiento (repositorios reales), cobertura de pruebas e integración continua | ✅ |
 | 12 | Instalador para Windows: ASAR con integridad, *fuses* de Electron, licencias de terceros y prueba del paquete | ✅ |
 | 13a | Cuentas de usuario con Supabase: inicio de sesión obligatorio, confirmación del correo y recuperación con código, datos separados por cuenta | ✅ |
-| 13b | Proyectos e historial en PostgreSQL (Supabase) con reglas de seguridad por filas | Pendiente |
+| 13b | Copia de proyectos e historial en PostgreSQL (Supabase), sin código y con seguridad por filas probada en la integración continua | ✅ |
 
 **El radar sobre sí mismo:** 99/100 (A), sin hallazgos altos ni críticos. La integración
 continua falla si aparece alguno (`npm run analyze -- . --fail-on high`).
@@ -79,6 +79,7 @@ npm ci            # instala dependencias exactas del lockfile
 npm run check     # tipos + lint + pruebas (debe pasar antes de cada commit; nunca sale a la red)
 npm run test:coverage # pruebas con cobertura (informe en coverage/index.html)
 npm run test:live # pruebas contra servicios reales (requieren RADAR_LIVE=1 o RADAR_LIVE_LLM)
+npm run test:db   # esquema de la nube y sus políticas en PostgreSQL (RADAR_TEST_DATABASE_URL, docs/CUENTAS.md)
 npm run build     # compila los paquetes en orden (engine → sources → ai → pipeline → cli) a packages/*/dist
 npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archivos)
 npm run desktop   # compila y abre la aplicación de escritorio
@@ -135,4 +136,4 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/SEGURIDAD.md](docs/SEGURIDAD.md) | Fase 11: modelo de amenazas, controles, qué sale del equipo, auditoría y riesgos pendientes |
 | [docs/INSTALADOR.md](docs/INSTALADOR.md) | Fase 12: generar el instalador, qué instala, fuses, comprobación del paquete y firma |
 | [docs/CALIDAD.md](docs/CALIDAD.md) | Fase 11: pruebas, cobertura, integración continua y refactorización de la deuda propia |
-| [docs/CUENTAS.md](docs/CUENTAS.md) | Fase 13: preparar Supabase, conectar la aplicación, cómo funcionan las cuentas y su seguridad |
+| [docs/CUENTAS.md](docs/CUENTAS.md) | Fase 13: preparar Supabase, conectar la aplicación, cuentas, copia en la nube y su seguridad |
