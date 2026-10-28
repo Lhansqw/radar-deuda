@@ -18,3 +18,4 @@ export { askAboutReport, citedAliases, findingAliases, reportDigest, MAX_QUESTIO
 export { fixContext, fixUnavailableReason, FixUnavailableError, proposeFix, validateFix, FIX_CONTEXT_LIMITS, type FixOptions, type ValidatedFix } from './fix.js';
 export { applyEdits, buildHunks, diffOps, EditError, formatPatch, joinLines, splitLines, type FilePatch, type LineEdit, type TextLines } from './diff.js';
 export { OpenRouterProvider, fetchOpenRouterModels, OPENROUTER_BASE_URL, planReasoning, REASONING_PREFERENCES, type OpenRouterOptions, type OpenRouterModel, type OpenRouterKeyStatus, type ReasoningPreference, type ReasoningPlan } from './providers/openrouter.js';
+export { IncludedAiProvider, INCLUDED_DEFAULT_MODEL, quotaMessage, type IncludedAiOptions } from './providers/included.js';

@@ -7,6 +7,8 @@ import {
   askAboutReport,
   checkApiKey,
   fixContext,
+  IncludedAiProvider,
+  INCLUDED_DEFAULT_MODEL,
   KEY_RULES,
   OpenAiCompatibleProvider,
   OpenRouterProvider,
@@ -25,7 +27,9 @@ import {
 } from '@radar/ai';
 import type { PipelineHooks } from './types.js';
 
-export type AiProviderName = 'lmstudio' | 'ollama' | 'anthropic' | 'openrouter' | 'openai' | 'url';
+/** «incluida»: la IA de la aplicación de escritorio a través de su proyecto de Supabase (necesita sesión; la CLI no la ofrece). */
+export type AiProviderName = 'lmstudio' | 'ollama' | 'anthropic' | 'openrouter' | 'openai' | 'url' | 'incluida';
+/** Los que se pueden elegir en la CLI. */
 export const AI_PROVIDERS: readonly AiProviderName[] = ['lmstudio', 'ollama', 'anthropic', 'openrouter', 'openai', 'url'];
 export const PRIVACY_MODES: readonly PrivacyMode[] = ['local', 'metadatos', 'fragmentos'];
 
@@ -51,6 +55,8 @@ export interface ApiKeys {
   openrouter?: string;
   anthropic?: string;
   openai?: string;
+  /** IA incluida: token de la sesión del usuario (la URL de la función va en AiOptions.url). */
+  incluida?: string;
 }
 
 /** Claves de las variables de entorno RADAR_*_API_KEY (la forma de pasarlas en la CLI). */
@@ -93,12 +99,17 @@ export function createProvider(o: AiOptions, keys: ApiKeys): LlmProvider {
     }
     case 'url':
       return new OpenAiCompatibleProvider({ id: 'personalizado', label: `Servidor ${o.url}`, baseUrl: o.url as string, ...(keys.openai ? { apiKey: keys.openai } : {}) });
+    case 'incluida':
+      if (!o.url) throw new Error('La IA incluida necesita la conexión con Supabase de la aplicación.');
+      return new IncludedAiProvider({ baseUrl: o.url, sessionToken: keys.incluida ?? '', ...(o.reasoning ? { reasoning: o.reasoning } : {}) });
   }
 }
 
 async function chooseModel(o: AiOptions, provider: LlmProvider, signal: AbortSignal): Promise<string> {
   if (o.model) return o.model;
   if (o.provider === 'anthropic') return ANTHROPIC_MODELS.fast;
+  // Los modelos de la IA incluida los elige el servidor.
+  if (o.provider === 'incluida') return INCLUDED_DEFAULT_MODEL;
   if (provider.locality === 'local' && provider.listModels) {
     const models = (await provider.listModels(signal)).filter((m) => !/embed/i.test(m));
     if (models.length === 0) throw new Error(`${provider.label} no tiene ningún modelo cargado. Carga uno (LM Studio: pestaña Developer, o \`lms load <modelo>\`) o indica el modelo (--ai-model en la CLI).`);
@@ -156,6 +167,9 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
   const privacy: PrivacyMode = o.privacy ?? (provider.locality === 'local' ? 'local' : 'metadatos');
   const model = await chooseModel(o, provider, signal);
   const planModel = o.planModel ?? (o.provider === 'anthropic' ? ANTHROPIC_MODELS.balanced : model);
+  if (o.provider === 'incluida') {
+    hooks.info('IA incluida: modelos gratuitos de OpenRouter a través de la cuenta de la aplicación; sus proveedores pueden guardar lo que reciben.');
+  }
   if (o.provider === 'openrouter') {
     hooks.info(
       o.allowDataCollection
@@ -227,7 +241,7 @@ export interface FixPreview {
   cloud: boolean;
   /** Hay que pedir permiso al usuario antes de enviarlo. */
   needsConsent: boolean;
-  /** OpenRouter puede enviarlo a proveedores que guardan o entrenan con los datos. */
+  /** OpenRouter (o la IA incluida) puede enviarlo a proveedores que guardan o entrenan con los datos. */
   mayRetain: boolean;
 }
 
@@ -241,7 +255,7 @@ export async function previewFix(report: AnalysisReport, findingId: string, o: A
     provider: provider.label,
     cloud: provider.locality === 'cloud',
     needsConsent: fixPrivacy(o, provider, false) === null,
-    mayRetain: o.provider === 'openrouter' && o.allowDataCollection === true,
+    mayRetain: o.provider === 'incluida' || (o.provider === 'openrouter' && o.allowDataCollection === true),
   };
 }
 
