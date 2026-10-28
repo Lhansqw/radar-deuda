@@ -1,9 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { parseReport, type AiFixProposal, type AnalysisReport } from '@radar/engine';
 import type { AnalysisSummary, ChatMessage, ChatMeta, Project, ProjectKind } from '../shared/model.js';
+import { CloudLedger } from './cloud-ledger.js';
+import { HISTORY_LIMIT, insertAnalysis, SUMMARY_COLUMNS, toSummary, type Row } from './store-rows.js';
+
+export { HISTORY_LIMIT } from './store-rows.js';
 
 /**
  * Persistencia de la aplicación en un solo archivo SQLite (node:sqlite, sin
@@ -65,6 +69,17 @@ const MIGRATIONS: readonly string[] = [
      created_at TEXT NOT NULL
    );
    CREATE INDEX chat_by_analysis ON chat_messages (analysis_id, id);`,
+  // Fase 13b: copia en la nube (cloud-ledger.ts). cloud_id es su identificador en
+  // Supabase (NULL: aún no ha subido); cloud_synced = 0, falta subirlo (nuevo o
+  // con el informe cambiado). cloud_removals: proyectos quitados aquí que hay
+  // que marcar como quitados en la nube.
+  `ALTER TABLE projects ADD COLUMN cloud_id TEXT;
+   CREATE UNIQUE INDEX projects_by_cloud_id ON projects (cloud_id);
+   ALTER TABLE analyses ADD COLUMN cloud_id TEXT;
+   ALTER TABLE analyses ADD COLUMN cloud_synced INTEGER NOT NULL DEFAULT 0;
+   CREATE UNIQUE INDEX analyses_by_cloud_id ON analyses (cloud_id);
+   CREATE INDEX analyses_to_upload ON analyses (cloud_synced) WHERE cloud_synced = 0;
+   CREATE TABLE cloud_removals (cloud_id TEXT PRIMARY KEY, removed_at TEXT NOT NULL);`,
 ];
 
 /** Versión del esquema que crea esta versión de la aplicación. */
@@ -73,38 +88,12 @@ export const SCHEMA_VERSION = MIGRATIONS.length;
 /** Mensajes de una conversación que se conservan (los más antiguos se eliminan). */
 export const CHAT_LIMIT = 200;
 
-/** Análisis que se conservan por proyecto (los más antiguos se eliminan). */
-export const HISTORY_LIMIT = 100;
 
 export class DuplicateProjectError extends Error {
   constructor(location: string) {
     super(`El proyecto ${location} ya está en la lista.`);
     this.name = 'DuplicateProjectError';
   }
-}
-
-type Row = Record<string, SQLInputValue>;
-
-const SUMMARY_COLUMNS = `id, project_id, started_at, finished_at, duration_ms, score, rating, debt_ratio, effort_minutes,
-  findings, critical, high, medium, low, info, head, branch, with_ai`;
-
-function toSummary(r: Row): AnalysisSummary {
-  return {
-    id: Number(r['id']),
-    projectId: Number(r['project_id']),
-    startedAt: String(r['started_at']),
-    finishedAt: String(r['finished_at']),
-    durationMs: Number(r['duration_ms']),
-    score: Number(r['score']),
-    rating: String(r['rating']) as AnalysisSummary['rating'],
-    debtRatio: Number(r['debt_ratio']),
-    effortMinutes: Number(r['effort_minutes']),
-    findings: Number(r['findings']),
-    bySeverity: { critical: Number(r['critical']), high: Number(r['high']), medium: Number(r['medium']), low: Number(r['low']), info: Number(r['info']) },
-    head: r['head'] === null ? null : String(r['head']),
-    branch: r['branch'] === null ? null : String(r['branch']),
-    withAi: Number(r['with_ai']) === 1,
-  };
 }
 
 function toChatMessage(r: Row): ChatMessage {
@@ -121,8 +110,28 @@ function toChatMessage(r: Row): ChatMessage {
 
 export class Store {
   private closed = false;
+  private readonly listeners = new Set<() => void>();
 
   private constructor(private readonly db: DatabaseSync) {}
+
+  /**
+   * Avisa cuando cambian los proyectos o el historial por una acción del
+   * usuario (no por lo que llega de la nube): la copia en la nube se pone al día.
+   * Devuelve la función para dejar de escuchar.
+   */
+  onChange(cb: () => void): () => void {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
+  }
+
+  private changed(): void {
+    for (const cb of this.listeners) cb();
+  }
+
+  /** Lo que falta subir a la nube y lo que llega de ella (cloud-ledger.ts). */
+  cloudLedger(): CloudLedger {
+    return new CloudLedger(this.db, (fn) => this.transaction(fn));
+  }
 
   /** Abre (o crea) la base de datos y aplica las migraciones pendientes. Usa ':memory:' en pruebas. */
   static open(file: string): Store {
@@ -199,12 +208,21 @@ export class Store {
     const { lastInsertRowid } = this.db
       .prepare('INSERT INTO projects (name, kind, location, branch, created_at) VALUES (?, ?, ?, ?, ?)')
       .run(p.name, p.kind, p.location, p.branch ?? null, new Date().toISOString());
+    this.changed();
     return this.getProject(Number(lastInsertRowid)) as Project;
   }
 
-  /** Elimina el proyecto y su historial (no toca la carpeta ni el repositorio). */
+  /**
+   * Elimina el proyecto y su historial (no toca la carpeta ni el repositorio).
+   * Si ya estaba en la nube, se anota para quitarlo también allí.
+   */
   removeProject(id: number): void {
-    this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    this.transaction(() => {
+      const r = this.db.prepare('SELECT cloud_id FROM projects WHERE id = ?').get(id) as Row | undefined;
+      this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+      if (r && r['cloud_id'] !== null) this.db.prepare('INSERT OR REPLACE INTO cloud_removals (cloud_id, removed_at) VALUES (?, ?)').run(String(r['cloud_id']), new Date().toISOString());
+    });
+    this.changed();
   }
 
   private toProject(r: Row): Project {
@@ -225,41 +243,10 @@ export class Store {
 
   /** Guarda un análisis terminado. El informe completo se comprime (suele reducirse a un 10 %). */
   saveAnalysis(projectId: number, report: AnalysisReport, timing: { startedAt: string; durationMs: number }): AnalysisSummary {
-    const s = report.summary.bySeverity;
-    const blob = gzipSync(JSON.stringify(report));
-    return this.transaction(() => {
-      const { lastInsertRowid } = this.db
-        .prepare(
-          `INSERT INTO analyses (project_id, started_at, finished_at, duration_ms, score, rating, debt_ratio, effort_minutes,
-             findings, critical, high, medium, low, info, head, branch, with_ai, report)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          projectId,
-          timing.startedAt,
-          new Date().toISOString(),
-          Math.round(timing.durationMs),
-          report.score.score,
-          report.score.rating,
-          report.score.debtRatio,
-          Math.round(report.score.remediationMinutes),
-          report.findings.length,
-          s.critical,
-          s.high,
-          s.medium,
-          s.low,
-          s.info,
-          report.vcs?.head ?? null,
-          report.vcs?.branch ?? null,
-          report.ai ? 1 : 0,
-          blob,
-        );
-      // Historial acotado: se conservan los HISTORY_LIMIT más recientes.
-      this.db
-        .prepare(`DELETE FROM analyses WHERE project_id = ? AND id NOT IN (SELECT id FROM analyses WHERE project_id = ? ORDER BY finished_at DESC, id DESC LIMIT ${HISTORY_LIMIT})`)
-        .run(projectId, projectId);
-      return toSummary(this.db.prepare(`SELECT ${SUMMARY_COLUMNS} FROM analyses WHERE id = ?`).get(Number(lastInsertRowid)) as Row);
-    });
+    const summary = this.transaction(() => insertAnalysis(this.db, projectId, report, { startedAt: timing.startedAt, finishedAt: new Date().toISOString(), durationMs: timing.durationMs }));
+    if (!summary) throw new Error('No se pudo guardar el análisis.');
+    this.changed();
+    return summary;
   }
 
   getAnalysis(analysisId: number): AnalysisSummary | null {
@@ -281,6 +268,7 @@ export class Store {
 
   /** Sustituye el informe de un análisis (p. ej. al añadir explicaciones de IA a posteriori). */
   updateReport(analysisId: number, report: AnalysisReport): void {
+    // Solo cambia lo que añade la IA, que no sube a la nube: la copia de la nube sigue valiendo.
     this.db.prepare('UPDATE analyses SET report = ?, with_ai = ? WHERE id = ?').run(gzipSync(JSON.stringify(report)), report.ai ? 1 : 0, analysisId);
   }
 
