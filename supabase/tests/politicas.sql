@@ -134,4 +134,40 @@ delete from public.projects;
 select pg_temp.expect((select count(*) from public.analyses) = 0, 'borrar el proyecto debería borrar sus análisis');
 reset role;
 
+-- ── Cupo de la IA incluida (migración ia_incluida) ─────────────────────────
+set role authenticated;
+set request.jwt.claim.sub = '11111111-1111-4111-8111-111111111111';
+select pg_temp.expect(public.ai_requests_today() = 0, 'Ana aún no ha usado la IA hoy');
+select pg_temp.expect(public.ai_count_request() = 1, 'la primera consulta de Ana cuenta 1');
+select pg_temp.expect(public.ai_count_request() = 2, 'la segunda consulta de Ana cuenta 2');
+select pg_temp.expect(public.ai_requests_today() = 2, 'Ana lleva 2 consultas hoy');
+select pg_temp.expect((select count(*) from public.ai_usage) = 1, 'Ana ve su uso');
+do $$
+begin
+  insert into public.ai_usage (user_id, day, requests) values ('11111111-1111-4111-8111-111111111111', current_date, 0);
+  raise exception 'FALLA: nadie debería poder escribir el uso directamente';
+exception when insufficient_privilege then null;
+end $$;
+do $$
+begin
+  update public.ai_usage set requests = 0;
+  raise exception 'FALLA: nadie debería poder borrar su propio contador';
+exception when insufficient_privilege then null;
+end $$;
+
+set request.jwt.claim.sub = '22222222-2222-4222-8222-222222222222';
+select pg_temp.expect(public.ai_requests_today() = 0, 'el uso de Ana no cuenta para Luis');
+select pg_temp.expect((select count(*) from public.ai_usage) = 0, 'Luis no ve el uso de Ana');
+select pg_temp.expect(public.ai_count_request() = 1, 'Luis tiene su propio contador');
+
+set role anon;
+reset request.jwt.claim.sub;
+do $$
+begin
+  perform public.ai_count_request();
+  raise exception 'FALLA: sin sesión no se debería poder contar consultas';
+exception when insufficient_privilege then null;
+end $$;
+reset role;
+
 select 'Políticas de seguridad por filas: todas las comprobaciones superadas.' as resultado;

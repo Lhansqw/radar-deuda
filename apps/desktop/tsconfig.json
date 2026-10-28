@@ -11,5 +11,5 @@
       "@radar/pipeline": ["../../packages/pipeline/src/index.ts"]
     }
   },
-  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/worker/**/*.ts", "src/shared/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "e2e/**/*.ts", "vite.config.ts"]
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts", "src/worker/**/*.ts", "src/shared/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "e2e/**/*.ts", "vite.config.ts", "../../supabase/functions/**/*.ts"]
 }
