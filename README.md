@@ -24,7 +24,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 12 | Instalador para Windows: ASAR con integridad, *fuses* de Electron, licencias de terceros y prueba del paquete | ✅ |
 | 13a | Cuentas de usuario con Supabase: inicio de sesión obligatorio, confirmación del correo y recuperación con código, datos separados por cuenta | ✅ |
 | 13b | Copia de proyectos e historial en PostgreSQL (Supabase), sin código y con seguridad por filas probada en la integración continua | ✅ |
-| 14 | IA incluida: modelos gratuitos sin que el usuario configure ninguna clave, a través de una función de Supabase con cupo diario por cuenta | ✅ |
+| 14 | IA incluida: gpt-oss-120b (Groq) sin que el usuario configure ninguna clave, a través de una función de Supabase con cupo diario por cuenta | ✅ |
 
 **El radar sobre sí mismo:** 99/100 (A), sin hallazgos altos ni críticos. La integración
 continua falla si aparece alguno (`npm run analyze -- . --fail-on high`).

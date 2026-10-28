@@ -78,9 +78,9 @@ lee y escribe lo suyo, y el rol anónimo no tiene permisos. `npm run test:db` co
 reglas en PostgreSQL en la integración continua.
 
 La IA incluida (fase 14, detalle en [IA-INCLUIDA.md](IA-INCLUIDA.md#seguridad)) no pone
-ninguna clave en la aplicación: la de OpenRouter es un secreto del proyecto de Supabase, y su
-función «ia» solo reenvía consultas de usuarios con sesión, a modelos gratuitos y dentro de
-un cupo diario por cuenta que el usuario no puede modificar.
+ninguna clave en la aplicación: la de Groq (y la de OpenRouter, si hay respaldo) son secretos
+del proyecto de Supabase, y su función «ia» solo reenvía consultas de usuarios con sesión, al
+modelo configurado y dentro de un cupo diario por cuenta que el usuario no puede modificar.
 
 ### Red
 
@@ -89,7 +89,7 @@ un cupo diario por cuenta que el usuario no puede modificar.
 | `api.osv.dev`, `registry.npmjs.org` | Con «Vulnerabilidades y versiones» (`--online`) | Nombres y versiones de paquetes |
 | `api.github.com`, `github.com` | Al añadir o analizar un repositorio de GitHub | El repositorio pedido; el token, si lo hay, en una cabecera |
 | `openrouter.ai`, `api.anthropic.com`, `api.openai.com` | Solo al usar la IA | Metadatos del análisis; código solo con «fragmentos» o con permiso explícito para una propuesta |
-| `<proyecto>.supabase.co` | Al iniciar sesión, registrarse, recuperar la contraseña y renovar la sesión; con la copia en la nube activada, al sincronizar; con la IA incluida, al usar la IA | Correo, contraseña y códigos de la cuenta. La copia: lista de proyectos (con su carpeta) y resultados de cada análisis, sin código ni nada de la IA. La IA incluida: lo mismo que se enviaría a OpenRouter, que la función reenvía allí |
+| `<proyecto>.supabase.co` | Al iniciar sesión, registrarse, recuperar la contraseña y renovar la sesión; con la copia en la nube activada, al sincronizar; con la IA incluida, al usar la IA | Correo, contraseña y códigos de la cuenta. La copia: lista de proyectos (con su carpeta) y resultados de cada análisis, sin código ni nada de la IA. La IA incluida: lo mismo que se enviaría a cualquier proveedor en la nube, que la función reenvía a Groq (o a OpenRouter de respaldo) |
 
 No hay telemetría ni actualizaciones automáticas. Todas las peticiones tienen tiempo límite,
 reintentos solo para errores transitorios y tamaño máximo de respuesta. Una petición con

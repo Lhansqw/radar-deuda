@@ -168,3 +168,9 @@ para su clave (50 consultas gratuitas al día, o 1000 con 10 USD de crédito com
 modelos gratuitos son más lentos e inestables y sus proveedores pueden guardar lo que
 reciben; por defecto solo se envían metadatos. OpenRouter con clave propia y los demás
 proveedores siguen disponibles.
+
+**Revisión: gpt-oss-120b en Groq como modelo estable.** Los modelos gratuitos de OpenRouter
+cambian y se saturan, y su límite es de 50 consultas al día por clave. La función usa ahora
+un modelo fijo, `openai/gpt-oss-120b` en Groq (salida estructurada estricta, rápido, con un
+plan de entrada sin coste), y los modelos gratuitos de OpenRouter quedan como respaldo
+opcional. El límite que manda pasa a ser el de tokens por día de la clave de Groq.
