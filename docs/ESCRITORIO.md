@@ -34,7 +34,7 @@ npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md
    deuda es nueva, cuál se resolvió y cuál cambió de severidad.
 6. **Preguntar**: conversación con la IA sobre el análisis (solo recibe sus datos, nunca
    código); las referencias de la respuesta (`H2`) llevan al hallazgo.
-7. **Configuración**: la cuenta (con «Cerrar sesión»), opciones del análisis (incluida la memoria máxima del proceso de
+7. **Configuración**: la cuenta (copia en la nube y «Cerrar sesión»), opciones del análisis (incluida la memoria máxima del proceso de
    análisis), proveedor y modelo de IA (con el catálogo de OpenRouter y sus modelos
    gratuitos), privacidad, presupuesto, credenciales y espacio en disco (vaciar la caché).
 
@@ -126,6 +126,7 @@ certificado y las actualizaciones automáticas firmadas.
 |---|---|
 | Proyectos, historial (hasta 100 análisis por proyecto, informe completo comprimido), propuestas, conversaciones (200 mensajes por análisis), ajustes y credenciales cifradas, de cada cuenta | `%APPDATA%\radar-deuda\usuarios\<id>\radar.db` |
 | Sesión de la cuenta (cifrada, solo con «Seguir conectado») | `%APPDATA%\radar-deuda\sesion.bin` |
+| Copia de los proyectos y del historial, sin código (si está activada) | Supabase: tablas `projects` y `analyses` ([CUENTAS.md](CUENTAS.md#4-la-copia-en-la-nube-13b)) |
 | Caché del motor, de la IA y de OSV/npm (compartida con la CLI) | `%LOCALAPPDATA%\radar-deuda\cache` |
 | Clones de GitHub | `%LOCALAPPDATA%\radar-deuda\repos` |
 

@@ -8,7 +8,7 @@ Supabase sobre PostgreSQL. La decisión y las alternativas están en
 | Parte | Estado |
 |---|---|
 | **13a.** Registro, confirmación del correo, inicio de sesión, recuperación de la contraseña y cierre de sesión. Cada cuenta tiene sus propios proyectos, historial, ajustes y claves de IA en el equipo | ✅ |
-| **13b.** Proyectos e historial guardados también en PostgreSQL, con reglas de seguridad por filas para que cada usuario solo vea los suyos, y disponibles en cualquier equipo | Pendiente |
+| **13b.** Copia de los proyectos y del historial en PostgreSQL, sin código, con reglas de seguridad por filas para que cada usuario solo vea lo suyo, y disponible en cualquier equipo con la misma cuenta | ✅ |
 
 La CLI no cambia: no necesita cuenta.
 
@@ -55,6 +55,12 @@ La CLI no cambia: no necesita cuenta.
 5. **Contraseñas.** La aplicación exige al menos 8 caracteres. Conviene poner el mismo mínimo
    en la configuración de contraseñas de Authentication (y, si quieres, exigir tipos de
    caracteres: la aplicación muestra el motivo si Supabase rechaza una).
+6. **Tablas de la nube (13b).** En el editor SQL del proyecto, pega el contenido de
+   [`supabase/migrations/20261028000000_proyectos_e_historial.sql`](../supabase/migrations/20261028000000_proyectos_e_historial.sql)
+   y ejecútalo una vez (o, con la CLI de Supabase, `supabase link` y `supabase db push`).
+   Crea las tablas `projects` y `analyses` con sus reglas de seguridad por filas. Sin ellas,
+   la aplicación funciona igual, pero Configuración → Cuenta dice que faltan las tablas y no
+   sube nada.
 
 Supabase pausa los proyectos gratuitos que pasan tiempo sin actividad; se reactivan desde
 su panel.
@@ -92,6 +98,9 @@ Acceso: correo, contraseña ──▶ AccountService (@supabase/supabase-js) ─
                                     ▼
 ◀── solo el estado ─────────  SessionRouter: abre usuarios/<id>/radar.db
     (correo, sin conexión)         y sus servicios; sin sesión, todo cerrado
+                                    │
+◀── estado de la copia ──────  CloudSync: proyectos e historial ───────▶ PostgreSQL (RLS)
+                                    sin código, con el token del usuario   projects, analyses
 ```
 
 - **La interfaz nunca recibe los tokens.** Solo conoce el estado: sin sesión, con sesión
@@ -120,7 +129,44 @@ Acceso: correo, contraseña ──▶ AccountService (@supabase/supabase-js) ─
   la contraseña ni el código. Al pedir un código de recuperación, la respuesta es la misma
   exista o no la cuenta.
 
-## 4. Seguridad
+## 4. La copia en la nube (13b)
+
+Los datos de trabajo siguen en el equipo (SQLite); la nube guarda una copia de los proyectos
+y del historial para verlos desde otro equipo con la misma cuenta. Se activa o desactiva en
+Configuración → Cuenta («Guardar los proyectos y el historial en la nube», activada por
+defecto), que también muestra el estado y permite sincronizar ya o borrar la copia.
+
+| Sube | No sube |
+|---|---|
+| La lista de proyectos: nombre, tipo, carpeta (o `owner/repo`) y rama | El código, ni siquiera los fragmentos de la evidencia: comentarios TODO, versiones de dependencias o el principio redactado de un secreto |
+| Cada análisis: fechas, puntuación, recuentos y el informe con hallazgos, ubicaciones, métricas y mensajes (comprimido) | Las claves de IA y el token de GitHub |
+| | Lo que añade la IA (explicaciones, propuestas) y las conversaciones |
+| | Los ajustes |
+
+- **Cuándo.** Al abrir la sesión y a los pocos segundos de cada cambio (proyecto añadido o
+  quitado, análisis guardado). Cada 10 minutos se buscan novedades de otros equipos. Sin
+  conexión queda pendiente y se reintenta cada 2 minutos.
+- **Cómo.** Primero se recibe lo de otros equipos (como mucho los 100 análisis más
+  recientes de cada proyecto) y después se envía lo pendiente. El mismo repositorio añadido
+  en dos equipos se une en uno. Quitar un proyecto en un equipo lo quita en los demás; volver
+  a añadirlo lo recupera. Cada análisis tiene su identificador antes de subir, así que una
+  subida cortada no lo duplica.
+- **Proyectos de otro equipo.** Un repositorio de GitHub se puede analizar en cualquier
+  equipo. Una carpeta local solo existe donde se añadió: en los demás se ve su historial, y
+  para analizarla hay que añadir su carpeta desde ese equipo.
+- **Borrar la copia en la nube** borra de Supabase los proyectos y el historial de la cuenta
+  y desactiva la copia; en el equipo no se borra nada. Si otro equipo sigue con la copia
+  activada, volverá a subir lo suyo.
+
+**Reglas de la base de datos** (la migración): cada fila es de un usuario (`user_id`, que pone
+la propia base de datos) y las políticas de seguridad por filas solo le dejan leer y escribir
+las suyas; nadie puede guardar análisis en el proyecto de otro; el rol anónimo no tiene
+ningún permiso; de un proyecto solo se cambian el nombre, la rama y si está quitado, y de un
+análisis solo el informe; un disparador conserva los 100 análisis más recientes por
+proyecto. `npm run test:db` lo comprueba en un PostgreSQL (la integración continua lo
+ejecuta con PostgreSQL 17).
+
+## 5. Seguridad
 
 | Amenaza | Control |
 |---|---|
@@ -130,6 +176,9 @@ Acceso: correo, contraseña ──▶ AccountService (@supabase/supabase-js) ─
 | Fuerza bruta | Límites de peticiones de Supabase Auth; la aplicación muestra el aviso de esperar |
 | Saber si un correo tiene cuenta | La recuperación responde igual en ambos casos; el registro con confirmación también |
 | Una interfaz comprometida | No ve tokens ni contraseñas guardadas; sin sesión no llega a ningún dato |
+| Otro usuario lee o cambia mi copia en la nube | Seguridad por filas en las dos tablas, con permisos explícitos solo para usuarios con sesión; probado con `npm run test:db` |
+| El código sale del equipo | El informe sube sin fragmentos de código ni lo que añade la IA; la prueba de extremo a extremo lo comprueba en lo que sube |
+| Un informe dañado o enorme en la nube | Al bajarlo se limita el tamaño descomprimido y se comprueba su formato; uno que no vale se salta |
 
 **Límite conocido (13a):** la separación entre cuentas de un mismo equipo la hace la
 aplicación, no el cifrado. Alguien con acceso a los archivos del mismo usuario de Windows
@@ -137,15 +186,23 @@ puede abrir la base de datos de otra cuenta; las claves de IA siguen protegidas 
 (del usuario de Windows, no de la cuenta). Para separar del todo a dos personas, cada una
 debe usar su propio usuario de Windows.
 
-## 5. Pruebas
+## 6. Pruebas
 
 - **Unitarias:** `test/helpers/fake-supabase.ts` simula la API HTTP de Supabase Auth
   (registro, códigos, inicio de sesión, renovación, cambio de contraseña) y se la pasa a
   `AccountService` como `fetch`. Cubren la sesión guardada, sin conexión, sesiones
   revocadas, la recuperación y los mensajes de error.
+- **Copia en la nube:** `test/helpers/fake-postgrest.ts` simula la API de datos con las mismas
+  reglas que la migración. Las pruebas de `CloudSync` usan dos equipos con la misma cuenta
+  (y otra cuenta): recibir sin volver a subir, unir el mismo repositorio, quitar y recuperar
+  proyectos, sin conexión, subidas cortadas y la nube sin código.
+- **Base de datos** (`npm run test:db`): aplica la migración en un PostgreSQL y comprueba cada
+  política como la vería la aplicación. Necesita `psql` y
+  `RADAR_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres` (un servidor donde
+  se pueda crear una base de datos temporal).
 - **Extremo a extremo** (`npm run e2e:desktop`): simula Supabase dentro del proceso
   principal, crea una cuenta con su código (también uno erróneo), comprueba que sin sesión
-  la interfaz no llega a los datos y que no guarda nada de la sesión, y al final cierra la
-  sesión y vuelve a entrar.
+  la interfaz no llega a los datos y que no guarda nada de la sesión, que el proyecto y su
+  análisis suben solos sin código, y al final cierra la sesión y vuelve a entrar.
 - **Con un proyecto real:** define las dos variables y crea una cuenta con tu correo (el
   servidor de correo de serie solo te escribe a ti).
