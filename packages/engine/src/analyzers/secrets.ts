@@ -6,7 +6,7 @@ import { findingId } from '../util.js';
  * se reutilizará en la capa de IA para que ningún secreto salga del equipo.
  */
 const ID = 'secrets';
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const TOOL = `${ID}@${VERSION}`;
 
 interface SecretRule {
@@ -26,6 +26,7 @@ const KNOWN_FORMATS: SecretRule[] = [
   { id: 'slack-token', label: 'Token de Slack', pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/, severity: 'high' },
   { id: 'stripe-live-key', label: 'Clave secreta de Stripe', pattern: /\b(?:sk|rk)_live_[A-Za-z0-9]{20,}\b/, severity: 'critical' },
   // La publicable (sb_publishable_…) está hecha para ir en el código del cliente; la secreta salta las reglas de la base de datos.
+  { id: 'groq-key', label: 'Clave de API de Groq', pattern: /\bgsk_[A-Za-z0-9]{40,}\b/, severity: 'critical' },
   { id: 'supabase-secret-key', label: 'Clave secreta de Supabase', pattern: /\bsb_secret_[A-Za-z0-9_-]{20,}/, severity: 'critical' },
   { id: 'connection-string', label: 'Cadena de conexión con contraseña', pattern: /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp):\/\/[^\s:/@'"]+:[^\s@'"]{4,}@[^\s'"]+/i, severity: 'high' },
 ];
