@@ -5,6 +5,7 @@ import type { AccountChannel, AppInfo, ArgsOf, Channel, ResultOf } from '../shar
 import type { StorageInfo } from '../shared/model.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
 import type { AiService } from './ai-service.js';
+import type { CloudSync } from './cloud-sync.js';
 import type { CredentialStore } from './credentials.js';
 import type { JobManager } from './jobs.js';
 import { readSnippet, resolveReportFile } from './snippets.js';
@@ -16,6 +17,8 @@ export interface HandlerDeps {
   credentials: CredentialStore;
   jobs: Pick<JobManager, 'start' | 'cancel' | 'list'>;
   ai: Pick<AiService, 'explain' | 'openRouterModels' | 'checkOpenRouterKey' | 'fixPreview' | 'proposeFix' | 'getFix' | 'ask'>;
+  /** Copia en la nube del usuario (fase 13b). */
+  sync: Pick<CloudSync, 'current' | 'now' | 'schedule' | 'deleteCloudCopy'>;
   info: () => AppInfo;
   /** Selector de carpetas del sistema. */
   chooseFolder: () => Promise<string | null>;
@@ -32,7 +35,7 @@ export interface HandlerDeps {
 }
 
 /** Lo que no depende del usuario: el sistema y la ventana. */
-export type AppDeps = Omit<HandlerDeps, 'store' | 'credentials' | 'jobs' | 'ai'>;
+export type AppDeps = Omit<HandlerDeps, 'store' | 'credentials' | 'jobs' | 'ai' | 'sync'>;
 
 export type Handlers = { [C in Channel]: (...args: ArgsOf<C>) => Promise<ResultOf<C>> | ResultOf<C> };
 /** Los canales del espacio de trabajo de un usuario (todos menos los de la cuenta, account-handlers.ts). */
@@ -99,6 +102,8 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
     'settings:get': () => loadSettings(d.store),
     'settings:set': (settings) => {
       d.store.setSetting(SETTINGS_KEY, settings);
+      // Activar o desactivar la copia en la nube se aplica enseguida.
+      d.sync.schedule(0);
       return loadSettings(d.store);
     },
 
@@ -145,6 +150,16 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
     'chat:clear': (analysisId) => {
       d.store.clearChat(analysisId);
       return null;
+    },
+
+    'sync:state': () => d.sync.current(),
+    'sync:now': () => d.sync.now(),
+    'sync:deleteCloud': async () => {
+      // Primero se desactiva: aunque el borrado falle (sin conexión), no vuelve a subir nada.
+      const settings = loadSettings(d.store);
+      d.store.setSetting(SETTINGS_KEY, { ...settings, cloud: { ...settings.cloud, sync: false } });
+      await d.sync.deleteCloudCopy();
+      return d.sync.now();
     },
   };
 }

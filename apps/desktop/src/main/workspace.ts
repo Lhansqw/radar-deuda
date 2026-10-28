@@ -1,9 +1,12 @@
 import path from 'node:path';
 import type { AccountState } from '../shared/account.js';
+import type { SyncState } from '../shared/sync.js';
 import type { AccountChannel } from '../shared/ipc.js';
 import { signedInHandlers, signedOutHandlers } from './account-handlers.js';
 import type { AccountChange } from './account-service.js';
 import { AiService } from './ai-service.js';
+import type { CloudRepo } from './cloud-repo.js';
+import { CloudSync } from './cloud-sync.js';
 import { CredentialStore, type Cipher } from './credentials.js';
 import { createHandlers, loadSettings, type AppDeps, type HandlerDeps, type Handlers } from './handlers.js';
 import { JobManager, type JobDeps } from './jobs.js';
@@ -11,7 +14,7 @@ import { Store } from './store.js';
 import { adoptLegacyData, DB_FILE, userDataDir } from './user-data.js';
 
 /** Lo que tiene abierto un usuario con la sesión iniciada: su base de datos y sus servicios. */
-export interface Workspace extends Pick<HandlerDeps, 'store' | 'credentials' | 'jobs' | 'ai'> {
+export interface Workspace extends Pick<HandlerDeps, 'store' | 'credentials' | 'jobs' | 'ai' | 'sync'> {
   userId: string;
   /** Su carpeta de datos (usuarios/<id>). */
   dir: string;
@@ -25,7 +28,14 @@ export interface WorkspaceDeps {
   cipher: Cipher;
   spawn: JobDeps['spawn'];
   emit: JobDeps['emit'];
+  /** La nube con la sesión del usuario (null sin sesión). */
+  cloud: () => Promise<CloudRepo | null>;
+  /** Avisa a la interfaz del estado de la copia en la nube. */
+  emitSync: (state: SyncState) => void;
 }
+
+/** Espera antes de la primera sincronización: que la ventana termine de abrir. */
+const FIRST_SYNC_MS = 1500;
 
 /** Abre los datos de un usuario (los de antes de las cuentas pasan a la primera que entra). */
 export function openWorkspace(userId: string, d: WorkspaceDeps): Workspace {
@@ -36,6 +46,10 @@ export function openWorkspace(userId: string, d: WorkspaceDeps): Workspace {
   const settings = () => loadSettings(store);
   const jobs = new JobManager({ store, credentials, settings, spawn: d.spawn, emit: d.emit });
   const ai = new AiService({ store, credentials, settings });
+  const sync = new CloudSync({ ledger: store.cloudLedger(), repo: d.cloud, enabled: () => settings().cloud.sync, emit: d.emitSync });
+  // Lo que cambia el usuario (proyectos, análisis) sube a los pocos segundos.
+  const stopWatching = store.onChange(() => sync.schedule());
+  sync.schedule(FIRST_SYNC_MS);
   return {
     userId,
     dir,
@@ -43,7 +57,10 @@ export function openWorkspace(userId: string, d: WorkspaceDeps): Workspace {
     credentials,
     jobs,
     ai,
+    sync,
     dispose: () => {
+      stopWatching();
+      sync.dispose();
       jobs.dispose();
       store.close();
     },

@@ -124,6 +124,9 @@ export const VALIDATORS: Validators = {
     return [id(a[0], 'Análisis no válido.'), q];
   },
   'chat:clear': (a) => (count(a, 1), [id(a[0], 'Análisis no válido.')]),
+  'sync:state': (a) => (count(a, 0), []),
+  'sync:now': (a) => (count(a, 0), []),
+  'sync:deleteCloud': (a) => (count(a, 0), []),
 };
 
 function findingId(v: unknown): string {

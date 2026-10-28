@@ -1,8 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { RadarApi } from '../shared/api.js';
 import type { AccountState } from '../shared/account.js';
-import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, type ArgsOf, type Channel, type IpcResult, type ResultOf } from '../shared/ipc.js';
+import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL, type ArgsOf, type Channel, type IpcResult, type ResultOf } from '../shared/ipc.js';
 import type { JobState } from '../shared/jobs.js';
+import type { SyncState } from '../shared/sync.js';
 
 /**
  * Puente entre la interfaz (sin acceso a Node) y el proceso principal. Solo
@@ -79,6 +80,18 @@ const api: RadarApi = {
     list: (analysisId) => invoke('chat:list', analysisId),
     ask: (analysisId, question) => invoke('chat:ask', analysisId, question),
     clear: (analysisId) => invoke('chat:clear', analysisId),
+  },
+  sync: {
+    state: () => invoke('sync:state'),
+    now: () => invoke('sync:now'),
+    deleteCloud: () => invoke('sync:deleteCloud'),
+    onChange: (cb) => {
+      const listener = (_event: unknown, state: SyncState): void => cb(state);
+      ipcRenderer.on(SYNC_EVENT_CHANNEL, listener);
+      return () => {
+        ipcRenderer.removeListener(SYNC_EVENT_CHANNEL, listener);
+      };
+    },
   },
   jobs: {
     start: (projectId) => invoke('jobs:start', projectId),

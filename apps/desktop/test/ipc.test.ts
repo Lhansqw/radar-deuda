@@ -31,6 +31,16 @@ const fakeAccount: AccountApi = {
   signOut: async () => ({ status: 'signed-out' }),
 };
 
+const syncState = { status: 'idle', lastSyncAt: null, message: null, pending: { projects: 0, analyses: 0, removals: 0 }, received: 0 } as const;
+/** Copia en la nube simulada: registra lo que se le pide. */
+const syncCalls: string[] = [];
+const fakeSync: HandlerDeps['sync'] = {
+  current: () => syncState,
+  now: async () => (syncCalls.push('now'), syncState),
+  schedule: () => void syncCalls.push('schedule'),
+  deleteCloudCopy: async () => (syncCalls.push('deleteCloudCopy'), syncState),
+};
+
 function setup(over: Partial<HandlerDeps> = {}) {
   const store = Store.open(':memory:');
   cleanup.push(() => store.close());
@@ -57,6 +67,7 @@ function setup(over: Partial<HandlerDeps> = {}) {
     storage: async () => ({ cache: { files: 0, bytes: 0, parts: [] }, clones: { files: 0, bytes: 0 } }),
     clearCache: async () => ({ files: 0, bytes: 0 }),
     removeClone: async () => undefined,
+    sync: fakeSync,
     ...over,
   });
   const handlers = signedInHandlers(workspace, createAccountHandlers(fakeAccount));
@@ -97,6 +108,17 @@ describe('contrato IPC', () => {
     expect(await call('account:confirmEmail', 'ana@ejemplo.com', ' 123456 ')).toMatchObject({ ok: true, value: { status: 'signed-in' } });
     expect(await call('account:setNewPassword', 'x'.repeat(1001))).toEqual({ ok: false, error: 'Contraseña no válida.' });
     expect(await call('account:signOut')).toEqual({ ok: true, value: { status: 'signed-out' } });
+  });
+
+  it('guardar los ajustes aplica enseguida la copia en la nube; borrarla la desactiva primero', async () => {
+    const { call } = setup();
+    syncCalls.length = 0;
+    await call('settings:set', { ...DEFAULT_SETTINGS, cloud: { sync: true } });
+    expect(syncCalls).toEqual(['schedule']);
+    expect(await call('sync:deleteCloud')).toEqual({ ok: true, value: syncState });
+    expect(syncCalls).toEqual(['schedule', 'deleteCloudCopy', 'now']);
+    expect(await call('settings:get')).toMatchObject({ ok: true, value: { cloud: { sync: false } } });
+    expect(await call('sync:state')).toEqual({ ok: true, value: syncState });
   });
 
   it('añade repositorios de GitHub normalizados y valida la rama', async () => {

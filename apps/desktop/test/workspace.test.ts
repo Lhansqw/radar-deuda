@@ -76,6 +76,7 @@ function openWorkspaceLike(userId: string, store: Store): Workspace {
     credentials: { status: () => ({ encryptionAvailable: true, secrets: {} }) } as unknown as Workspace['credentials'],
     jobs: { start: () => Promise.reject(new Error('no se usa')) as never, cancel: () => undefined, list: () => [] },
     ai: {} as Workspace['ai'],
+    sync: {} as Workspace['sync'],
     dispose: () => store.close(),
   };
 }
@@ -141,7 +142,7 @@ describe('openWorkspace', () => {
     const legacy = Store.open(path.join(dataDir, 'radar.db'));
     legacy.addProject({ name: 'tienda', kind: 'local', location: '/proyectos/tienda' });
     legacy.close();
-    const ws = openWorkspace(ANA.id, { dataDir, cipher, spawn: noWorker, emit: () => undefined });
+    const ws = openWorkspace(ANA.id, { dataDir, cipher, spawn: noWorker, emit: () => undefined, cloud: async () => null, emitSync: () => undefined });
     expect(ws.dir).toBe(path.join(dataDir, 'usuarios', ANA.id));
     expect(ws.store.listProjects().map((p) => p.name)).toEqual(['tienda']);
     ws.dispose();
@@ -149,7 +150,7 @@ describe('openWorkspace', () => {
 
     // Otro usuario empieza vacío, aunque aparezca otra vez un radar.db suelto.
     writeFileSync(path.join(dataDir, 'radar.db'), '');
-    const luis = openWorkspace(LUIS.id, { dataDir, cipher, spawn: noWorker, emit: () => undefined });
+    const luis = openWorkspace(LUIS.id, { dataDir, cipher, spawn: noWorker, emit: () => undefined, cloud: async () => null, emitSync: () => undefined });
     expect(luis.store.listProjects()).toEqual([]);
     luis.dispose();
   });

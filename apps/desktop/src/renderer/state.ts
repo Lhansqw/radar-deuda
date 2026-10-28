@@ -20,6 +20,23 @@ export function useRadar() {
     setRevisions((r) => ({ ...r, [projectId]: (r[projectId] ?? 0) + 1 }));
   }, []);
 
+  // Proyectos o análisis llegados de otros equipos (copia en la nube): se vuelve a cargar todo.
+  useEffect(() => {
+    let received: number | null = null;
+    const apply = (n: number): void => {
+      // También la primera vez si ya llegó algo: pudo llegar antes de que esta vista se abriera.
+      if (n !== received && (received !== null || n > 0)) {
+        void window.radar.projects.list().then((list) => {
+          setProjects(list);
+          setRevisions((r) => Object.fromEntries(list.map((p) => [p.id, (r[p.id] ?? 0) + 1])));
+        });
+      }
+      received = n;
+    };
+    void window.radar.sync.state().then((s) => apply(s.received));
+    return window.radar.sync.onChange((s) => apply(s.received));
+  }, []);
+
   useEffect(() => {
     void window.radar.projects.list().then(setProjects);
     void window.radar.jobs.list().then((list) => {

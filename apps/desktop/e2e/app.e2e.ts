@@ -13,6 +13,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
@@ -113,10 +114,39 @@ async function simulate(app: ElectronApplication): Promise<void> {
         if (route === 'POST /auth/v1/logout') return new Response(null, { status: 204 });
         return json({ msg: `Sin simular: ${route}` }, 404);
       };
+      // Su base de datos (API de PostgREST): las tablas de supabase/migrations, de un solo usuario.
+      type Row = Record<string, unknown>;
+      const tables: Record<string, Row[]> = { projects: [], analyses: [] };
+      (globalThis as unknown as { cloud: Record<string, Row[]> }).cloud = tables;
+      const rest = (url: URL, init: RequestInit | undefined): Response => {
+        const table = url.pathname.slice('/rest/v1/'.length);
+        const rows = tables[table];
+        if (!rows) return json({ code: 'PGRST205', message: `Sin simular: ${table}` }, 404);
+        const filters = [...url.searchParams].filter(([k]) => !['select', 'order', 'offset', 'limit', 'columns'].includes(k));
+        const match = (r: Row) => filters.every(([k, v]) => (v.startsWith('eq.') ? String(r[k]) === v.slice(3) : v === 'not.is.null' ? r[k] !== null && r[k] !== undefined : true));
+        const select = url.searchParams.get('select');
+        const pick = (r: Row): Row => (!select || select === '*' ? r : Object.fromEntries(select.split(',').map((c) => [c, r[c] ?? null])));
+        const method = init?.method ?? 'GET';
+        const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as Row | Row[]) : {};
+        if (method === 'GET') {
+          const offset = Number(url.searchParams.get('offset') ?? 0);
+          const limit = url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : Infinity;
+          return json(rows.filter(match).slice(offset, offset + limit).map(pick));
+        }
+        if (method === 'POST') {
+          const added = (Array.isArray(body) ? body : [body]).map((v) => ({ id: crypto.randomUUID(), created_at: new Date().toISOString(), deleted_at: null, ...v }));
+          rows.push(...added);
+          return select ? json(added.map(pick), 201) : new Response(null, { status: 201 });
+        }
+        if (method === 'PATCH') for (const r of rows.filter(match)) Object.assign(r, body);
+        if (method === 'DELETE') tables[table] = rows.filter((r) => !match(r));
+        return new Response(null, { status: 204 });
+      };
       globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
         const url = String(input instanceof Request ? input.url : input);
         g.requests.push({ url, body: typeof init?.body === 'string' ? init.body : '' });
         if (url.startsWith(`${supabaseUrl}/auth/v1/`)) return supabase(new URL(url), init);
+        if (url.startsWith(`${supabaseUrl}/rest/v1/`)) return rest(new URL(url), init);
         if (url.endsWith('/api/v1/models')) {
           const free = { prompt: '0', completion: '0' };
           return json({
@@ -165,6 +195,17 @@ async function simulate(app: ElectronApplication): Promise<void> {
     },
     [repo, SUPABASE_URL, SIGNUP_CODE] as const,
   );
+}
+
+/** Espera a que `probe` devuelva algo (lo que pasa en segundo plano, como la copia en la nube). */
+async function waitFor<T>(probe: () => Promise<T | null>, timeoutMs: number, failure: string): Promise<T> {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await probe();
+    if (value !== null) return value;
+    if (Date.now() > until) throw new Error(failure);
+    await new Promise((r) => setTimeout(r, 250));
+  }
 }
 
 /** Crea la cuenta y confirma el correo con el código, como haría el usuario. */
@@ -240,7 +281,7 @@ async function main(): Promise<void> {
       const w = globalThis as unknown as { require?: unknown; process?: unknown; radar: object; location: { origin: string } };
       return { require: typeof w.require, process: typeof w.process, api: Object.keys(w.radar).sort(), origin: w.location.origin };
     });
-    assert.deepEqual(surface, { require: 'undefined', process: 'undefined', api: ['account', 'ai', 'analyses', 'app', 'chat', 'files', 'jobs', 'projects', 'secrets', 'settings'], origin: 'app://radar' });
+    assert.deepEqual(surface, { require: 'undefined', process: 'undefined', api: ['account', 'ai', 'analyses', 'app', 'chat', 'files', 'jobs', 'projects', 'secrets', 'settings', 'sync'], origin: 'app://radar' });
     log('la interfaz no tiene acceso a Node y solo ve window.radar');
 
     // Sin sesión, la interfaz no llega a ningún dato.
@@ -263,6 +304,26 @@ async function main(): Promise<void> {
     assert.ok(blips > 5, `El radar debería mostrar hallazgos (hay ${blips})`);
     await shot(page, 'panel');
     log(`análisis completo: ${blips} hallazgos en el radar`);
+
+    // La copia en la nube sube sola el proyecto y el análisis, sin código.
+    const cloud = await waitFor(
+      async () => {
+        const c = await app.evaluate(() => (globalThis as unknown as { cloud: Record<string, Array<Record<string, unknown>>> }).cloud);
+        return (c['analyses'] ?? []).length > 0 ? c : null;
+      },
+      30_000,
+      'El análisis no subió a la nube',
+    );
+    assert.deepEqual(
+      (cloud['projects'] ?? []).map((p) => [p['name'], p['kind']]),
+      [['tienda', 'local']],
+    );
+    for (const a of cloud['analyses'] ?? []) {
+      const uploaded = gunzipSync(Buffer.from(String(a['report_gz']), 'base64')).toString('utf8');
+      assert.ok(!uploaded.includes('"snippet"'), 'Subió un fragmento de código a la nube');
+      assert.ok(!uploaded.includes(SECRET_IN_DEMO), 'Subió el secreto a la nube');
+    }
+    log('proyecto e historial copiados en la nube, sin fragmentos de código');
 
     await page.getByRole('button', { name: /^Hallazgos/ }).click();
     await page.locator('.finding-row', { hasText: 'Función difícil de mantener' }).first().click();
@@ -370,6 +431,7 @@ async function main(): Promise<void> {
 
     // Cerrar sesión vuelve al acceso; al entrar de nuevo, los proyectos siguen ahí.
     await page.getByRole('button', { name: 'Configuración' }).click();
+    await page.locator('.cloud-status', { hasText: /^Al día/ }).waitFor();
     await page.getByRole('button', { name: 'Cerrar sesión' }).click();
     await page.getByRole('heading', { name: 'Inicia sesión' }).waitFor();
     await page.getByLabel('Correo').fill(EMAIL);
