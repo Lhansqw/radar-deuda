@@ -143,3 +143,28 @@ principal de Electron.
 servidor de correo propio para que se registre cualquier persona; sin conexión configurada
 la aplicación no deja entrar. La CLI sigue sin cuentas.
 
+
+## D12. IA sin claves para el usuario: función de Supabase con modelos gratuitos (fase 14)
+
+La aplicación debe poder usar la IA sin que el usuario cree ni pegue ninguna clave, y la IA
+debe estar en la nube (no local).
+
+| Criterio | Clave de OpenRouter dentro de la aplicación | Función de Supabase con la clave del proyecto | Servidor propio |
+|---|---|---|---|
+| ¿Se puede robar la clave? | Sí: cualquiera la saca del instalador | No: es un secreto del proyecto | No |
+| Solo usuarios con cuenta | No | Sí (token de la sesión) | Sí, si se programa |
+| Limitar el gasto | Solo el límite de la clave, para todos | Solo modelos gratuitos y cupo diario por cuenta | Lo que se programe |
+| Qué hay que mantener | Nada | Una función y una tabla en el proyecto que ya existe | Servidor, despliegue y actualizaciones |
+| Coste | El de los modelos | Ninguno con modelos gratuitos (plan gratuito de Supabase) | Alojamiento |
+
+**Decisión: función «ia» en Supabase.** Reutiliza las cuentas y la base de datos de la fase
+13, habla la misma API que OpenRouter (en la aplicación es el proveedor de OpenRouter
+apuntando a la función, con el token de la sesión como credencial) y el usuario eligió solo
+modelos gratuitos, con un cupo diario por cuenta.
+
+**Consecuencias:** el dueño del proyecto instala la función y su tabla una vez
+([IA-INCLUIDA.md](IA-INCLUIDA.md)). El cupo total depende del límite diario de OpenRouter
+para su clave (50 consultas gratuitas al día, o 1000 con 10 USD de crédito comprado). Los
+modelos gratuitos son más lentos e inestables y sus proveedores pueden guardar lo que
+reciben; por defecto solo se envían metadatos. OpenRouter con clave propia y los demás
+proveedores siguen disponibles.

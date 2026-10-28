@@ -62,6 +62,9 @@ La CLI no cambia: no necesita cuenta.
    la aplicación funciona igual, pero Configuración → Cuenta dice que faltan las tablas y no
    sube nada.
 
+7. **IA incluida (fase 14).** Para que la IA funcione sin que cada usuario configure una
+   clave, instala la función «ia» y su tabla: [IA-INCLUIDA.md](IA-INCLUIDA.md).
+
 Supabase pausa los proyectos gratuitos que pasan tiempo sin actividad; se reactivan desde
 su panel.
 
