@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:live": "vitest run --config vitest.live.config.ts",
+    "test:db": "tsx apps/desktop/scripts/test-db.ts",
     "bench": "tsx packages/engine/scripts/bench.ts",
     "desktop": "npm run start -w @radar/desktop",
     "desktop:dev": "npm run dev -w @radar/desktop",

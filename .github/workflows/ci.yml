@@ -6,6 +6,8 @@
 # - calidad: el radar se analiza a sí mismo y falla con hallazgos altos o
 #   críticos; la cobertura de las pruebas no puede bajar de sus mínimos. El
 #   informe y la cobertura quedan como artefacto; el rendimiento es informativo.
+# - base-de-datos: el esquema de la nube (supabase/migrations) en PostgreSQL, con
+#   las pruebas de sus políticas de seguridad por filas.
 # - escritorio: la aplicación de Electron de extremo a extremo en Windows, y el
 #   instalador (con los fuses y el ASAR comprobados) como artefacto.
 # - paquete-linux: el mismo paquete en Linux, comprobado con una pantalla virtual.
@@ -114,6 +116,38 @@ jobs:
             bench-results/
           if-no-files-found: ignore
           retention-days: 30
+
+  base-de-datos:
+    name: Base de datos (políticas de seguridad)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      RADAR_TEST_DATABASE_URL: postgresql://postgres@localhost:5432/postgres
+    services:
+      # La misma versión mayor que usan los proyectos nuevos de Supabase.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Esquema y políticas de seguridad por filas
+        run: npm run test:db
 
   escritorio:
     name: Aplicación de escritorio e instalador (Windows)
