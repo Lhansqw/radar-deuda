@@ -70,6 +70,7 @@ function setup(settings: AppSettings = DEFAULT_SETTINGS, env: NodeJS.ProcessEnv 
     emit: (s) => events.push(s),
     now: () => new Date('2026-10-26T15:00:00Z'),
     cancelGraceMs: 50,
+    folderExists: (p) => p !== '/repos/de-otro-equipo',
   });
   const project = store.addProject({ name: 'demo', kind: 'local', location: '/repos/demo' });
   return { store, credentials, jobs, workers, events, project, spawned };
@@ -148,6 +149,13 @@ describe('JobManager', () => {
     jobs.start(project.id);
     expect(() => jobs.start(other.id)).toThrow(new JobError('Ya hay un análisis en curso (demo). Espera a que termine o cancélalo.'));
     expect(() => jobs.start(999)).toThrow(/ya no existe/);
+  });
+
+  it('un proyecto local cuya carpeta no está en este equipo no se analiza y lo explica', () => {
+    const { jobs, store, spawned } = setup();
+    const other = store.addProject({ name: 'tienda', kind: 'local', location: '/repos/de-otro-equipo' });
+    expect(() => jobs.start(other.id)).toThrow(/no está en este equipo.*ver su historial/);
+    expect(spawned).toEqual([]);
   });
 
   it('cancela: pide al proceso que se detenga y, si no responde, lo termina', async () => {
