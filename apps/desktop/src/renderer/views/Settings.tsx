@@ -20,6 +20,13 @@ function useSettingsDraft() {
   const [error, setError] = useState<string | null>(null);
   const [savedOk, setSavedOk] = useState(false);
 
+  /** Vuelve a leer los ajustes guardados (p. ej. tras desactivar la copia en la nube desde otro sitio). */
+  const reload = async (): Promise<void> => {
+    const s = await window.radar.settings.get();
+    setSaved(s);
+    setDraft((d) => (d && saved && JSON.stringify(d) !== JSON.stringify(saved) ? { ...d, cloud: s.cloud } : s));
+  };
+
   useEffect(() => {
     void window.radar.settings.get().then((s) => {
       setSaved(s);
@@ -52,7 +59,7 @@ function useSettingsDraft() {
   };
 
   const dirty = draft !== null && saved !== null && JSON.stringify(draft) !== JSON.stringify(saved);
-  return { draft, setDraft, error, savedOk, dirty, save, discard };
+  return { draft, setDraft, error, savedOk, dirty, save, discard, reload };
 }
 
 export function Settings({ account }: { account: Extract<AccountState, { status: 'signed-in' }> }) {
@@ -72,7 +79,12 @@ export function Settings({ account }: { account: Extract<AccountState, { status:
       <header className="settings-head">
         <h1>Configuración</h1>
       </header>
-      <AccountSection account={account} />
+      <AccountSection
+        account={account}
+        cloud={draft.cloud}
+        onCloudChange={(patch) => setDraft({ ...draft, cloud: { ...draft.cloud, ...patch } })}
+        onSettingsChanged={() => void settings.reload()}
+      />
       <AnalysisSection value={draft.analysis} onChange={(patch) => setDraft({ ...draft, analysis: { ...draft.analysis, ...patch } })} />
       <AiSection value={draft.ai} onChange={(patch) => setDraft({ ...draft, ai: { ...draft.ai, ...patch } })} />
       <Credentials status={secrets} onChange={setSecrets} />

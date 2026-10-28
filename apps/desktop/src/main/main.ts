@@ -6,11 +6,12 @@ import { defaultCacheDir } from '@radar/engine';
 import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
 import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
 import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell } from 'electron';
-import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL } from '../shared/ipc.js';
+import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { createAccountHandlers } from './account-handlers.js';
 import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
+import { SupabaseRepo } from './cloud-repo.js';
 import type { AppDeps } from './handlers.js';
 import { registerIpc } from './ipc.js';
 import { devServerFromEnv } from './policy.js';
@@ -150,7 +151,18 @@ function start(): void {
   router = new SessionRouter({
     account: createAccountHandlers(account),
     app: appDeps,
-    open: (userId) => openWorkspace(userId, { dataDir, cipher: safeStorage, spawn, emit: (state) => broadcast(JOB_EVENT_CHANNEL, state) }),
+    open: (userId) =>
+      openWorkspace(userId, {
+        dataDir,
+        cipher: safeStorage,
+        spawn,
+        emit: (state) => broadcast(JOB_EVENT_CHANNEL, state),
+        cloud: async () => {
+          const db = await account.database();
+          return db ? new SupabaseRepo(db) : null;
+        },
+        emitSync: (state) => broadcast(SYNC_EVENT_CHANNEL, state),
+      }),
     notify: (state) => broadcast(ACCOUNT_EVENT_CHANNEL, state),
   });
   // La sesión guardada (si la hay) llega por onChange en cuanto se lee, ya con el enrutador creado.

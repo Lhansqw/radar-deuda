@@ -10,6 +10,7 @@ import type { JobState } from './jobs.js';
 import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
+import type { SyncState } from './sync.js';
 
 export interface AppInfo {
   versions: { app: string; electron: string; chrome: string; node: string };
@@ -86,12 +87,20 @@ export interface IpcContract {
   /** Pregunta a la IA; devuelve la pregunta y la respuesta guardadas. */
   'chat:ask': { args: [analysisId: number, question: string]; result: ChatMessage[] };
   'chat:clear': { args: [analysisId: number]; result: null };
+  /** Estado de la copia en la nube (fase 13b). */
+  'sync:state': { args: []; result: SyncState };
+  /** Sincroniza ya y devuelve el estado al terminar. */
+  'sync:now': { args: []; result: SyncState };
+  /** Borra la copia en la nube de la cuenta y desactiva la sincronización (en el equipo no se borra nada). */
+  'sync:deleteCloud': { args: []; result: SyncState };
 }
 
 /** Canal de avisos del proceso principal a la interfaz (estado de los análisis). */
 export const JOB_EVENT_CHANNEL = 'jobs:event';
 /** Canal de avisos de la cuenta (sesión iniciada, cerrada o caducada). */
 export const ACCOUNT_EVENT_CHANNEL = 'account:event';
+/** Canal de avisos de la copia en la nube (estado y cambios llegados de otros equipos). */
+export const SYNC_EVENT_CHANNEL = 'sync:event';
 
 export type Channel = keyof IpcContract;
 export type ArgsOf<C extends Channel> = IpcContract[C]['args'];
@@ -147,6 +156,9 @@ export const CHANNELS = [
   'chat:list',
   'chat:ask',
   'chat:clear',
+  'sync:state',
+  'sync:now',
+  'sync:deleteCloud',
 ] as const satisfies readonly Channel[];
 
 /**

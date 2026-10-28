@@ -2609,6 +2609,55 @@ code,
   font-size: var(--t-xs);
 }
 
+/* Configuración → Cuenta → copia en la nube */
+.cloud-copy {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 40rem;
+  padding: 1rem 0;
+  border-block: 1px solid var(--linea);
+}
+
+.cloud-status {
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--bien);
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+}
+
+.cloud-status[data-status='off'] {
+  border-left-color: var(--linea-fuerte);
+}
+
+.cloud-status[data-status='syncing'] {
+  border-left-color: var(--enlace);
+}
+
+.cloud-status[data-status='offline'] {
+  border-left-color: var(--sev-medium);
+}
+
+.cloud-status[data-status='error'] {
+  border-left-color: var(--sev-critical);
+  color: var(--error-texto);
+}
+
+.cloud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cloud-actions .confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--tinta-2);
+  font-size: var(--t-s);
+}
+
 /* Cuenta con la sesión iniciada, al pie de la barra lateral */
 .sidebar-account {
   display: flex;

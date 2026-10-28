@@ -7,6 +7,7 @@
 import type { AccountState } from './account.js';
 import type { ArgsOf, Channel, ResultOf } from './ipc.js';
 import type { JobState } from './jobs.js';
+import type { SyncState } from './sync.js';
 
 type Fn<C extends Channel> = (...args: ArgsOf<C>) => Promise<ResultOf<C>>;
 
@@ -39,6 +40,13 @@ export interface RadarApi {
     getFix: Fn<'ai:getFix'>;
   };
   chat: { list: Fn<'chat:list'>; ask: Fn<'chat:ask'>; clear: Fn<'chat:clear'> };
+  sync: {
+    state: Fn<'sync:state'>;
+    now: Fn<'sync:now'>;
+    deleteCloud: Fn<'sync:deleteCloud'>;
+    /** Avisa de cada cambio de la copia en la nube. Devuelve la función para dejar de escuchar. */
+    onChange: (cb: (state: SyncState) => void) => () => void;
+  };
   jobs: {
     start: Fn<'jobs:start'>;
     cancel: Fn<'jobs:cancel'>;
