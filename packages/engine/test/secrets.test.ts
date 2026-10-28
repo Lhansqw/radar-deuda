@@ -14,6 +14,7 @@ const fake = {
   anthropic: ['sk', 'ant', 'api03', 'Zx8Qw2Er5Ty7Ui9Op1As3Df'].join('-'),
   privateKey: ['-----BEGIN', 'RSA', 'PRIVATE', 'KEY-----'].join(' '),
   supabaseSecret: ['sb', 'secret', 'Q7rZx2LmP9wDk4Tb8NvY3cHs'].join('_'),
+  groq: ['gsk', 'Zq8vT2mW9xQ7rZx2LmP9wDk4Tb8NvY3cHsAb5Cd7Ef9Gh1Jk3Lm'].join('_'),
   supabasePublishable: ['sb', 'publishable', 'Q7rZx2LmP9wDk4Tb8NvY3cHs'].join('_'),
 };
 
@@ -26,6 +27,7 @@ describe('formatos conocidos', () => {
     ['anthropic-key', `ANTHROPIC_API_KEY=${fake.anthropic}`],
     ['private-key', fake.privateKey],
     ['supabase-secret-key', `SUPABASE_SECRET_KEY=${fake.supabaseSecret}`],
+    ['groq-key', `GROQ_API_KEY=${fake.groq}`],
   ])('%s', (ruleId, line) => {
     const [m] = scan(line, 'config/.env');
     expect(m?.ruleId).toBe(ruleId);
