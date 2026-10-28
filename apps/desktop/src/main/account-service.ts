@@ -2,6 +2,7 @@ import { createClient, type Session, type SupabaseClient, type User } from '@sup
 import { emailProblem, newPasswordProblem, normalizeEmail, type AccountState, type SignUpResult } from '../shared/account.js';
 import { AccountError, accountError, isOfflineError } from './account-errors.js';
 import type { CloudConfigResult } from './cloud-config.js';
+import type { Database } from './cloud-schema.js';
 import type { EncryptedSessionStorage } from './session-storage.js';
 
 /** Clave con la que Supabase Auth guarda la sesión en EncryptedSessionStorage. */
@@ -27,6 +28,8 @@ export interface AccountServiceDeps {
   onChange: (change: AccountChange) => void;
   /** Para las pruebas; por defecto, el fetch global en el momento de cada petición. */
   fetch?: typeof fetch;
+  /** Reintentar las lecturas de la base de datos que fallan por la red (por defecto sí; las pruebas no esperan). */
+  retryReads?: boolean;
 }
 
 /**
@@ -39,7 +42,7 @@ export interface AccountServiceDeps {
  * las plantillas, ver docs/CUENTAS.md).
  */
 export class AccountService {
-  private readonly client: SupabaseClient | null;
+  private readonly client: SupabaseClient<Database> | null;
   private current: AccountChange;
   private readonly ready: Promise<void>;
   private validation: Promise<void> = Promise.resolve();
@@ -48,9 +51,10 @@ export class AccountService {
   constructor(private readonly d: AccountServiceDeps) {
     if (d.config.ok) {
       const fetchNow = d.fetch ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args));
-      this.client = createClient(d.config.config.url, d.config.config.publishableKey, {
+      this.client = createClient<Database>(d.config.config.url, d.config.config.publishableKey, {
         auth: { storage: d.storage, storageKey: SESSION_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
         global: { fetch: fetchNow },
+        db: { retry: d.retryReads ?? true },
       });
       this.current = { state: { status: 'signed-out' }, user: null };
     } else {
@@ -70,6 +74,16 @@ export class AccountService {
   async user(): Promise<SignedInUser | null> {
     await this.ready;
     return this.current.user;
+  }
+
+  /**
+   * La base de datos de la nube con la sesión del usuario (sus peticiones
+   * llevan su token y las políticas de seguridad por filas lo identifican), o
+   * null sin sesión iniciada.
+   */
+  async database(): Promise<SupabaseClient<Database> | null> {
+    await this.ready;
+    return this.current.state.status === 'signed-in' ? this.client : null;
   }
 
   /**
@@ -196,7 +210,7 @@ export class AccountService {
   }
 
   /** Cambios que no inicia el usuario: la sesión caduca o se revoca, o vuelve la conexión. */
-  private watch(auth: SupabaseClient['auth']): void {
+  private watch(auth: SupabaseClient<Database>['auth']): void {
     const { data } = auth.onAuthStateChange((event, session) => {
       try {
         if (event === 'SIGNED_OUT' && this.current.state.status === 'signed-in') this.set({ state: { status: 'signed-out' }, user: null });
@@ -214,7 +228,7 @@ export class AccountService {
    * conexión sigue valiendo y se marca como tal hasta que vuelva la red
    * (Supabase Auth reintenta solo).
    */
-  private async validate(auth: SupabaseClient['auth'], stored: SignedInUser | null): Promise<void> {
+  private async validate(auth: SupabaseClient<Database>['auth'], stored: SignedInUser | null): Promise<void> {
     const { data, error } = await auth.getSession().catch((err: unknown) => ({ data: { session: null as Session | null }, error: err }));
     // Solo si mientras tanto nadie inició ni cerró otra sesión.
     if (stored && this.current.user?.id === stored.id) {
@@ -224,7 +238,7 @@ export class AccountService {
     }
   }
 
-  private async auth(): Promise<SupabaseClient['auth']> {
+  private async auth(): Promise<SupabaseClient<Database>['auth']> {
     await this.ready;
     if (!this.client) throw new AccountError(this.current.state.status === 'unconfigured' ? this.current.state.message : 'Falta la conexión con Supabase.');
     return this.client.auth;

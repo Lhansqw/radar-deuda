@@ -10,7 +10,7 @@ export function report(score: number, extra: Partial<AnalysisReport> = {}): Anal
     generatedAt: '2026-10-26T12:00:00.000Z',
     config: {} as AnalysisReport['config'],
     score: { score, rating: score >= 80 ? 'A' : 'C', debtRatio: 0.12, remediationMinutes: 125.4, developmentMinutes: 1000, codeLines: 300 },
-    findings: [{ id: 'f1', severity: 'high' }] as AnalysisReport['findings'],
+    findings: [{ id: 'f1', severity: 'high', locations: [], evidence: [] }] as unknown as AnalysisReport['findings'],
     summary: { bySeverity, byCategory: {} },
     coverage: [],
     errors: [],
