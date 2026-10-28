@@ -38,7 +38,7 @@ npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md
    análisis), proveedor y modelo de IA (con el catálogo de OpenRouter y sus modelos
    gratuitos), privacidad, presupuesto, credenciales y espacio en disco (vaciar la caché).
 
-La IA funciona sin configurar nada: por defecto es la **IA incluida**, modelos gratuitos
+La IA funciona sin configurar nada: por defecto es la **IA incluida**, gpt-oss-120b (Groq)
 con la cuenta de la aplicación y un cupo diario que se ve en Configuración
 ([IA-INCLUIDA.md](IA-INCLUIDA.md)). Para usar OpenRouter con tu clave: Configuración → Inteligencia artificial → elige
 un modelo de la lista (filtro «Solo gratuitos») → si es gratuito, marca «Permitir

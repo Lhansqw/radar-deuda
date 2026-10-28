@@ -7,7 +7,7 @@ esta misma capa las [propuestas de corrección y las preguntas sobre el análisi
 ## Qué necesitas para usarla
 
 En la aplicación de escritorio no hace falta nada: por defecto usa la **IA incluida**,
-modelos gratuitos con la cuenta de la aplicación y un cupo diario ([IA-INCLUIDA.md](IA-INCLUIDA.md)).
+gpt-oss-120b (Groq) con la cuenta de la aplicación y un cupo diario ([IA-INCLUIDA.md](IA-INCLUIDA.md)).
 Lo que sigue es para la CLI o para usar otro proveedor.
 
 Elige **una** opción. El análisis funciona igual sin IA. En la CLI, las claves se leen
