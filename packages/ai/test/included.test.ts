@@ -22,6 +22,18 @@ describe('IncludedAiProvider', () => {
     expect(p.label).toBe('IA incluida');
   });
 
+  it('no repite lo que la función ya esperó (ocupada o sin cupo), sí los fallos de la red de Supabase', async () => {
+    const calls = (status: number) => {
+      const fetch = fakeFetch((url) => (url.endsWith('/models') ? json({ data: [] }) : json({ error: { message: 'x' } }, status)));
+      return { fetch, count: () => fetch.calls.filter((c) => c.url.endsWith('/chat/completions')).length };
+    };
+    for (const [status, expected] of [[503, 1], [429, 1], [502, 3]] as const) {
+      const c = calls(status);
+      await expect(new IncludedAiProvider({ baseUrl: BASE, sessionToken: TOKEN, sleep: noSleep, fetch: c.fetch }).complete(plain)).rejects.toBeTruthy();
+      expect(c.count(), `HTTP ${status}`).toBe(expected);
+    }
+  });
+
   it('sin sesión no se puede usar', () => {
     expect(() => new IncludedAiProvider({ baseUrl: BASE, sessionToken: '' })).toThrow('Inicia sesión para usar la IA incluida.');
   });

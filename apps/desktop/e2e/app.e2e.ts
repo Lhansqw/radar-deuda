@@ -364,7 +364,7 @@ async function main(): Promise<void> {
     await shot(page, 'historial');
     log('historial y comparación entre análisis');
 
-    // Sin configurar nada, la IA incluida: modelos gratuitos con la cuenta de la aplicación, sin clave.
+    // Sin configurar nada, la IA incluida: el modelo de la aplicación, sin clave.
     await page.getByRole('button', { name: /^Hallazgos/ }).click();
     await page.locator('.finding-row').filter({ hasNotText: 'Función difícil de mantener' }).first().click();
     await page.getByRole('button', { name: 'Explicar con IA' }).click();

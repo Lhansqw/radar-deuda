@@ -168,7 +168,7 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
   const model = await chooseModel(o, provider, signal);
   const planModel = o.planModel ?? (o.provider === 'anthropic' ? ANTHROPIC_MODELS.balanced : model);
   if (o.provider === 'incluida') {
-    hooks.info('IA incluida: modelos gratuitos de OpenRouter a través de la cuenta de la aplicación; sus proveedores pueden guardar lo que reciben.');
+    hooks.info('IA incluida: el modelo de la aplicación, a través de su proyecto de Supabase (sin clave propia); su proveedor recibe lo que se envía según la privacidad elegida.');
   }
   if (o.provider === 'openrouter') {
     hooks.info(

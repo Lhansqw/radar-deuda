@@ -3,16 +3,17 @@ import { ProviderError, type PreflightPlan } from '../provider.js';
 import { OpenRouterProvider, type OpenRouterKeyStatus, type OpenRouterOptions } from './openrouter.js';
 
 /**
- * IA incluida (fase 14): modelos gratuitos de OpenRouter sin que el usuario
+ * IA incluida (fase 14): el modelo de la aplicación sin que el usuario
  * configure ninguna clave. La aplicación no lleva la clave (se podría sacar
  * del instalador): la guarda el proyecto de Supabase, y su función «ia»
- * (supabase/functions/ia) reenvía las consultas a OpenRouter tras comprobar la
- * sesión del usuario, que solo pide modelos gratuitos y que no pasa de su cupo
- * diario. Habla la misma API que OpenRouter, así que este proveedor es el de
- * OpenRouter apuntando a la función, con el token de la sesión como credencial.
+ * (supabase/functions/ia) reenvía las consultas al modelo (gpt-oss-120b en
+ * Groq, con modelos gratuitos de OpenRouter de respaldo) tras comprobar la
+ * sesión del usuario y que no pasa de su cupo diario. Habla la misma API que
+ * OpenRouter, así que este proveedor es el de OpenRouter apuntando a la
+ * función, con el token de la sesión como credencial.
  */
 
-/** Modelo que elige el servidor (los gratuitos que configuró el dueño del proyecto). */
+/** Modelo que elige el servidor (el que configuró el dueño del proyecto). */
 export const INCLUDED_DEFAULT_MODEL = 'radar/predeterminado';
 
 export interface IncludedAiOptions extends Omit<OpenRouterOptions, 'apiKey' | 'baseUrl' | 'id' | 'label' | 'validateKey' | 'allowDataCollection' | 'zeroDataRetention'> {
@@ -28,7 +29,8 @@ export class IncludedAiProvider extends OpenRouterProvider {
     if (!sessionToken) throw new ProviderError('Inicia sesión para usar la IA incluida.', 'auth', 'incluida');
     // Los proveedores de los modelos gratuitos suelen guardar lo que reciben: hay que permitirlo
     // (la privacidad «solo metadatos», la de la nube por defecto, no envía código).
-    super({ ...rest, apiKey: sessionToken, id: 'incluida', label: 'IA incluida', validateKey: false, allowDataCollection: true });
+    // La función ya espera por los límites por minuto del modelo: aquí solo se repiten los fallos de la red de Supabase.
+    super({ retryable: (status) => status === 500 || status === 502 || status === 504, ...rest, apiKey: sessionToken, id: 'incluida', label: 'IA incluida', validateKey: false, allowDataCollection: true });
   }
 
   /** Cupo de hoy (la función responde como la API /key de OpenRouter). */

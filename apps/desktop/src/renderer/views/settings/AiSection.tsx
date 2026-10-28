@@ -11,7 +11,7 @@ const PROVIDERS: Array<{ value: AiProviderName; label: string; hint: string }> =
   {
     value: 'incluida',
     label: 'IA incluida (gratuita)',
-    hint: 'Sin claves: modelos gratuitos con la cuenta de la aplicación y un número de consultas al día. Sus proveedores pueden guardar lo que reciben; con «solo metadatos» no se envía código.',
+    hint: 'Sin claves: el modelo de la aplicación (gpt-oss-120b), con un número de consultas al día por cuenta. Con «solo metadatos» no se envía código.',
   },
   { value: 'openrouter', label: 'OpenRouter (tu clave)', hint: 'Muchos modelos con una sola clave, incluidos algunos gratuitos.' },
   { value: 'anthropic', label: 'Anthropic (Claude)', hint: 'Si no eliges modelo: claude-haiku-5-5 para explicar y claude-sonnet-5-5 para el plan.' },
