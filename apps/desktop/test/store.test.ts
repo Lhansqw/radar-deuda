@@ -2,8 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AiFixProposal, AnalysisReport, Severity } from '@radar/engine';
+import type { AiFixProposal } from '@radar/engine';
 import { CHAT_LIMIT, DuplicateProjectError, HISTORY_LIMIT, SCHEMA_VERSION, Store } from '../src/main/store.js';
+import { report } from './helpers/report.js';
 
 const dirs: string[] = [];
 const stores: Store[] = [];
@@ -15,25 +16,6 @@ function memory(): Store {
   const s = Store.open(':memory:');
   stores.push(s);
   return s;
-}
-
-/** Informe mínimo con la forma que valida parseReport. */
-function report(score: number, extra: Partial<AnalysisReport> = {}): AnalysisReport {
-  const bySeverity: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 0 };
-  return {
-    schemaVersion: 1,
-    engineVersion: '0.1.0',
-    root: '/repo',
-    generatedAt: '2026-10-26T12:00:00.000Z',
-    config: {} as AnalysisReport['config'],
-    score: { score, rating: score >= 80 ? 'A' : 'C', debtRatio: 0.12, remediationMinutes: 125.4, developmentMinutes: 1000, codeLines: 300 },
-    findings: [{ id: 'f1', severity: 'high' }] as AnalysisReport['findings'],
-    summary: { bySeverity, byCategory: {} },
-    coverage: [],
-    errors: [],
-    stats: { durationMs: 10, filesDiscovered: 3, filesAnalyzed: 3, cacheHits: 0, skipped: [], cpuUserMs: 1, cpuSystemMs: 1, peakRssMb: 50 },
-    ...extra,
-  };
 }
 
 describe('Store', () => {
@@ -125,7 +107,10 @@ describe('Store', () => {
     a.close();
     const { DatabaseSync } = await import('node:sqlite');
     const db = new DatabaseSync(file);
-    db.exec('DROP TABLE fix_proposals; DROP TABLE chat_messages; PRAGMA user_version = 1;');
+    // Lo que añadieron las versiones 2 (propuestas y conversaciones) y 3 (copia en la nube).
+    db.exec(`DROP INDEX projects_by_cloud_id; DROP INDEX analyses_by_cloud_id; DROP INDEX analyses_to_upload;
+      ALTER TABLE projects DROP COLUMN cloud_id; ALTER TABLE analyses DROP COLUMN cloud_id; ALTER TABLE analyses DROP COLUMN cloud_synced;
+      DROP TABLE cloud_removals; DROP TABLE fix_proposals; DROP TABLE chat_messages; PRAGMA user_version = 1;`);
     db.close();
     const b = Store.open(file);
     stores.push(b);
@@ -133,6 +118,8 @@ describe('Store', () => {
     const [analysis] = b.listAnalyses(p.id);
     expect(analysis?.score).toBe(70);
     expect(b.listChatMessages(analysis?.id ?? 0)).toEqual([]);
+    // Lo que había antes de la nube queda pendiente de subir.
+    expect(b.cloudLedger().pendingCount()).toEqual({ projects: 1, analyses: 1, removals: 0 });
   });
 
   it('guarda una propuesta por hallazgo, la sustituye y la borra con su análisis', () => {
