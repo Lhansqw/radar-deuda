@@ -155,6 +155,14 @@ describe('claves de IA', () => {
     expect(() => createProvider({ provider: 'openai', model: 'x', limit: 1, budgetUsd: 1, plan: false }, {})).toThrow(/RADAR_OPENAI_API_KEY/);
     expect(createProvider({ provider: 'lmstudio', limit: 1, budgetUsd: 1, plan: false }, {}).locality).toBe('local');
   });
+
+  it('la IA incluida usa la función de Supabase con el token de la sesión, y sin sesión lo dice', () => {
+    const url = 'https://prueba.supabase.co/functions/v1/ia';
+    const p = createProvider({ provider: 'incluida', url, limit: 1, budgetUsd: 1, plan: false }, { incluida: 'token-de-sesion' });
+    expect({ id: p.id, label: p.label, locality: p.locality }).toEqual({ id: 'incluida', label: 'IA incluida', locality: 'cloud' });
+    expect(() => createProvider({ provider: 'incluida', url, limit: 1, budgetUsd: 1, plan: false }, {})).toThrow('Inicia sesión para usar la IA incluida.');
+    expect(() => createProvider({ provider: 'incluida', limit: 1, budgetUsd: 1, plan: false }, { incluida: 't' })).toThrow(/conexión con Supabase/);
+  });
 });
 
 describe('caché del historial', () => {

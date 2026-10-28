@@ -79,6 +79,11 @@ function defaultReasoningHeadroom(model: OpenRouterModel | null): number {
 export interface OpenRouterOptions extends Omit<OpenAiCompatibleOptions, 'id' | 'label' | 'baseUrl' | 'apiKey' | 'locality'> {
   apiKey: string;
   baseUrl?: string;
+  /** Para un servicio que reenvía a OpenRouter (la IA incluida): su id y su nombre en los mensajes. */
+  id?: string;
+  label?: string;
+  /** Comprobar que la clave tiene el formato de OpenRouter (por defecto sí). */
+  validateKey?: boolean;
   /** Razonamiento de los modelos que razonan (por defecto "auto"). */
   reasoning?: ReasoningPreference;
   /**
@@ -184,12 +189,12 @@ export class OpenRouterProvider extends OpenAiCompatibleProvider {
   private catalog: Promise<Map<string, OpenRouterModel>> | null = null;
 
   constructor(options: OpenRouterOptions) {
-    const { apiKey, baseUrl = OPENROUTER_BASE_URL, allowDataCollection = false, zeroDataRetention = false, reasoning = 'auto', fallbackModels = [], ...rest } = options;
-    checkApiKey(apiKey, KEY_RULES.openrouter, 'openrouter');
+    const { apiKey, baseUrl = OPENROUTER_BASE_URL, id = 'openrouter', label = 'OpenRouter', validateKey = true, allowDataCollection = false, zeroDataRetention = false, reasoning = 'auto', fallbackModels = [], ...rest } = options;
+    if (validateKey) checkApiKey(apiKey, KEY_RULES.openrouter, 'openrouter');
     super({
       ...rest,
-      id: 'openrouter',
-      label: 'OpenRouter',
+      id,
+      label,
       baseUrl,
       apiKey,
       locality: 'cloud',
