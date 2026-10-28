@@ -188,7 +188,7 @@ describe('caché del historial', () => {
 
     // Otro commit: se recalcula y sustituye a la anterior.
     await writeFile(path.join(root, 'caliente.ts'), complex(9));
-    await runGit(['-c', 'user.name=t', '-c', 'user.email=t@x.co', 'commit', '-qam', 'c2'], { cwd: root });
+    await runGit(['-c', 'commit.gpgsign=false', '-c', 'user.name=t', '-c', 'user.email=t@x.co', 'commit', '-qam', 'c2'], { cwd: root });
     const third = await cachedFileChurn(root, await opts(), signal);
     expect(third.fromCache).toBe(false);
     expect(third.churn.get('caliente.ts')?.commits).toBe(3);
