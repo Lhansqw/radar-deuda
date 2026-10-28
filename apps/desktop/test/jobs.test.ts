@@ -4,7 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisReport } from '@radar/engine';
 import { CredentialStore } from '../src/main/credentials.js';
-import { aiOptionsFrom, JobError, JobManager, sinceFromMonths, type WorkerHandle } from '../src/main/jobs.js';
+import { aiOptionsFrom, JobError, JobManager, sinceFromMonths, type IncludedAccess, type WorkerHandle } from '../src/main/jobs.js';
 import { Store } from '../src/main/store.js';
 import type { JobState } from '../src/shared/jobs.js';
 import { DEFAULT_SETTINGS, type AppSettings } from '../src/shared/settings.js';
@@ -49,7 +49,7 @@ const report = (score = 70): AnalysisReport =>
     stats: { durationMs: 1, filesDiscovered: 1, filesAnalyzed: 1, cacheHits: 0, skipped: [], cpuUserMs: 1, cpuSystemMs: 1, peakRssMb: 1 },
   }) as unknown as AnalysisReport;
 
-function setup(settings: AppSettings = DEFAULT_SETTINGS, env: NodeJS.ProcessEnv = {}) {
+function setup(settings: AppSettings = DEFAULT_SETTINGS, env: NodeJS.ProcessEnv = {}, included: IncludedAccess | null = null) {
   const store = Store.open(':memory:');
   cleanup.push(() => store.close());
   const cipher = { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() };
@@ -71,6 +71,7 @@ function setup(settings: AppSettings = DEFAULT_SETTINGS, env: NodeJS.ProcessEnv 
     now: () => new Date('2026-10-26T15:00:00Z'),
     cancelGraceMs: 50,
     folderExists: (p) => p !== '/repos/de-otro-equipo',
+    includedAi: () => included,
   });
   const project = store.addProject({ name: 'demo', kind: 'local', location: '/repos/demo' });
   return { store, credentials, jobs, workers, events, project, spawned };
@@ -114,7 +115,7 @@ describe('JobManager', () => {
   it('con IA automática pasa las opciones y las claves; un fallo de la IA no pierde el análisis', () => {
     const settings: AppSettings = {
       ...DEFAULT_SETTINGS,
-      ai: { ...DEFAULT_SETTINGS.ai, auto: true, model: 'a/b:free', fallbackModels: ['c/d:free'], allowDataCollection: true, reasoning: 'low', budgetUsd: 0.2, limit: 3 },
+      ai: { ...DEFAULT_SETTINGS.ai, provider: 'openrouter', auto: true, model: 'a/b:free', fallbackModels: ['c/d:free'], allowDataCollection: true, reasoning: 'low', budgetUsd: 0.2, limit: 3 },
     };
     const key = ['sk', 'or', 'v1', 'k'.repeat(64)].join('-');
     const { jobs, workers, events, project, store } = setup(settings, { RADAR_OPENROUTER_API_KEY: key });
@@ -130,6 +131,17 @@ describe('JobManager', () => {
     workers[0]?.send({ type: 'finished' });
     expect(events.at(-1)).toMatchObject({ status: 'done', aiError: 'Clave revocada.' });
     expect(store.listAnalyses(project.id)).toHaveLength(1);
+  });
+
+  it('con la IA incluida pasa la función «ia» y el token de la sesión, no el modelo', () => {
+    const settings: AppSettings = { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, auto: true, model: 'restos/de:antes' } };
+    const included = { url: 'https://p.supabase.co/functions/v1/ia', token: 'token-de-sesion' };
+    const { jobs, workers, project } = setup(settings, {}, included);
+    jobs.start(project.id);
+    expect((workers[0]?.received[0] as StartMessage).ai).toEqual({
+      options: { provider: 'incluida', limit: 8, budgetUsd: 0.5, plan: true, url: included.url },
+      keys: { incluida: 'token-de-sesion' },
+    });
   });
 
   it('añade la sección de IA al análisis ya guardado', () => {

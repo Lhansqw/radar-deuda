@@ -142,6 +142,18 @@ describe('AccountService', () => {
     await expect(account.setNewPassword('nueva-clave-segura')).rejects.toThrow(/código de recuperación/);
   });
 
+  it('IA incluida: con sesión da la función «ia» y el token de la sesión; sin sesión, nada', async () => {
+    const { account, server } = await setup();
+    server.addUser('ana@ejemplo.com', PASSWORD);
+    expect(account.includedAi()).toBeNull();
+    await account.signIn('ana@ejemplo.com', PASSWORD, true);
+    const access = account.includedAi();
+    expect(access).toEqual({ url: `${FAKE_URL}/functions/v1/ia`, token: expect.any(String) as unknown });
+    expect(access?.token.length).toBeGreaterThan(10);
+    await account.signOut();
+    expect(account.includedAi()).toBeNull();
+  });
+
   it('cerrar sesión borra la sesión guardada, también sin conexión', async () => {
     const { account, server, file, changes } = await setup();
     server.addUser('ana@ejemplo.com', PASSWORD);

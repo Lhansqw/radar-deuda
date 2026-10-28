@@ -9,7 +9,7 @@ import type { CloudRepo } from './cloud-repo.js';
 import { CloudSync } from './cloud-sync.js';
 import { CredentialStore, type Cipher } from './credentials.js';
 import { createHandlers, loadSettings, type AppDeps, type HandlerDeps, type Handlers } from './handlers.js';
-import { JobManager, type JobDeps } from './jobs.js';
+import { JobManager, type IncludedAccess, type JobDeps } from './jobs.js';
 import { Store } from './store.js';
 import { adoptLegacyData, DB_FILE, userDataDir } from './user-data.js';
 
@@ -32,6 +32,8 @@ export interface WorkspaceDeps {
   cloud: () => Promise<CloudRepo | null>;
   /** Avisa a la interfaz del estado de la copia en la nube. */
   emitSync: (state: SyncState) => void;
+  /** IA incluida: la función «ia» y el token de la sesión (null sin sesión). */
+  includedAi: () => IncludedAccess | null;
 }
 
 /** Espera antes de la primera sincronización: que la ventana termine de abrir. */
@@ -44,8 +46,8 @@ export function openWorkspace(userId: string, d: WorkspaceDeps): Workspace {
   const store = Store.open(path.join(dir, DB_FILE));
   const credentials = new CredentialStore(store, d.cipher);
   const settings = () => loadSettings(store);
-  const jobs = new JobManager({ store, credentials, settings, spawn: d.spawn, emit: d.emit });
-  const ai = new AiService({ store, credentials, settings });
+  const jobs = new JobManager({ store, credentials, settings, spawn: d.spawn, emit: d.emit, includedAi: d.includedAi });
+  const ai = new AiService({ store, credentials, settings, includedAi: d.includedAi });
   const sync = new CloudSync({ ledger: store.cloudLedger(), repo: d.cloud, enabled: () => settings().cloud.sync, emit: d.emitSync });
   // Lo que cambia el usuario (proyectos, análisis) sube a los pocos segundos.
   const stopWatching = store.onChange(() => sync.schedule());

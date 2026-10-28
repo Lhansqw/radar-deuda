@@ -12,13 +12,20 @@ describe('ajustes', () => {
     expect(validateSettings(DEFAULT_SETTINGS)).toEqual({ ok: true, value: DEFAULT_SETTINGS });
   });
 
+  it('por defecto, la IA incluida: sin modelo ni clave que configurar', () => {
+    expect(DEFAULT_SETTINGS.ai.provider).toBe('incluida');
+    expect(errorsOf(withAi({ auto: true }))).toEqual([]);
+    expect(errorsOf(withAi({ privacy: 'local' }))).toEqual(['Privacidad "local" impide usar un proveedor en la nube.']);
+  });
+
   it('valida OpenRouter: formato de modelos, respaldos y opciones de retención', () => {
-    expect(errorsOf(withAi({ model: 'sin-proveedor' }))).toEqual(['Modelo: en OpenRouter el formato es proveedor/modelo.']);
-    expect(errorsOf(withAi({ model: 'a/b:free', fallbackModels: ['c/d:free', 'x'] }))).toEqual(['Modelo de respaldo no válido: x (formato proveedor/modelo).']);
-    expect(errorsOf(withAi({ model: 'a/b', fallbackModels: ['c/d', 'e/f', 'g/h', 'i/j'] }))).toEqual(['Modelos de respaldo: como mucho 3.']);
-    expect(errorsOf(withAi({ allowDataCollection: true, zeroDataRetention: true }))).toHaveLength(1);
-    expect(errorsOf(withAi({ auto: true }))).toEqual(['Para usar la IA automáticamente con OpenRouter, elige un modelo.']);
-    expect(errorsOf(withAi({ auto: true, model: 'nvidia/nemotron-3.5-super-vl:free', fallbackModels: ['  dots-studio/dots-3-note-preview:free '] }))).toEqual([]);
+    const openRouter = (ai: Partial<AppSettings['ai']>) => withAi({ provider: 'openrouter', ...ai });
+    expect(errorsOf(openRouter({ model: 'sin-proveedor' }))).toEqual(['Modelo: en OpenRouter el formato es proveedor/modelo.']);
+    expect(errorsOf(openRouter({ model: 'a/b:free', fallbackModels: ['c/d:free', 'x'] }))).toEqual(['Modelo de respaldo no válido: x (formato proveedor/modelo).']);
+    expect(errorsOf(openRouter({ model: 'a/b', fallbackModels: ['c/d', 'e/f', 'g/h', 'i/j'] }))).toEqual(['Modelos de respaldo: como mucho 3.']);
+    expect(errorsOf(openRouter({ allowDataCollection: true, zeroDataRetention: true }))).toHaveLength(1);
+    expect(errorsOf(openRouter({ auto: true }))).toEqual(['Para usar la IA automáticamente con OpenRouter, elige un modelo.']);
+    expect(errorsOf(openRouter({ auto: true, model: 'nvidia/nemotron-3.5-super-vl:free', fallbackModels: ['  dots-studio/dots-3-note-preview:free '] }))).toEqual([]);
   });
 
   it('limpia espacios y descarta respaldos vacíos', () => {

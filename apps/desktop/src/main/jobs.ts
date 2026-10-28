@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import type { AiOptions } from '@radar/pipeline';
+import type { AiOptions, ApiKeys } from '@radar/pipeline';
 import type { JobLogEntry, JobPhase, JobState } from '../shared/jobs.js';
 import type { Project } from '../shared/model.js';
 import { LOCAL_PROVIDERS, type AppSettings, type AiSettings } from '../shared/settings.js';
@@ -29,17 +29,28 @@ export interface JobDeps {
   cancelGraceMs?: number;
   /** Para las pruebas; por defecto, si la carpeta existe en el disco. */
   folderExists?: (path: string) => boolean;
+  /** IA incluida: la función «ia» y el token de la sesión (null sin sesión). */
+  includedAi?: () => IncludedAccess | null;
+}
+
+/** Cómo llegar a la IA incluida (fase 14): la función «ia» de Supabase con el token de la sesión. */
+export interface IncludedAccess {
+  url: string;
+  token: string;
 }
 
 /** Ajustes de la aplicación → opciones de la capa de IA. */
-export function aiOptionsFrom(s: AiSettings): AiOptions {
+export function aiOptionsFrom(s: AiSettings, included: IncludedAccess | null = null): AiOptions {
   const openrouter = s.provider === 'openrouter';
+  const incluida = s.provider === 'incluida';
   return {
     provider: s.provider,
     limit: s.limit,
     budgetUsd: s.budgetUsd,
     plan: s.plan,
-    ...(s.model !== '' ? { model: s.model } : {}),
+    // Los modelos de la IA incluida los elige el servidor.
+    ...(s.model !== '' && !incluida ? { model: s.model } : {}),
+    ...(incluida && included ? { url: included.url } : {}),
     ...(s.privacy !== 'auto' ? { privacy: s.privacy } : {}),
     ...(LOCAL_PROVIDERS.has(s.provider) && s.localUrl !== '' ? { url: s.localUrl } : {}),
     ...(openrouter && s.fallbackModels.length > 0 ? { fallbackModels: s.fallbackModels } : {}),
@@ -47,6 +58,16 @@ export function aiOptionsFrom(s: AiSettings): AiOptions {
     ...(openrouter && s.zeroDataRetention ? { zeroDataRetention: true } : {}),
     ...(openrouter && s.reasoning !== 'auto' ? { reasoning: s.reasoning } : {}),
   };
+}
+
+/** Claves de la capa de IA: las guardadas y, con la IA incluida, el token de la sesión. */
+export function aiKeysFrom(credentials: Pick<CredentialStore, 'apiKeys'>, s: AiSettings, included: IncludedAccess | null): ApiKeys {
+  return { ...credentials.apiKeys(), ...(s.provider === 'incluida' && included ? { incluida: included.token } : {}) };
+}
+
+/** La IA incluida necesita la sesión con conexión a Supabase. */
+export function includedProblem(s: AiSettings, included: IncludedAccess | null): string | null {
+  return s.provider === 'incluida' && !included ? 'La IA incluida necesita la sesión iniciada con conexión. Vuelve a iniciar sesión o elige otro proveedor en Configuración.' : null;
 }
 
 /** Fecha de inicio del historial a partir de los meses configurados (AAAA-MM-DD). */
@@ -166,8 +187,13 @@ export class JobManager {
         ...(github && project.branch ? { branch: project.branch } : {}),
         ...(token ? { githubToken: token } : {}),
       },
-      ...(settings.ai.auto ? { ai: { options: aiOptionsFrom(settings.ai), keys: this.d.credentials.apiKeys() } } : {}),
+      ...(settings.ai.auto ? { ai: this.aiRequest(settings) } : {}),
     };
+  }
+
+  private aiRequest(settings: AppSettings): NonNullable<StartMessage['ai']> {
+    const included = this.d.includedAi?.() ?? null;
+    return { options: aiOptionsFrom(settings.ai, included), keys: aiKeysFrom(this.d.credentials, settings.ai, included) };
   }
 
   private onMessage(jobId: string, m: FromWorker): void {

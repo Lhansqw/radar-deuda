@@ -7,7 +7,7 @@
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { AccountState, SignUpResult } from './account.js';
 import type { JobState } from './jobs.js';
-import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal } from './model.js';
+import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
 import type { SyncState } from './sync.js';
@@ -76,6 +76,8 @@ export interface IpcContract {
   'ai:models': { args: []; result: CatalogModel[] };
   /** Comprueba la clave de OpenRouter guardada (validez, crédito y cuota gratuita). */
   'ai:checkKey': { args: []; result: OpenRouterKeyCheck };
+  /** Consultas de IA incluida que le quedan hoy a la cuenta (fase 14). */
+  'ai:includedQuota': { args: []; result: IncludedQuota };
   /** Lo que se enviaría para proponer una corrección (sin enviar nada). */
   'ai:fixPreview': { args: [analysisId: number, findingId: string]; result: FixPreviewInfo };
   /** Propone una corrección; `consent`: el usuario confirmó enviar el fragmento de código. */
@@ -150,6 +152,7 @@ export const CHANNELS = [
   'ai:explain',
   'ai:models',
   'ai:checkKey',
+  'ai:includedQuota',
   'ai:fixPreview',
   'ai:proposeFix',
   'ai:getFix',

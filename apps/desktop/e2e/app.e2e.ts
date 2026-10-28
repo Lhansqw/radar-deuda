@@ -142,11 +142,26 @@ async function simulate(app: ElectronApplication): Promise<void> {
         if (method === 'DELETE') tables[table] = rows.filter((r) => !match(r));
         return new Response(null, { status: 204 });
       };
+      // La función «ia» del proyecto (IA incluida): exige el token de la sesión y lleva la cuenta del cupo.
+      const ia = `${supabaseUrl}/functions/v1/ia`;
+      let iaUsed = 0;
+      const iaRejects = (init: RequestInit | undefined): Response | null => {
+        const token = new Headers(init?.headers).get('authorization')?.replace(/^Bearer /, '') ?? '';
+        const sub = (JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString() || '{}') as { sub?: string }).sub;
+        return [...users.values()].some((u) => u.id === sub) ? null : json({ error: { message: 'Inicia sesión para usar la IA incluida.' } }, 401);
+      };
       globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
         const url = String(input instanceof Request ? input.url : input);
         g.requests.push({ url, body: typeof init?.body === 'string' ? init.body : '' });
         if (url.startsWith(`${supabaseUrl}/auth/v1/`)) return supabase(new URL(url), init);
         if (url.startsWith(`${supabaseUrl}/rest/v1/`)) return rest(new URL(url), init);
+        if (url.startsWith(`${ia}/`)) {
+          const rejected = iaRejects(init);
+          if (rejected) return rejected;
+          if (url === `${ia}/key`) return json({ data: { limit: null, usage: 0, is_free_tier: true, free_model_daily_requests: { used: iaUsed, limit: 30, remaining: 30 - iaUsed } } });
+          if (url === `${ia}/models`) return json({ data: [{ id: 'radar/predeterminado', name: 'Modelos gratuitos de la aplicación', context_length: 262000, pricing: { prompt: '0', completion: '0' }, supported_parameters: ['structured_outputs'] }] });
+          if (url === `${ia}/chat/completions`) iaUsed++;
+        }
         if (url.endsWith('/api/v1/models')) {
           const free = { prompt: '0', completion: '0' };
           return json({
@@ -159,7 +174,8 @@ async function simulate(app: ElectronApplication): Promise<void> {
           });
         }
         if (url.endsWith('/api/v1/key')) return json({ data: { limit_remaining: null, usage: 0, free_model_daily_requests: { used: 3, limit: 50, remaining: 47 } } });
-        if (url.endsWith('/api/v1/chat/completions')) {
+        // OpenRouter, o la función «ia», que responde igual.
+        if (url.endsWith('/api/v1/chat/completions') || url === `${ia}/chat/completions`) {
           const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
           const system = body.messages.find((m) => m.role === 'system')?.content ?? '';
           const id = /El id del hallazgo es "([^"]+)"/.exec(body.messages.map((m) => m.content).join('\n'))?.[1];
@@ -347,7 +363,25 @@ async function main(): Promise<void> {
     await shot(page, 'historial');
     log('historial y comparación entre análisis');
 
-    // Sin modelo configurado, pedir la explicación lleva a Configuración.
+    // Sin configurar nada, la IA incluida: modelos gratuitos con la cuenta de la aplicación, sin clave.
+    await page.getByRole('button', { name: /^Hallazgos/ }).click();
+    await page.locator('.finding-row').filter({ hasNotText: 'Función difícil de mantener' }).first().click();
+    await page.getByRole('button', { name: 'Explicar con IA' }).click();
+    await page.locator('.detail .ai', { hasText: 'Explicación simulada' }).waitFor({ timeout: 30_000 });
+    const included = (await app.evaluate(() => (globalThis as unknown as { requests: Array<{ url: string; body: string }> }).requests)).filter((r) => r.url.endsWith('/chat/completions'));
+    assert.deepEqual(
+      included.map((r) => r.url),
+      [`${SUPABASE_URL}/functions/v1/ia/chat/completions`],
+      'La IA incluida pasa por la función «ia» del proyecto',
+    );
+    await page.getByRole('button', { name: 'Configuración' }).click();
+    assert.match((await page.locator('#cupo-ia').filter({ hasText: /Te quedan/ }).textContent()) ?? '', /Te quedan 29 de 30 consultas hoy/);
+    log('explicación con la IA incluida, sin ninguna clave; el cupo del día se ve en Configuración');
+
+    // Con OpenRouter y sin modelo, pedir la explicación lleva a Configuración.
+    await page.getByLabel('Proveedor', { exact: true }).selectOption('openrouter');
+    await page.getByRole('button', { name: 'Guardar cambios' }).click();
+    await page.locator('.save-bar', { hasText: 'Cambios guardados' }).waitFor();
     await page.getByRole('button', { name: /^Hallazgos/ }).click();
     await page.locator('.finding-row', { hasText: 'Función difícil de mantener' }).first().click();
     await page.getByRole('button', { name: 'Explicar con IA' }).click();
@@ -387,13 +421,13 @@ async function main(): Promise<void> {
     // Privacidad por defecto (solo metadatos): ni el código ni el secreto salen del equipo.
     const requests = await app.evaluate(() => (globalThis as unknown as { requests: Array<{ url: string; body: string }> }).requests);
     const chats = requests.filter((r) => r.url.endsWith('/chat/completions'));
-    assert.equal(chats.length, 1, 'Una sola petición: el hallazgo pedido, sin plan');
+    assert.equal(chats.filter((r) => r.url.startsWith('https://openrouter.ai/')).length, 1, 'Una sola petición a OpenRouter: el hallazgo pedido, sin plan');
     const code = readFileSync(path.join(repo, 'src/pedidos/procesarPedido.ts'), 'utf8')
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 30);
     for (const r of chats) {
-      assert.match(r.body, /procesarPedido/, 'La petición lleva los metadatos del hallazgo');
+      if (r.url.startsWith('https://openrouter.ai/')) assert.match(r.body, /procesarPedido/, 'La petición lleva los metadatos del hallazgo');
       for (const line of code) assert.equal(r.body.includes(line), false, `Se envió código a la IA: ${line}`);
       assert.equal(r.body.includes(SECRET_IN_DEMO), false, 'Se envió el secreto a la IA');
     }

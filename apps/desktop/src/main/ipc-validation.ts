@@ -108,6 +108,7 @@ export const VALIDATORS: Validators = {
   'ai:explain': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), findingId(a[1])]),
   'ai:models': (a) => (count(a, 0), []),
   'ai:checkKey': (a) => (count(a, 0), []),
+  'ai:includedQuota': (a) => (count(a, 0), []),
   'ai:fixPreview': (a) => (count(a, 2), [id(a[0], 'Análisis no válido.'), findingId(a[1])]),
   'ai:proposeFix': (a) => {
     count(a, 3);

@@ -16,7 +16,7 @@ export interface HandlerDeps {
   store: Store;
   credentials: CredentialStore;
   jobs: Pick<JobManager, 'start' | 'cancel' | 'list'>;
-  ai: Pick<AiService, 'explain' | 'openRouterModels' | 'checkOpenRouterKey' | 'fixPreview' | 'proposeFix' | 'getFix' | 'ask'>;
+  ai: Pick<AiService, 'explain' | 'openRouterModels' | 'checkOpenRouterKey' | 'includedQuota' | 'fixPreview' | 'proposeFix' | 'getFix' | 'ask'>;
   /** Copia en la nube del usuario (fase 13b). */
   sync: Pick<CloudSync, 'current' | 'now' | 'schedule' | 'deleteCloudCopy'>;
   info: () => AppInfo;
@@ -141,6 +141,7 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
     'ai:explain': (analysisId, findingId) => d.ai.explain(analysisId, findingId),
     'ai:models': () => d.ai.openRouterModels(),
     'ai:checkKey': () => d.ai.checkOpenRouterKey(),
+    'ai:includedQuota': () => d.ai.includedQuota(),
     'ai:fixPreview': (analysisId, findingId) => d.ai.fixPreview(analysisId, findingId),
     'ai:proposeFix': (analysisId, findingId, consent) => d.ai.proposeFix(analysisId, findingId, consent),
     'ai:getFix': (analysisId, findingId) => d.ai.getFix(analysisId, findingId),

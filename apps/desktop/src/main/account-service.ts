@@ -3,6 +3,7 @@ import { emailProblem, newPasswordProblem, normalizeEmail, type AccountState, ty
 import { AccountError, accountError, isOfflineError } from './account-errors.js';
 import type { CloudConfigResult } from './cloud-config.js';
 import type { Database } from './cloud-schema.js';
+import type { IncludedAccess } from './jobs.js';
 import type { EncryptedSessionStorage } from './session-storage.js';
 
 /** Clave con la que Supabase Auth guarda la sesión en EncryptedSessionStorage. */
@@ -47,6 +48,8 @@ export class AccountService {
   private readonly ready: Promise<void>;
   private validation: Promise<void> = Promise.resolve();
   private unsubscribe: (() => void) | null = null;
+  /** Token de acceso de la sesión (Supabase Auth lo renueva solo); nunca sale del proceso principal. */
+  private token: string | null = null;
 
   constructor(private readonly d: AccountServiceDeps) {
     if (d.config.ok) {
@@ -84,6 +87,15 @@ export class AccountService {
   async database(): Promise<SupabaseClient<Database> | null> {
     await this.ready;
     return this.current.state.status === 'signed-in' ? this.client : null;
+  }
+
+  /**
+   * Acceso a la IA incluida (fase 14): la función «ia» del proyecto y el token
+   * de la sesión, o null sin sesión iniciada.
+   */
+  includedAi(): IncludedAccess | null {
+    if (!this.d.config.ok || this.current.state.status !== 'signed-in' || !this.token) return null;
+    return { url: `${this.d.config.config.url}/functions/v1/ia`, token: this.token };
   }
 
   /**
@@ -212,6 +224,7 @@ export class AccountService {
   /** Cambios que no inicia el usuario: la sesión caduca o se revoca, o vuelve la conexión. */
   private watch(auth: SupabaseClient<Database>['auth']): void {
     const { data } = auth.onAuthStateChange((event, session) => {
+      this.token = session?.access_token ?? null;
       try {
         if (event === 'SIGNED_OUT' && this.current.state.status === 'signed-in') this.set({ state: { status: 'signed-out' }, user: null });
         if ((event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session && this.current.state.status === 'signed-in') this.signedIn(session.user, '', false);

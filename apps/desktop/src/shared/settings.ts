@@ -4,11 +4,12 @@
  * lo usan tanto el proceso principal (para validar) como la interfaz.
  */
 
-export type AiProviderName = 'openrouter' | 'anthropic' | 'openai' | 'lmstudio' | 'ollama';
+/** «incluida»: modelos gratuitos con la cuenta de la aplicación, sin clave (fase 14). */
+export type AiProviderName = 'incluida' | 'openrouter' | 'anthropic' | 'openai' | 'lmstudio' | 'ollama';
 export type PrivacySetting = 'auto' | 'local' | 'metadatos' | 'fragmentos';
 export type ReasoningLevel = 'auto' | 'none' | 'minimal' | 'low' | 'medium' | 'high';
 
-export const AI_PROVIDER_NAMES: readonly AiProviderName[] = ['openrouter', 'anthropic', 'openai', 'lmstudio', 'ollama'];
+export const AI_PROVIDER_NAMES: readonly AiProviderName[] = ['incluida', 'openrouter', 'anthropic', 'openai', 'lmstudio', 'ollama'];
 export const PRIVACY_SETTINGS: readonly PrivacySetting[] = ['auto', 'local', 'metadatos', 'fragmentos'];
 export const REASONING_LEVELS: readonly ReasoningLevel[] = ['auto', 'none', 'minimal', 'low', 'medium', 'high'];
 export const LOCAL_PROVIDERS: ReadonlySet<AiProviderName> = new Set(['lmstudio', 'ollama']);
@@ -31,7 +32,7 @@ export interface AiSettings {
   /** Explicar los hallazgos con IA al terminar cada análisis. */
   auto: boolean;
   provider: AiProviderName;
-  /** Vacío: el predeterminado del proveedor (Anthropic) o el primero cargado (locales). */
+  /** Vacío: el predeterminado del proveedor (Anthropic) o el primero cargado (locales). La IA incluida no lo usa. */
   model: string;
   /** OpenRouter: hasta 3 modelos de respaldo. */
   fallbackModels: string[];
@@ -66,7 +67,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   analysis: { history: true, historyMonths: 12, online: false, memoryLimitMb: 4096 },
   ai: {
     auto: false,
-    provider: 'openrouter',
+    provider: 'incluida',
     model: '',
     fallbackModels: [],
     privacy: 'auto',
@@ -184,7 +185,8 @@ function readCloud(r: FieldReader, c: Record<string, unknown>): CloudSettings {
 /** Reglas que relacionan campos de la IA. */
 function aiRuleErrors(s: AiSettings): string[] {
   return [
-    ...(s.provider === 'openrouter' ? openRouterErrors(s) : otherProviderErrors(s)),
+    // La IA incluida elige sus modelos en el servidor: el modelo y los respaldos no se usan.
+    ...(s.provider === 'openrouter' ? openRouterErrors(s) : s.provider === 'incluida' ? [] : otherProviderErrors(s)),
     ...(s.auto && s.provider === 'openrouter' && s.model === '' ? ['Para usar la IA automáticamente con OpenRouter, elige un modelo.'] : []),
     ...(!LOCAL_PROVIDERS.has(s.provider) && s.privacy === 'local' ? ['Privacidad "local" impide usar un proveedor en la nube.'] : []),
     ...(s.localUrl !== '' && !isHttpUrlWithoutCredentials(s.localUrl) ? ['Servidor local: URL no válida (p. ej. http://localhost:1234/v1).'] : []),
