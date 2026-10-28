@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import type { AiOptions } from '@radar/pipeline';
 import type { JobLogEntry, JobPhase, JobState } from '../shared/jobs.js';
 import type { Project } from '../shared/model.js';
@@ -26,6 +27,8 @@ export interface JobDeps {
   now?: () => Date;
   /** Tiempo que se espera a que el proceso se detenga al cancelar antes de terminarlo. */
   cancelGraceMs?: number;
+  /** Para las pruebas; por defecto, si la carpeta existe en el disco. */
+  folderExists?: (path: string) => boolean;
 }
 
 /** Ajustes de la aplicación → opciones de la capa de IA. */
@@ -95,6 +98,10 @@ export class JobManager {
   start(projectId: number): JobState {
     const project = this.d.store.getProject(projectId);
     if (!project) throw new JobError('Ese proyecto ya no existe.');
+    // Un proyecto local añadido en otro equipo (llegó con la copia en la nube): aquí solo hay su historial.
+    if (project.kind === 'local' && !(this.d.folderExists ?? existsSync)(project.location)) {
+      throw new JobError(`La carpeta ${project.location} no está en este equipo. Si el proyecto se añadió en otro equipo, aquí puedes ver su historial, pero para analizarlo hay que añadir su carpeta desde este.`);
+    }
     if (this.running) {
       const busy = this.d.store.getProject(this.running.state.projectId);
       throw new JobError(`Ya hay un análisis en curso${busy ? ` (${busy.name})` : ''}. Espera a que termine o cancélalo.`);
