@@ -35,7 +35,8 @@ const SIGNUP_CODE = '123456';
 const SECRET_IN_DEMO = 'Xk9#mP2vL8qR4nT7';
 
 function git(...args: string[]): void {
-  execFileSync('git', args, {
+  // Sin firmar: si el equipo firma los commits por defecto (commit.gpgsign), aquí no hay clave.
+  execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], {
     cwd: repo,
     stdio: 'ignore',
     env: { ...process.env, GIT_AUTHOR_NAME: 'Ana', GIT_AUTHOR_EMAIL: 'ana@example.com', GIT_COMMITTER_NAME: 'Ana', GIT_COMMITTER_EMAIL: 'ana@example.com' },
