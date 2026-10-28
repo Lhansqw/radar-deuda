@@ -87,6 +87,14 @@ export class CloudLedger {
     }));
   }
 
+  /**
+   * Le da su identificador en la nube antes de subirlo: si la subida se
+   * interrumpe, el siguiente intento usa el mismo y la nube no lo duplica.
+   */
+  assignCloudId(id: number, cloudId: string): void {
+    this.db.prepare('UPDATE analyses SET cloud_id = ? WHERE id = ? AND cloud_id IS NULL').run(cloudId, id);
+  }
+
   /** El análisis ya está en la nube con este identificador. */
   markUploaded(id: number, cloudId: string): void {
     this.db.prepare('UPDATE analyses SET cloud_id = ?, cloud_synced = 1 WHERE id = ?').run(cloudId, id);
@@ -127,6 +135,14 @@ export class CloudLedger {
   /** Guarda un análisis de otro equipo (ya subido). null si es más antiguo que los que se conservan. */
   importAnalysis(projectId: number, a: { cloudId: string; startedAt: string; finishedAt: string; durationMs: number; report: AnalysisReport }): AnalysisSummary | null {
     return this.transaction(() => insertAnalysis(this.db, projectId, a.report, a));
+  }
+
+  /** El proyecto ya no está en la nube (se borró allí): él y su historial vuelven a estar pendientes. */
+  unlinkProject(id: number): void {
+    this.transaction(() => {
+      this.db.prepare('UPDATE projects SET cloud_id = NULL WHERE id = ?').run(id);
+      this.db.prepare('UPDATE analyses SET cloud_id = NULL, cloud_synced = 0 WHERE project_id = ?').run(id);
+    });
   }
 
   /** Tras borrar la copia en la nube: todo vuelve a estar pendiente de subir. */
