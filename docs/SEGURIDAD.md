@@ -69,8 +69,9 @@ generados por el proceso principal y respuestas de la IA mostradas como texto.
 Detalle en [CUENTAS.md](CUENTAS.md#5-seguridad). Las cuentas viven en Supabase Auth; el
 cliente está en el proceso principal y la interfaz nunca recibe los tokens. Sin sesión no hay
 ninguna base de datos abierta ni canal de datos que responda. La sesión se guarda solo
-cifrada con el sistema, y la contraseña nunca. La conexión exige `https`, y la clave secreta
-de Supabase se rechaza al ejecutar y al compilar.
+cifrada con el sistema, y la contraseña nunca. La conexión exige `https`. La aplicación lleva
+la URL y la clave publicable del proyecto (`apps/desktop/nube.json`), que están hechas para
+ser públicas; la clave secreta de Supabase se rechaza al ejecutar y al compilar.
 
 La copia en la nube (13b) sube los proyectos y el historial sin código (sin los fragmentos
 de la evidencia ni lo que añade la IA) a dos tablas con seguridad por filas: cada usuario solo

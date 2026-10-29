@@ -66,9 +66,9 @@ radar-deuda/
 ```
 
 La aplicación de escritorio está en `apps/desktop` (Electron 44 + React 19); ver
-[docs/ESCRITORIO.md](docs/ESCRITORIO.md). Pide iniciar sesión: antes de abrirla o de
-generar el instalador, define `RADAR_SUPABASE_URL` y `RADAR_SUPABASE_PUBLISHABLE_KEY` con
-los datos de tu proyecto de Supabase ([docs/CUENTAS.md](docs/CUENTAS.md)).
+[docs/ESCRITORIO.md](docs/ESCRITORIO.md). Pide iniciar sesión: la conexión con el
+proyecto de Supabase viene incluida (`apps/desktop/nube.json`), así que funciona en
+cualquier equipo sin configurar nada ([docs/CUENTAS.md](docs/CUENTAS.md)).
 
 En desarrollo, los paquetes se importan entre sí desde su código fuente (`paths` en
 `tsconfig.json` y `alias` en `vitest.config.ts`); `npm run build` los compila en orden.

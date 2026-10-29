@@ -70,26 +70,26 @@ su panel.
 
 ## 2. Conectar la aplicación
 
-La URL y la clave publicable llegan por dos variables de entorno. No son secretas (la clave
-publicable está pensada para ir dentro de las aplicaciones), pero no se guardan en el
-repositorio.
+La URL y la clave publicable del proyecto están en
+[`apps/desktop/nube.json`](../apps/desktop/nube.json), y se incrustan en la aplicación al
+compilar: cualquier copia (desarrollo, `npm run dist` o el instalador de la integración
+continua) entra sin configurar nada, en cualquier equipo.
 
-**Desarrollo** (PowerShell, en la misma ventana):
+Ninguna de las dos es secreta: la clave publicable (`sb_publishable_…`) está hecha para ir
+dentro de las aplicaciones, y los datos los protegen las reglas de seguridad por filas y
+Supabase Auth. La clave **secreta** (`sb_secret_…` o la antigua `service_role`) nunca va
+en `nube.json` ni en la aplicación: si aparece, la compilación se detiene.
+
+**Usar otro proyecto de Supabase.** Cambia `nube.json`, o define las variables de entorno,
+que lo sustituyen (al ejecutar y al compilar):
 
 ```powershell
 $env:RADAR_SUPABASE_URL = "https://<proyecto>.supabase.co"
 $env:RADAR_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."
-npm run desktop:dev      # o npm run desktop
+npm run desktop:dev      # o npm run desktop, o npm run dist
 ```
 
-Para no repetirlo en cada ventana, guárdalas como variables de tu usuario de Windows
-(Configuración → Sistema → Información → Configuración avanzada del sistema → Variables de
-entorno) y abre una terminal nueva.
-
-**Instalador.** Con las variables definidas, `npm run dist` incrusta la conexión en la
-aplicación y lo indica («Conexión con Supabase incluida: …»). Sin ellas, el instalador se
-genera igual, pero la aplicación instalada muestra «Falta la conexión con Supabase» y no
-deja entrar. El instalador que genera la integración continua no la lleva.
+`npm run dist` indica qué conexión incluye («Conexión con Supabase incluida: …»).
 
 ## 3. Cómo funciona
 

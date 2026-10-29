@@ -3,9 +3,10 @@
  *
  * Ninguna de las dos es secreta: la clave publicable está pensada para ir en
  * aplicaciones de escritorio y móviles, y lo que protege los datos son las
- * reglas de seguridad por filas de la base de datos. Aun así no se guardan en
- * el repositorio: llegan por variables de entorno, al ejecutar o al compilar
- * (scripts/config.ts las incrusta en el paquete si están definidas).
+ * reglas de seguridad por filas de la base de datos. Las del proyecto están en
+ * apps/desktop/nube.json y se incrustan al compilar (scripts/config.ts), así
+ * que cualquier copia funciona sin configurar nada; las variables de entorno
+ * las sustituyen para usar otro proyecto.
  *
  * La clave secreta (sb_secret_…, o la antigua service_role) salta esas reglas:
  * se rechaza siempre.
@@ -22,7 +23,7 @@ export interface CloudConfig {
 
 export type CloudConfigResult = { ok: true; config: CloudConfig } | { ok: false; message: string };
 
-/** Valores incrustados al compilar, si los había (ver scripts/config.ts). */
+/** Valores incrustados al compilar (nube.json o el entorno; ver scripts/config.ts). */
 export interface BuiltCloudConfig {
   url: string;
   publishableKey: string;
