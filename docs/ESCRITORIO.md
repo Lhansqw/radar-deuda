@@ -17,8 +17,8 @@ npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md
 ```
 
 0. **Iniciar sesión** o **crear una cuenta** (correo y contraseña; el correo se confirma con
-   el código que envía Supabase). Hace falta configurar la conexión: ver
-   [CUENTAS.md](CUENTAS.md).
+   el código que envía Supabase). La conexión con Supabase viene incluida
+   (`nube.json`): ver [CUENTAS.md](CUENTAS.md).
 1. **Añadir carpeta** o **Añadir de GitHub** (`propietario/repositorio`, rama opcional).
    Los repositorios privados necesitan un token de GitHub en Configuración.
 2. **Analizar**. El análisis corre en un proceso aparte: la ventana sigue respondiendo y
@@ -152,7 +152,7 @@ npm run e2e:desktop    # compila y ejecuta la prueba de extremo a extremo
 
 | Variable | Uso |
 |---|---|
-| `RADAR_SUPABASE_URL`, `RADAR_SUPABASE_PUBLISHABLE_KEY` | Conexión para las cuentas ([CUENTAS.md](CUENTAS.md)); sin ellas no se puede iniciar sesión |
+| `RADAR_SUPABASE_URL`, `RADAR_SUPABASE_PUBLISHABLE_KEY` | Otro proyecto de Supabase para las cuentas, en lugar del de `nube.json` ([CUENTAS.md](CUENTAS.md)) |
 | `RADAR_DATA_DIR` | Carpeta de datos (base de datos) en lugar de `%APPDATA%\radar-deuda` |
 | `RADAR_CACHE_DIR` | Caché y clones en lugar de `%LOCALAPPDATA%\radar-deuda` |
 | `RADAR_E2E_ELECTRON` | Ejecutable de Electron para la prueba, si no es el de `node_modules` |

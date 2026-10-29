@@ -28,7 +28,7 @@ console.log(`Compilado. Software de terceros incluido: ${packages.join(', ')}.`)
 console.log(
   cloud
     ? `Conexión con Supabase incluida: ${cloud.url}.`
-    : 'Sin conexión con Supabase (RADAR_SUPABASE_URL y RADAR_SUPABASE_PUBLISHABLE_KEY no están definidas): la aplicación instalada no permitirá iniciar sesión. Ver docs/CUENTAS.md.',
+    : 'Sin conexión con Supabase (no hay apps/desktop/nube.json ni RADAR_SUPABASE_URL y RADAR_SUPABASE_PUBLISHABLE_KEY): la aplicación instalada no permitirá iniciar sesión. Ver docs/CUENTAS.md.',
 );
 
 await build({

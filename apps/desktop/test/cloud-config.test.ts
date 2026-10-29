@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { cloudForBuild } from '../scripts/config.js';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { cloudForBuild, projectCloud } from '../scripts/config.js';
 import { cloudConfig, ENV_KEY, ENV_URL } from '../src/main/cloud-config.js';
 import { codeProblem, emailProblem, newPasswordProblem, normalizeEmail } from '../src/shared/account.js';
 
@@ -48,11 +51,30 @@ describe('cloudConfig', () => {
 });
 
 describe('cloudForBuild', () => {
-  it('incrusta la conexión solo si está definida, y una clave secreta detiene la compilación', () => {
-    expect(cloudForBuild({})).toBeNull();
-    expect(cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: KEY })).toEqual({ url: 'https://abcd.supabase.co', publishableKey: KEY });
-    expect(() => cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: SECRET })).toThrow(/No se puede incrustar.*clave secreta/);
-    expect(() => cloudForBuild({ [ENV_KEY]: KEY })).toThrow(/Falta RADAR_SUPABASE_URL/);
+  const project = { url: 'https://proyecto.supabase.co', publishableKey: KEY };
+
+  it('incrusta la del proyecto; el entorno la sustituye, y una clave secreta detiene la compilación', () => {
+    expect(cloudForBuild({}, project)).toEqual(project);
+    expect(cloudForBuild({}, null)).toBeNull();
+    expect(cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: KEY }, project)).toEqual({ url: 'https://abcd.supabase.co', publishableKey: KEY });
+    expect(() => cloudForBuild({ [ENV_URL]: 'https://abcd.supabase.co', [ENV_KEY]: SECRET }, project)).toThrow(/No se puede incrustar.*clave secreta/);
+    expect(() => cloudForBuild({ [ENV_KEY]: KEY }, project)).toThrow(/Falta RADAR_SUPABASE_URL/);
+  });
+
+  it('nube.json del repositorio: la URL y la clave publicable del proyecto', () => {
+    const r = projectCloud();
+    expect(r?.url).toMatch(/^https:\/\/[a-z0-9]+\.supabase\.co$/);
+    expect(r?.publishableKey).toMatch(/^sb_publishable_/);
+  });
+
+  it('nube.json con una clave secreta o incompleto detiene la compilación; si no existe, no hay conexión', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'radar-nube-'));
+    const file = path.join(dir, 'nube.json');
+    expect(projectCloud(file)).toBeNull();
+    writeFileSync(file, JSON.stringify({ url: 'https://abcd.supabase.co', publishableKey: SECRET }));
+    expect(() => projectCloud(file)).toThrow(/nube.json no es válido.*clave secreta/);
+    writeFileSync(file, JSON.stringify({ url: 'https://abcd.supabase.co' }));
+    expect(() => projectCloud(file)).toThrow(/Falta RADAR_SUPABASE_PUBLISHABLE_KEY/);
   });
 });
 
