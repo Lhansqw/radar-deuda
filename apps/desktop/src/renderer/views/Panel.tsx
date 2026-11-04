@@ -59,6 +59,7 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
             <p className="score-rating">
               Calificación <strong>{s.rating}</strong>. {RATING_HINT[s.rating]}.
             </p>
+            <RatingScale rating={s.rating} debtRatio={s.debtRatio} />
           </div>
           <dl className="facts">
             <div>
@@ -184,6 +185,46 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
           </ul>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+/** Tramos de la calificación SQALE por ratio de deuda (los mismos umbrales que el motor). */
+const RATING_BANDS = [
+  { rating: 'A', to: 0.05 },
+  { rating: 'B', to: 0.1 },
+  { rating: 'C', to: 0.2 },
+  { rating: 'D', to: 0.5 },
+  { rating: 'E', to: Infinity },
+] as const;
+
+/**
+ * Escala A–E con la posición del proyecto: los tramos tienen el mismo ancho
+ * y la marca se coloca dentro de su tramo según el ratio.
+ */
+function RatingScale({ rating, debtRatio }: { rating: string; debtRatio: number }) {
+  const index = RATING_BANDS.findIndex((b) => b.rating === rating);
+  const from = index > 0 ? RATING_BANDS[index - 1]!.to : 0;
+  const to = RATING_BANDS[index]?.to ?? Infinity;
+  const within = Number.isFinite(to) ? (debtRatio - from) / (to - from) : Math.min(1, (debtRatio - from) / 0.5);
+  const position = ((Math.max(0, index) + Math.min(0.96, Math.max(0.04, within))) / RATING_BANDS.length) * 100;
+  return (
+    <div className="rating-scale" aria-hidden="true">
+      <div className="rating-scale-track">
+        {RATING_BANDS.map((b) => (
+          <span key={b.rating} data-current={b.rating === rating || undefined}>
+            {b.rating}
+          </span>
+        ))}
+        <i style={{ left: `${position}%` }} />
+      </div>
+      <div className="rating-scale-ticks">
+        <span>0 %</span>
+        <span>5 %</span>
+        <span>10 %</span>
+        <span>20 %</span>
+        <span>50 %</span>
+      </div>
     </div>
   );
 }

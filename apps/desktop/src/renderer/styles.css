@@ -580,6 +580,76 @@ code,
   margin-top: 0.5rem;
 }
 
+/* Bienvenida: el radar vacío a la izquierda, el texto a su lado. */
+.welcome {
+  display: grid;
+  grid-template-columns: minmax(18rem, 30rem) minmax(18rem, 32rem);
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  min-height: 100%;
+  padding: 3rem 2rem;
+}
+
+.welcome-copy {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+
+.welcome-copy h2 {
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.welcome-copy p {
+  max-width: 34em;
+  color: var(--tinta-2);
+}
+
+.welcome-copy .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.welcome-radar {
+  width: 100%;
+  height: auto;
+}
+
+.welcome-ring {
+  fill: none;
+  stroke: var(--linea);
+}
+
+.welcome-label {
+  fill: var(--tinta-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.welcome-sweep {
+  transform-box: view-box;
+  transform-origin: 170px 170px;
+  rotate: 25deg;
+  animation: acceso-barrido 1.8s cubic-bezier(0.3, 0.6, 0.2, 1) 0.15s both;
+}
+
+@media (max-width: 60rem) {
+  .welcome {
+    grid-template-columns: minmax(0, 28rem);
+    gap: 1.5rem;
+  }
+
+  .welcome-radar {
+    max-width: 18rem;
+  }
+}
+
 .backdrop {
   position: fixed;
   inset: 0;
@@ -1111,6 +1181,90 @@ code,
   color: var(--tinta);
 }
 
+/* Escala A–E: los tramos con el mismo ancho; la marca sitúa el proyecto en el suyo. */
+.rating-scale {
+  margin-top: 1rem;
+}
+
+.rating-scale-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+}
+
+.rating-scale-track > span {
+  padding: 0.1875rem 0 0.25rem;
+  border-top: 3px solid var(--linea-fuerte);
+  color: var(--apagado);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  text-align: center;
+}
+
+.rating-scale-track > span:nth-child(1) {
+  border-color: color-mix(in srgb, var(--bien) 70%, var(--linea-fuerte));
+}
+.rating-scale-track > span:nth-child(2) {
+  border-color: color-mix(in srgb, var(--bien) 35%, var(--linea-fuerte));
+}
+.rating-scale-track > span:nth-child(3) {
+  border-color: color-mix(in srgb, var(--sev-medium) 55%, var(--linea-fuerte));
+}
+.rating-scale-track > span:nth-child(4) {
+  border-color: color-mix(in srgb, var(--sev-high) 70%, var(--linea-fuerte));
+}
+.rating-scale-track > span:nth-child(5) {
+  border-color: color-mix(in srgb, var(--sev-critical) 75%, var(--linea-fuerte));
+}
+
+.rating-scale-track > span[data-current] {
+  color: var(--tinta);
+  font-size: var(--t-s);
+}
+
+/* Marca: una aguja sobre la línea de color. */
+.rating-scale-track > i {
+  position: absolute;
+  top: -5px;
+  width: 2px;
+  height: 11px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--tiza);
+  box-shadow: 0 0 0 2px var(--plano);
+}
+
+.rating-scale-ticks {
+  position: relative;
+  height: 1rem;
+  color: var(--apagado);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rating-scale-ticks > span {
+  position: absolute;
+  translate: -50% 0;
+}
+
+.rating-scale-ticks > span:nth-child(1) {
+  left: 0;
+  translate: 0 0;
+}
+.rating-scale-ticks > span:nth-child(2) {
+  left: 20%;
+}
+.rating-scale-ticks > span:nth-child(3) {
+  left: 40%;
+}
+.rating-scale-ticks > span:nth-child(4) {
+  left: 60%;
+}
+.rating-scale-ticks > span:nth-child(5) {
+  left: 80%;
+}
+
 .facts {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1269,6 +1423,43 @@ code,
   to {
     transform: rotate(0deg);
     opacity: 0.6;
+  }
+}
+
+/* Graduación del borde y cruz del centro: el radar se lee como un instrumento. */
+.radar-ticks line {
+  stroke: var(--linea-fuerte);
+}
+
+.radar-center {
+  stroke: var(--apagado);
+  stroke-width: 1;
+}
+
+/* Sector del hallazgo señalado: ayuda a leer su categoría. */
+.radar-sector-active {
+  fill: var(--tiza);
+  fill-opacity: 0.045;
+}
+
+/* Halo de lo urgente (crítica y alta): un eco, no un parpadeo. */
+.radar-halo {
+  fill: none;
+  stroke-width: 1;
+  stroke-opacity: 0.45;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: eco-radar 2.4s ease-out 1.6s 2 both;
+}
+
+@keyframes eco-radar {
+  from {
+    transform: scale(0.7);
+    stroke-opacity: 0.7;
+  }
+  to {
+    transform: scale(1.6);
+    stroke-opacity: 0;
   }
 }
 
