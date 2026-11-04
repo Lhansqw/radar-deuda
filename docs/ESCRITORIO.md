@@ -170,6 +170,10 @@ información mande.
 
 - **Severidad**: color de estado siempre acompañado de forma y texto (◆ crítica,
   ▲ alta, ● media, ○ baja, – informativa), legible también sin color.
+- **Radar**: el tamaño de cada punto indica el esfuerzo de corrección; lo crítico y lo
+  alto emiten un eco al abrir el panel. Al señalar un punto se ilumina su sector.
+- **Calificación**: una escala A–E bajo la puntuación sitúa el ratio de deuda del
+  proyecto dentro de su tramo (los mismos umbrales SQALE del motor).
 - **Contraste** comprobado (WCAG): texto principal 13,3:1, secundario 7,6:1 y apagado
   ≥ 4,5:1 sobre el fondo.
 - **Teclado**: el radar y la evolución se recorren con el teclado; cada gráfico tiene su

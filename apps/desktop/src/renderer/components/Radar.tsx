@@ -10,6 +10,20 @@ const SIZE = 460;
 const PAD_X = 92;
 const WIDTH = SIZE + 2 * PAD_X;
 
+/** Radio de la marca según el esfuerzo de corrección: más trabajo, punto mayor (4–9 px). */
+function blipRadius(minutes: number): number {
+  return Math.min(9, Math.max(4, 3.5 + Math.sqrt(Math.max(0, minutes)) / 2.2));
+}
+
+/** Graduación del borde, como en un instrumento: una marca cada 5°, más larga cada 30°. */
+const TICKS = Array.from({ length: 72 }, (_, i) => i * 5);
+
+/** Cuña de un sector (ángulos en sentido horario desde las 12). */
+function wedge(c: number, r: number, start: number, end: number): string {
+  const p = (a: number) => `${c + r * Math.sin(a)} ${c - r * Math.cos(a)}`;
+  return `M${c} ${c} L${p(start)} A${r} ${r} 0 0 1 ${p(end)} Z`;
+}
+
 /**
  * Radar de hallazgos: un sector por categoría y un anillo por severidad, con
  * lo crítico en el centro. La posición codifica la severidad además del
@@ -22,13 +36,14 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
   const { center: c, radius: R } = layout;
   const hovered = hover ? byId.get(hover.id) : undefined;
   const drawn = layout.blips.length;
+  const activeSector = hover ? layout.sectors.find((s) => s.category === hovered?.category) : undefined;
 
   return (
     <div className="radar">
       <svg viewBox={`${-PAD_X} 0 ${WIDTH} ${SIZE}`} role="img" aria-labelledby="radar-titulo radar-desc">
         <title id="radar-titulo">Radar de hallazgos</title>
         <desc id="radar-desc">
-          {drawn} hallazgos por categoría (sectores) y severidad (anillos; crítica en el centro). La lista completa está en la vista Hallazgos.
+          {drawn} hallazgos por categoría (sectores) y severidad (anillos; crítica en el centro); el tamaño de cada punto indica el esfuerzo de corrección. La lista completa está en la vista Hallazgos.
         </desc>
         <defs>
           <linearGradient id="barrido" x1="0" y1="0" x2="1" y2="0">
@@ -41,11 +56,20 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
         {[...layout.rings].reverse().map((r) => (
           <circle key={r.severity} cx={c} cy={c} r={r.outer} className="radar-ring" />
         ))}
+        {activeSector ? <path d={wedge(c, R, activeSector.start, activeSector.end)} className="radar-sector-active" /> : null}
         {layout.sectors.map((s) => {
           const x = c + R * Math.sin(s.start);
           const y = c - R * Math.cos(s.start);
           return <line key={s.category} x1={c} y1={c} x2={x} y2={y} className="radar-spoke" />;
         })}
+        <g className="radar-ticks" aria-hidden="true">
+          {TICKS.map((deg) => {
+            const a = (deg * Math.PI) / 180;
+            const len = deg % 30 === 0 ? 7 : 3.5;
+            return <line key={deg} x1={c + R * Math.sin(a)} y1={c - R * Math.cos(a)} x2={c + (R + len) * Math.sin(a)} y2={c - (R + len) * Math.cos(a)} />;
+          })}
+        </g>
+        <path d={`M${c - 6} ${c} H${c + 6} M${c} ${c - 6} V${c + 6}`} className="radar-center" />
 
         {/* Barrido: una sola vuelta al abrir el panel */}
         <g className="radar-sweep" style={{ transformOrigin: `${c}px ${c}px` }}>
@@ -76,6 +100,8 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
         {layout.blips.map((b) => {
           const f = byId.get(b.findingId);
           const active = hover?.id === b.findingId;
+          const r = blipRadius(f?.effort.minutes ?? 0);
+          const urgent = b.severity === 'critical' || b.severity === 'high';
           return (
             <g
               key={b.findingId}
@@ -97,8 +123,9 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
               }}
             >
               {/* Zona de interacción mayor que la marca */}
-              <circle cx={b.x} cy={b.y} r={12} fill="transparent" />
-              <circle cx={b.x} cy={b.y} r={active ? 6.5 : 5} fill={`var(--sev-${b.severity})`} stroke="var(--plano)" strokeWidth={2} />
+              <circle cx={b.x} cy={b.y} r={Math.max(12, r + 4)} fill="transparent" />
+              {urgent ? <circle cx={b.x} cy={b.y} r={r + 4} className="radar-halo" stroke={`var(--sev-${b.severity})`} /> : null}
+              <circle cx={b.x} cy={b.y} r={active ? r + 1.5 : r} fill={`var(--sev-${b.severity})`} stroke="var(--plano)" strokeWidth={2} />
             </g>
           );
         })}
