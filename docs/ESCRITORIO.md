@@ -22,7 +22,9 @@ npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md
 1. **Añadir carpeta** o **Añadir de GitHub** (`propietario/repositorio`, rama opcional).
    Los repositorios privados necesitan un token de GitHub en Configuración.
 2. **Analizar**. El análisis corre en un proceso aparte: la ventana sigue respondiendo y
-   se puede cancelar.
+   se puede cancelar. En el primer análisis de un proyecto, el radar barre mientras tanto:
+   el borde se llena con el avance de la etapa y al lado se ven las etapas, el contador
+   y el tiempo transcurrido.
 3. **Panel**: puntuación, radar (un sector por categoría, un anillo por severidad, lo
    crítico en el centro), qué cambió desde el análisis anterior, evolución, por dónde
    empezar y puntos críticos.
