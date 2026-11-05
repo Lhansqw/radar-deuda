@@ -42,12 +42,13 @@ export function ProjectWorkspace({ project, job, data, view, memory, onView, onA
         onCancel={(jobId) => run(() => window.radar.jobs.cancel(jobId))}
         onRemove={() => run(async () => (await window.radar.projects.remove(project.id), onRemoved()))}
       />
-      {job && !dismissed.has(job.jobId) ? <JobStatus job={job} onDismiss={() => setDismissed((d) => new Set(d).add(job.jobId))} /> : null}
+      {/* En el primer análisis, el progreso lo enseña la pantalla de escaneo. */}
+      {job && !dismissed.has(job.jobId) && !(job.status === 'running' && !data.report) ? <JobStatus job={job} onDismiss={() => setDismissed((d) => new Set(d).add(job.jobId))} /> : null}
       <div className="workspace-body" data-view={view}>
         {data.report && data.analysisId !== null ? (
           <AnalysisView project={project} data={data as LoadedData} view={view} memory={memory} onView={onView} onReportChanged={onReportChanged} />
         ) : data.loading ? null : (
-          <NotAnalyzed running={job?.status === 'running'} onAnalyze={onAnalyze} />
+          <NotAnalyzed job={job} kind={project.kind} onAnalyze={onAnalyze} />
         )}
       </div>
     </>

@@ -642,12 +642,126 @@ code,
 @media (max-width: 60rem) {
   .welcome {
     grid-template-columns: minmax(0, 28rem);
+    align-content: center;
     gap: 1.5rem;
   }
 
   .welcome-radar {
     max-width: 18rem;
   }
+}
+
+/* ── Primer análisis en curso ──────────────────────────────────────────── */
+
+/* El barrido gira sin parar; con movimiento reducido se queda en su ángulo de reposo. */
+.scan-sweep {
+  animation: escaneo 3.2s linear infinite;
+}
+
+@keyframes escaneo {
+  from {
+    rotate: 25deg;
+  }
+  to {
+    rotate: 385deg;
+  }
+}
+
+.scan > [role='progressbar'] {
+  display: grid;
+}
+
+@media (max-width: 60rem) {
+  .scan > [role='progressbar'] {
+    width: min(100%, 18rem);
+  }
+}
+
+.scan-arc {
+  fill: none;
+  stroke: var(--tiza);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.2s ease-out;
+}
+
+.scan-now {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.welcome-copy .scan-phase {
+  color: var(--tinta);
+  font-size: var(--t-l);
+  font-weight: 600;
+}
+
+.welcome-copy .scan-count {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+  color: var(--apagado);
+  font-size: var(--t-s);
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-figures {
+  color: var(--tinta-2);
+}
+
+.scan-steps {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-s);
+}
+
+.scan-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  color: var(--apagado);
+}
+
+.scan-steps li[data-state='done'] {
+  color: var(--tinta-2);
+}
+
+.scan-steps li[data-state='current'] {
+  color: var(--tinta);
+  font-weight: 600;
+}
+
+.scan-dot {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--linea-fuerte);
+  border-radius: 50%;
+  color: var(--pizarra);
+}
+
+.scan-steps li[data-state='done'] .scan-dot {
+  border-color: var(--tinta-2);
+  background: var(--tinta-2);
+}
+
+.scan-steps li[data-state='current'] .scan-dot {
+  border: 2px solid var(--tiza);
+  background: radial-gradient(circle, var(--tiza) 0 2.5px, transparent 3px);
+}
+
+.welcome-copy .scan-log {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--apagado);
+  font-size: var(--t-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .backdrop {

@@ -11,6 +11,29 @@ import { DEFAULT_SETTINGS } from '../src/shared/settings.js';
 import { layoutRadar, RADAR_RINGS } from '../src/renderer/lib/radar.js';
 import { buildTree, flattenTree } from '../src/renderer/lib/tree.js';
 import { visibleRange } from '../src/renderer/lib/virtual.js';
+import { scanSteps } from '../src/renderer/lib/scan.js';
+
+describe('scanSteps', () => {
+  const phases = (s: ReturnType<typeof scanSteps>) => s.map((x) => x.phase);
+
+  it('solo enseña la descarga en proyectos de GitHub', () => {
+    expect(phases(scanSteps('local', 'starting'))).not.toContain('clone');
+    expect(phases(scanSteps('github', 'starting'))).toContain('clone');
+  });
+
+  it('enseña la IA solo cuando está en marcha', () => {
+    expect(phases(scanSteps('local', 'saving'))).not.toContain('ai');
+    const withAi = scanSteps('local', 'ai');
+    expect(withAi.at(-1)).toMatchObject({ phase: 'ai', state: 'current' });
+    expect(withAi.slice(0, -1).every((s) => s.state === 'done')).toBe(true);
+  });
+
+  it('marca hechas las anteriores y pendientes las siguientes', () => {
+    const steps = scanSteps('local', 'files');
+    expect(steps.map((s) => s.state)).toEqual(['done', 'done', 'current', 'pending', 'pending', 'pending', 'pending']);
+    expect(phases(steps)).not.toContain('finished');
+  });
+});
 
 let n = 0;
 function f(severity: Severity, file: string, extra: Partial<Finding> = {}): Finding {
