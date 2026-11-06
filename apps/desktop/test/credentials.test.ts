@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { CredentialError, CredentialStore, type Cipher } from '../src/main/credentials.js';
+import { CredentialError, CredentialStore, trustedCipher, type Cipher } from '../src/main/credentials.js';
 import { Store } from '../src/main/store.js';
 
 const stores: Store[] = [];
@@ -99,5 +99,25 @@ describe('CredentialStore', () => {
     expect(creds.get('openrouter')).toBe(envKey);
     creds.delete('openrouter');
     expect(creds.status().secrets.openrouter).toEqual({ stored: false, fromEnv: true });
+  });
+});
+
+describe('trustedCipher', () => {
+  const withBackend = (backend: string) => ({ ...fakeCipher(), getSelectedStorageBackend: () => backend });
+
+  it('en Linux sin llavero (clave fija de Chromium) el cifrado no cuenta como disponible', () => {
+    for (const backend of ['basic_text', 'unknown']) {
+      const cipher = trustedCipher(withBackend(backend), 'linux');
+      expect(cipher.isEncryptionAvailable()).toBe(false);
+      expect(() => cipher.encryptString('secreto')).toThrow();
+    }
+  });
+
+  it('en Linux con llavero, y en Windows y macOS, se usa el del sistema', () => {
+    const linux = trustedCipher(withBackend('gnome_libsecret'), 'linux');
+    expect(linux.isEncryptionAvailable()).toBe(true);
+    expect(linux.decryptString(linux.encryptString('secreto'))).toBe('secreto');
+    expect(trustedCipher(fakeCipher(), 'darwin').isEncryptionAvailable()).toBe(true);
+    expect(trustedCipher(fakeCipher(false), 'win32').isEncryptionAvailable()).toBe(false);
   });
 });

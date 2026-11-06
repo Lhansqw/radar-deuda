@@ -30,6 +30,24 @@ describe('defaultReposDir', () => {
     expect(defaultReposDir({ RADAR_CACHE_DIR: custom })).toBe(path.join(custom, 'repos'));
     expect(defaultReposDir({ LOCALAPPDATA: path.resolve('local'), XDG_CACHE_HOME: path.resolve('xdg') })).toMatch(/radar-deuda[\\/]repos$/);
   });
+
+  it('usa la carpeta de cada sistema operativo', () => {
+    const env = { LOCALAPPDATA: path.resolve('local'), XDG_CACHE_HOME: path.resolve('xdg') };
+    const original = process.platform;
+    const expected: Record<string, string> = {
+      win32: path.join(env.LOCALAPPDATA, 'radar-deuda', 'repos'),
+      darwin: path.join(os.homedir(), 'Library', 'Caches', 'radar-deuda', 'repos'),
+      linux: path.join(env.XDG_CACHE_HOME, 'radar-deuda', 'repos'),
+    };
+    try {
+      for (const [platform, dir] of Object.entries(expected)) {
+        Object.defineProperty(process, 'platform', { value: platform });
+        expect(defaultReposDir(env)).toBe(dir);
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', { value: original });
+    }
+  });
 });
 
 describe('authEnv', () => {

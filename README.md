@@ -1,6 +1,6 @@
 # Radar de Deuda Técnica
 
-Aplicación de escritorio para Windows que analiza repositorios (locales o de GitHub),
+Aplicación de escritorio para Windows, Linux y macOS que analiza repositorios (locales o de GitHub),
 detecta deuda técnica con herramientas deterministas y usa inteligencia artificial
 para explicar, priorizar y proponer correcciones a los hallazgos.
 
@@ -25,6 +25,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 13a | Cuentas de usuario con Supabase: inicio de sesión obligatorio, confirmación del correo y recuperación con código, datos separados por cuenta | ✅ |
 | 13b | Copia de proyectos e historial en PostgreSQL (Supabase), sin código y con seguridad por filas probada en la integración continua | ✅ |
 | 14 | IA incluida: gpt-oss-120b (Groq) sin que el usuario configure ninguna clave, a través de una función de Supabase con cupo diario por cuenta | ✅ |
+| 15 | Linux (AppImage y .deb) y macOS (.dmg para Apple Silicon e Intel), comprobados en la integración continua | ✅ |
 
 **El radar sobre sí mismo:** 99/100 (A), sin hallazgos altos ni críticos. La integración
 continua falla si aparece alguno (`npm run analyze -- . --fail-on high`).
@@ -86,7 +87,7 @@ npm run bench     # benchmark de rendimiento (añade -- --large para 5 000 archi
 npm run desktop   # compila y abre la aplicación de escritorio
 npm run desktop:dev   # aplicación con recarga en caliente de la interfaz
 npm run e2e:desktop   # prueba de extremo a extremo de la aplicación (abre una ventana; sin red)
-npm run dist      # instalador para Windows en apps/desktop/release (docs/INSTALADOR.md)
+npm run dist      # instaladores del sistema actual en apps/desktop/release (docs/INSTALADOR.md)
 npm run cache     # cuánto ocupa la caché (-- --limpiar [días] | --vaciar)
 ```
 
@@ -129,13 +130,14 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Fase 1: viabilidad, riesgos, arquitectura y MVP |
 | [docs/DECISIONES.md](docs/DECISIONES.md) | Fase 2: comparación de tecnologías y stack |
 | [docs/ENTORNO-WINDOWS.md](docs/ENTORNO-WINDOWS.md) | Fase 3: herramientas y preparación del entorno |
+| [docs/ENTORNO-LINUX-MAC.md](docs/ENTORNO-LINUX-MAC.md) | Fase 15: desarrollar y empaquetar en Linux y macOS |
 | [docs/METODOLOGIA.md](docs/METODOLOGIA.md) | Puntuación, severidad, confianza y estimaciones de esfuerzo |
 | [docs/RENDIMIENTO.md](docs/RENDIMIENTO.md) | Fases 10 y 11: objetivos, benchmark, repositorios reales (hasta microsoft/vscode), caché y memoria |
 | [docs/FUENTES.md](docs/FUENTES.md) | Fase 6: Git, GitHub, token, privacidad y dependencias en línea |
 | [docs/IA.md](docs/IA.md) | Fases 7 y 9: qué necesitas, proveedores (incluidos modelos gratuitos de OpenRouter), privacidad, cómo se evita que la IA invente, propuestas de corrección y preguntas |
 | [docs/ESCRITORIO.md](docs/ESCRITORIO.md) | Fases 8, 9, 11 y 12: uso de la aplicación, arquitectura de procesos, seguridad, datos y diseño |
 | [docs/SEGURIDAD.md](docs/SEGURIDAD.md) | Fase 11: modelo de amenazas, controles, qué sale del equipo, auditoría y riesgos pendientes |
-| [docs/INSTALADOR.md](docs/INSTALADOR.md) | Fase 12: generar el instalador, qué instala, fuses, comprobación del paquete y firma |
+| [docs/INSTALADOR.md](docs/INSTALADOR.md) | Fases 12 y 15: generar los instaladores (Windows, Linux y macOS), qué instalan, fuses, comprobación del paquete y firma |
 | [docs/CALIDAD.md](docs/CALIDAD.md) | Fase 11: pruebas, cobertura, integración continua y refactorización de la deuda propia |
 | [docs/CUENTAS.md](docs/CUENTAS.md) | Fase 13: preparar Supabase, conectar la aplicación, cuentas, copia en la nube y su seguridad |
 | [docs/IA-INCLUIDA.md](docs/IA-INCLUIDA.md) | Fase 14: la IA sin claves para el usuario, cómo instalar la función «ia» y su cupo, y su seguridad |
