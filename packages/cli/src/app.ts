@@ -17,7 +17,7 @@ Uso: radar-deuda <carpeta | owner/repo | URL de GitHub> [opciones]
 Origen:
   <carpeta>               Repositorio local (si la carpeta existe, tiene prioridad)
   owner/repo, github:owner/repo, https://github.com/owner/repo
-                          Se clona (superficial) en %LOCALAPPDATA%\\radar-deuda\\repos.
+                          Se clona (superficial) en la caché del sistema (radar-deuda/repos).
                           Repos privados: define RADAR_GITHUB_TOKEN (token fine-grained
                           de solo lectura). El token nunca se guarda en disco.
   --branch <rama>         Rama a clonar (por defecto, la principal)
