@@ -1,6 +1,5 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { safeJoin, type AiFixProposal, type AiSection, type AnalysisReport, type ReportComparison } from '@radar/engine';
+import { repoReader, type AiFixProposal, type AiSection, type AnalysisReport, type ReportComparison } from '@radar/engine';
 import {
   ANTHROPIC_MODELS,
   AnthropicProvider,
@@ -182,7 +181,7 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
     model,
     planModel,
     privacy,
-    readText: reportReader(report),
+    readText: repoReader(report.root),
     cacheDir: aiCacheDir(cacheBase),
     budget: { maxRequests: o.limit * 2 + 4, maxCostUsd: o.budgetUsd },
     limit: o.limit,
@@ -220,14 +219,6 @@ async function announce(o: AiOptions, provider: LlmProvider, run: { privacy: Pri
   } else hooks.info(`IA local (${provider.label}, modelo ${model}): nada sale del equipo.`);
 }
 
-/** Lee archivos del repositorio analizado sin salir de su carpeta. */
-function reportReader(report: AnalysisReport): (rel: string) => Promise<string | null> {
-  return async (rel) => {
-    const abs = safeJoin(report.root, rel);
-    return abs ? readFile(abs, 'utf8').catch(() => null) : null;
-  };
-}
-
 /** Modelo para las tareas que más razonan (plan y propuestas de código). */
 function capableModel(o: AiOptions, model: string): string {
   return o.planModel ?? (o.provider === 'anthropic' ? ANTHROPIC_MODELS.balanced : model);
@@ -260,7 +251,7 @@ export interface FixPreview {
 /** Lo que se enviaría para proponer una corrección, sin enviar nada. */
 export async function previewFix(report: AnalysisReport, findingId: string, o: AiOptions, keys: ApiKeys): Promise<FixPreview> {
   const provider = createProvider(o, keys);
-  const ctx = await fixContext(report, findingId, reportReader(report), provider.locality === 'local' ? 'local' : 'fragmentos');
+  const ctx = await fixContext(report, findingId, repoReader(report.root), provider.locality === 'local' ? 'local' : 'fragmentos');
   return {
     text: ctx.text,
     snippets: ctx.snippets,
@@ -292,7 +283,7 @@ export async function proposeFixStep(report: AnalysisReport, findingId: string, 
     provider,
     model,
     privacy,
-    readText: reportReader(report),
+    readText: repoReader(report.root),
     cacheDir: aiCacheDir(s.cacheBase),
     budget: { maxRequests: 3, maxCostUsd: o.budgetUsd },
     signal: s.signal,
@@ -315,7 +306,7 @@ export async function askStep(report: AnalysisReport, history: readonly ChatTurn
     privacy,
     budget: { maxRequests: 1, maxCostUsd: o.budgetUsd },
     signal: s.signal,
-    projectSummary: await projectSummary(report, reportReader(report)),
+    projectSummary: await projectSummary(report, repoReader(report.root)),
     ...(s.comparison ? { comparison: s.comparison } : {}),
   });
 }

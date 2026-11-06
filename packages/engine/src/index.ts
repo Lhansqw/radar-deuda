@@ -3,7 +3,7 @@
  * y de la capa de IA: solo lee archivos y devuelve un informe estructurado.
  */
 export * from './types.js';
-export { analyzeRepository, safeJoin, type AnalyzeOptions } from './engine.js';
+export { analyzeRepository, repoExists, repoReader, safeJoin, type AnalyzeOptions } from './engine.js';
 export { errorMessage, findingId, sha1 } from './util.js';
 export { isTestPath } from './discovery.js';
 export { resolveConfig, configHash, DEFAULT_CONFIG, DEFAULT_THRESHOLDS, ENGINE_VERSION, type ConfigOverrides } from './config.js';

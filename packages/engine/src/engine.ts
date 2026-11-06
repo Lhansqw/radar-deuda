@@ -96,15 +96,7 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
   signal?.throwIfAborted();
   onProgress?.({ phase: 'cross-file', done: 0, total: 1 });
 
-  const readText = async (rel: string): Promise<string | null> => {
-    const abs = safeJoin(root, rel);
-    if (!abs) return null;
-    try {
-      return await readFile(abs, 'utf8');
-    } catch {
-      return null;
-    }
-  };
+  const readText = repoReader(root);
   for (const analyzer of fileAnalyzers) {
     if (!analyzer.finalize) continue;
     try {
@@ -122,16 +114,7 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
     files: analyzedFiles.sort((a, b) => a.relPath.localeCompare(b.relPath)),
     config,
     readText,
-    exists: async (rel: string): Promise<boolean> => {
-      const abs = safeJoin(root, rel);
-      if (!abs) return false;
-      try {
-        await access(abs);
-        return true;
-      } catch {
-        return false;
-      }
-    },
+    exists: repoExists(root),
   };
   const extraCoverage: CoverageNote[] = [];
   if (radarignore !== null) {
@@ -311,6 +294,22 @@ function runAnalyzer(analyzer: FileAnalyzer, input: FileInput, config: AnalysisC
 }
 
 /** Une una ruta relativa a la raíz y garantiza que el resultado no escapa de ella. */
+/** Lee archivos de `root` (UTF-8) sin salir de la carpeta; null si la ruta sale de ella o no se puede leer. */
+export function repoReader(root: string): (rel: string) => Promise<string | null> {
+  return async (rel) => {
+    const abs = safeJoin(root, rel);
+    return abs ? readFile(abs, 'utf8').catch(() => null) : null;
+  };
+}
+
+/** Si existe un archivo o carpeta dentro de `root` (false si la ruta sale de ella). */
+export function repoExists(root: string): (rel: string) => Promise<boolean> {
+  return async (rel) => {
+    const abs = safeJoin(root, rel);
+    return abs ? access(abs).then(() => true, () => false) : false;
+  };
+}
+
 export function safeJoin(root: string, rel: string): string | null {
   if (rel.includes('\0') || path.isAbsolute(rel)) return null;
   const abs = path.resolve(root, rel);

@@ -1,5 +1,4 @@
-import { readFile } from 'node:fs/promises';
-import { compareReports, defaultCacheDir, safeJoin, sha1, type AnalysisReport } from '@radar/engine';
+import { compareReports, defaultCacheDir, repoReader, sha1, type AnalysisReport } from '@radar/engine';
 import { fetchOpenRouterModels, IncludedAiProvider, OpenRouterProvider, type OpenRouterModel } from '@radar/ai';
 import type { FetchLike } from '@radar/sources';
 import { askStep, previewFix, proposeFixStep, runAiStep, type AiOptions, type ApiKeys } from '@radar/pipeline';
@@ -183,10 +182,10 @@ export class AiService {
     const proposal = this.d.store.getFixProposal(analysisId, findingId);
     const report = this.d.store.getReport(analysisId);
     if (!proposal || !report) return null;
+    const read = repoReader(report.root);
     let stale = false;
     for (const [file, hash] of Object.entries(proposal.baseHashes)) {
-      const abs = safeJoin(report.root, file);
-      const text = abs ? await readFile(abs, 'utf8').catch(() => null) : null;
+      const text = await read(file);
       if (text === null || sha1(text) !== hash) stale = true;
     }
     return { proposal, stale };
