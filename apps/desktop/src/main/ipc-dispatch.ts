@@ -1,3 +1,4 @@
+import { errorMessage } from '../shared/errors.js';
 import type { Channel, IpcResult } from '../shared/ipc.js';
 import { isAppUrl } from '../shared/origin.js';
 import type { Handlers } from './handlers.js';
@@ -21,7 +22,7 @@ export async function dispatch<C extends Channel>(
     const handler = handlers[channel] as (...a: unknown[]) => unknown;
     return { ok: true, value: await handler(...(parsed as unknown[])) };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     if (!(err instanceof Error) || err.name === 'Error' || err.name === 'TypeError') console.error(`[ipc] ${channel}:`, err);
     return { ok: false, error: message };
   }

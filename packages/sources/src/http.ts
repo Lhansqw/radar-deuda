@@ -1,3 +1,5 @@
+import { errorMessage } from '@radar/engine';
+
 /**
  * Cliente HTTP mínimo y prudente para las APIs públicas que usa la
  * aplicación. Tiempo límite por intento, reintentos solo para errores
@@ -135,7 +137,7 @@ export async function requestText(url: string, init: RequestInit = {}, options: 
     if (!res.ok) throw new HttpError(`HTTP ${res.status} en ${new URL(url).host}`, res.status, res.headers, text.slice(0, 2000));
     return { status: res.status, headers: res.headers, text };
   }
-  const reason = lastError instanceof Error ? lastError.message : String(lastError);
+  const reason = errorMessage(lastError);
   throw new Error(`No se pudo contactar con ${new URL(url).host}: ${reason}`, { cause: lastError });
 }
 

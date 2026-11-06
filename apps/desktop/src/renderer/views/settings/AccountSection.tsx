@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { AccountState } from '../../../shared/account.js';
+import { errorMessage } from '../../../shared/errors.js';
 import type { CloudSettings } from '../../../shared/settings.js';
 import type { SyncState } from '../../../shared/sync.js';
 import { Icon } from '../../components/Icon.js';
 import { formatDateTime } from '../../lib/format.js';
-import { CheckField, errorText, FormError, SettingsSection } from './SettingsSection.js';
+import { CheckField, FormError, SettingsSection } from './SettingsSection.js';
 
 /** La cuenta con la sesión iniciada, su copia en la nube y el botón para cerrar la sesión. */
 export function AccountSection({
@@ -29,7 +30,7 @@ export function AccountSection({
       // El proceso principal avisa del cierre y la interfaz vuelve al acceso (Root.tsx).
       await window.radar.account.signOut();
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
       setBusy(false);
     }
   };
@@ -96,7 +97,7 @@ function CloudCopy({ cloud, onCloudChange, onSettingsChanged }: { cloud: CloudSe
     try {
       await fn();
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }

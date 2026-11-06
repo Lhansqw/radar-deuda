@@ -5,7 +5,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { compareReports, defaultCacheDir, findFindingByRef, findingRefs, formatComparison, formatReport, hasNewAtLeast, parseReport, SEVERITY_ORDER, type Severity } from '@radar/engine';
+import { compareReports, defaultCacheDir, errorMessage, findFindingByRef, findingRefs, formatComparison, formatReport, hasNewAtLeast, parseReport, SEVERITY_ORDER, type Severity } from '@radar/engine';
 import { tokenFromEnv } from '@radar/sources';
 import { formatAiSection, formatChatAnswer, formatFixProposal } from '@radar/ai';
 import { askStep, keysFromEnv, proposeFixStep, runPipeline, type PipelineEvent } from '@radar/pipeline';
@@ -120,7 +120,7 @@ export function parseCli(argv: string[]): Parsed {
   try {
     parsed = readArgs(argv);
   } catch (err) {
-    return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
+    return { kind: 'error', message: errorMessage(err) };
   }
   const { values: v, positionals } = parsed;
   if (v.help) return { kind: 'help' };

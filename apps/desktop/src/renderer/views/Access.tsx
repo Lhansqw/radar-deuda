@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { codeProblem, emailProblem, newPasswordProblem, type AccountState } from '../../shared/account.js';
+import { errorMessage } from '../../shared/errors.js';
 import { AccessFrame } from '../components/AccessFrame.js';
 import { PasswordField } from '../components/PasswordField.js';
 
@@ -40,7 +41,7 @@ export function Access({ state }: { state: Extract<AccountState, { status: 'sign
     try {
       await fn();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { errorMessage } from '../../../shared/errors.js';
 import type { AppInfo } from '../../../shared/ipc.js';
 import type { StorageInfo } from '../../../shared/model.js';
 import { formatBytes } from '../../lib/format.js';
-import { errorText, SettingsSection } from './SettingsSection.js';
+import { SettingsSection } from './SettingsSection.js';
 
 /** Versiones, dónde guarda los datos y espacio en disco. */
 export function AppSection({ info }: { info: AppInfo }) {
@@ -49,7 +50,7 @@ function Storage() {
       setNotice(`Caché vaciada: ${formatBytes(r.bytes)} liberados. El siguiente análisis de cada proyecto será completo.`);
       setInfo(await window.radar.app.storage());
     } catch (err) {
-      setNotice(errorText(err));
+      setNotice(errorMessage(err));
     } finally {
       setBusy(false);
     }

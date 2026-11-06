@@ -22,7 +22,7 @@ import type {
   Severity,
   SkippedFile,
 } from './types.js';
-import { mapWithConcurrency, sha1, sortFindings, splitLines } from './util.js';
+import { errorMessage, mapWithConcurrency, sha1, sortFindings, splitLines } from './util.js';
 
 export interface AnalyzeOptions {
   config?: ConfigOverrides;
@@ -379,6 +379,3 @@ function mergeCoverage(base: CoverageNote[], extra: readonly CoverageNote[]): Co
   return out;
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}

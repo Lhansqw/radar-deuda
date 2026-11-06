@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { defaultCacheDir } from '@radar/engine';
+import { defaultCacheDir, errorMessage } from '@radar/engine';
 import { cacheUsage, clearCache, pruneCache } from '@radar/pipeline';
 
 export const CACHE_HELP = `
@@ -22,7 +22,7 @@ export function parseCacheArgs(argv: string[]): CacheCommand {
   try {
     parsed = parseArgs({ args: argv, allowPositionals: true, options: { limpiar: { type: 'boolean', default: false }, vaciar: { type: 'boolean', default: false }, help: { type: 'boolean', short: 'h', default: false } } });
   } catch (err) {
-    return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
+    return { kind: 'error', message: errorMessage(err) };
   }
   const { values: v, positionals } = parsed;
   if (v.help) return { kind: 'help' };

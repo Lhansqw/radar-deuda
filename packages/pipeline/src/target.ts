@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { errorMessage } from '@radar/engine';
 import { cloneOrUpdate, GitHubClient, HttpError, parseGitHubRepo, type CloneOptions, type CloneResult, type GitHubRepoRef } from '@radar/sources';
 import type { PipelineHooks } from './types.js';
 
@@ -57,7 +58,7 @@ export async function resolveTarget(o: SourceOptions, hooks: PipelineHooks, sign
     // 401 (token inválido) y 404 (no existe o sin acceso) son definitivos. Los metadatos son opcionales:
     // ante un límite de peticiones, un error del servidor o falta de red, se intenta clonar igualmente.
     if (err instanceof Error && err.cause instanceof HttpError && (err.cause.status === 401 || err.cause.status === 404)) throw err;
-    hooks.warn(`No se pudieron obtener los metadatos de GitHub (${err instanceof Error ? err.message : String(err)}). Se intenta clonar igualmente.`);
+    hooks.warn(`No se pudieron obtener los metadatos de GitHub (${errorMessage(err)}). Se intenta clonar igualmente.`);
   }
   hooks.info(`Clonando ${ref.owner}/${ref.repo}${meta ? ` (${Math.round(meta.sizeKb / 1024)} MB, rama ${o.branch ?? meta.defaultBranch})` : ''}…`);
   hooks.progress?.({ phase: 'clone', repo: `${ref.owner}/${ref.repo}` });

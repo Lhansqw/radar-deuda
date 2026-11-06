@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { errorMessage } from '../../shared/errors.js';
 import type { Project } from '../../shared/model.js';
 
 /** Alta de un repositorio de GitHub (público, o privado con un token configurado). */
@@ -25,7 +26,7 @@ export function AddGithubDialog({ onClose, onAdded }: { onClose: () => void; onA
     try {
       onAdded(await window.radar.projects.addGithub(repo.trim(), branch.trim() === '' ? null : branch.trim()));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }

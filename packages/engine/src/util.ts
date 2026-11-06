@@ -86,3 +86,8 @@ export function lineAt(lineStarts: readonly number[], pos: number): number {
   }
   return lo + 1;
 }
+
+/** Texto de un error para mostrarlo (los valores lanzados que no son Error, tal cual). */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}

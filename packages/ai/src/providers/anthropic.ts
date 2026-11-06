@@ -1,3 +1,4 @@
+import { errorMessage } from '@radar/engine';
 import { HttpError, requestJson, type HttpOptions } from '@radar/sources';
 import { checkApiKey, KEY_RULES, ProviderError, type CompletionRequest, type CompletionResult, type FinishReason, type LlmProvider } from '../provider.js';
 
@@ -104,7 +105,7 @@ export class AnthropicProvider implements LlmProvider {
 
   private explain(err: unknown): ProviderError {
     if (!(err instanceof HttpError)) {
-      return new ProviderError(`Anthropic: no se pudo conectar (${err instanceof Error ? err.message : String(err)}).`, 'unavailable', this.id, { cause: err });
+      return new ProviderError(`Anthropic: no se pudo conectar (${errorMessage(err)}).`, 'unavailable', this.id, { cause: err });
     }
     let parsed: ErrorBody = {};
     try {

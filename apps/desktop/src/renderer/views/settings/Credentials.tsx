@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import { errorMessage } from '../../../shared/errors.js';
 import type { OpenRouterKeyCheck } from '../../../shared/model.js';
 import { SECRET_LABELS, SECRET_NAMES, type SecretName, type SecretsStatus } from '../../../shared/secrets.js';
 import { Icon } from '../../components/Icon.js';
-import { errorText, FormError, SettingsSection } from './SettingsSection.js';
+import { FormError, SettingsSection } from './SettingsSection.js';
 
 const KEY_PAGES: Record<SecretName, string> = {
   openrouter: 'https://openrouter.ai/settings/keys',
@@ -51,7 +52,7 @@ function useSecret(name: SecretName, onChange: (s: SecretsStatus) => void) {
       onChange(await fn());
       setValue('');
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -63,7 +64,7 @@ function useSecret(name: SecretName, onChange: (s: SecretsStatus) => void) {
     try {
       setCheck({ result: await window.radar.ai.checkKey(), error: null });
     } catch (err) {
-      setCheck({ result: null, error: errorText(err) });
+      setCheck({ result: null, error: errorMessage(err) });
     } finally {
       setBusy(false);
     }
