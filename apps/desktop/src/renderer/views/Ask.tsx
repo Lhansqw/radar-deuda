@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { AnalysisReport, Finding } from '@radar/engine';
+import { errorMessage } from '../../shared/errors.js';
 import type { ChatMessage } from '../../shared/model.js';
 import { Icon } from '../components/Icon.js';
 import { SeverityGlyph } from '../components/SeverityMark.js';
@@ -46,7 +47,7 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
       .catch((err: unknown) => {
         if (cancelled) return;
         setLoaded({ id: analysisId, messages: [] });
-        setError(err instanceof Error ? err.message : String(err));
+        setError(errorMessage(err));
       });
     return () => {
       cancelled = true;
@@ -70,7 +71,7 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
       const added = await window.radar.chat.ask(analysisId, q);
       setLoaded((l) => (l && l.id === analysisId ? { id: analysisId, messages: [...l.messages, ...added] } : l));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       // La pregunta vuelve al cuadro de texto para reintentarla o corregirla.
       setDraft(q);
     } finally {

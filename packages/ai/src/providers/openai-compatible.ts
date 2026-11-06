@@ -1,3 +1,4 @@
+import { errorMessage } from '@radar/engine';
 import { HttpError, requestJson, type HttpOptions } from '@radar/sources';
 import { localityOf, ProviderError, type CompletionRequest, type CompletionResult, type FinishReason, type LlmProvider, type Locality } from '../provider.js';
 
@@ -156,7 +157,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       if (err.status >= 500) return new ProviderError(`${this.label}: error del servidor (HTTP ${err.status}).`, 'unavailable', this.id, { cause: err });
       return new ProviderError(`${this.label}: petición rechazada (HTTP ${err.status}): ${detail}`, 'invalid-request', this.id, { cause: err });
     }
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorMessage(err);
     const hint = this.locality === 'local' ? ' ¿Está iniciado el servidor local (LM Studio: pestaña Developer → Start server, o `lms server start`)?' : '';
     return new ProviderError(`${this.label}: no se pudo conectar (${message}).${hint}`, 'unavailable', this.id, { cause: err });
   }

@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { localityOf, ProviderError } from '../src/provider.js';
 import { OpenAiCompatibleProvider, PRESETS } from '../src/providers/openai-compatible.js';
-import { fakeFetch, json, noSleep } from './helpers/fake-fetch.js';
+import { fakeFetch, json, noSleep } from '../../sources/test/helpers/fake-fetch.js';
 
 const req = { model: 'm', system: 'sistema', messages: [{ role: 'user' as const, content: 'hola' }], maxOutputTokens: 100 };
 const ok = (content: string, extra: object = {}) => json({ model: 'm-real', choices: [{ message: { content }, finish_reason: 'stop' }], usage: { prompt_tokens: 12, completion_tokens: 5 }, ...extra });

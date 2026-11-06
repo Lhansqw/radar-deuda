@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { errorMessage } from '@radar/engine';
 import { CACHE_HELP, parseCacheArgs, runCache } from './cache.js';
 
 async function main(): Promise<number> {
@@ -16,7 +17,7 @@ async function main(): Promise<number> {
     console.log(await runCache(cmd));
     return 0;
   } catch (err) {
-    console.error(err instanceof Error ? err.message : String(err));
+    console.error(errorMessage(err));
     return 2;
   }
 }

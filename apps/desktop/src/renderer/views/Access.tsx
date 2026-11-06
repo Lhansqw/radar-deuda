@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from
 import { codeProblem, emailProblem, newPasswordProblem, type AccountState } from '../../shared/account.js';
 import { AccessFrame } from '../components/AccessFrame.js';
 import { PasswordField } from '../components/PasswordField.js';
+import { useAction } from '../lib/action.js';
 
 /** Pasos del acceso. El correo se conserva al pasar de uno a otro. */
 type Step = { kind: 'signIn' } | { kind: 'signUp' } | { kind: 'confirm'; sent: boolean } | { kind: 'forgot' } | { kind: 'reset' };
@@ -27,24 +28,15 @@ interface Ctx {
 export function Access({ state }: { state: Extract<AccountState, { status: 'signed-out' | 'password-reset' }> }) {
   const [step, setStep] = useState<Step>({ kind: 'signIn' });
   const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, error, setError, run } = useAction();
 
-  const go = useCallback((next: Step) => {
-    setError(null);
-    setStep(next);
-  }, []);
-  const run = useCallback(async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  }, []);
+  const go = useCallback(
+    (next: Step) => {
+      setError(null);
+      setStep(next);
+    },
+    [setError],
+  );
   const ctx: Ctx = { email, setEmail, go, run, busy, error };
 
   let form: ReactNode;

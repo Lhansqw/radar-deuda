@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AccountState } from '../../shared/account.js';
+import { errorMessage } from '../../shared/errors.js';
 import type { AppInfo } from '../../shared/ipc.js';
 import type { SecretsStatus } from '../../shared/secrets.js';
 import type { AppSettings } from '../../shared/settings.js';
@@ -8,7 +9,6 @@ import { AiSection } from './settings/AiSection.js';
 import { AnalysisSection } from './settings/AnalysisSection.js';
 import { AppSection } from './settings/AppSection.js';
 import { Credentials } from './settings/Credentials.js';
-import { errorText } from './settings/SettingsSection.js';
 
 /** Cuánto se ve «Cambios guardados» después de guardar. */
 const SAVED_NOTICE_MS = 2500;
@@ -49,7 +49,7 @@ function useSettingsDraft() {
       setDraft(s);
       setSavedOk(true);
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
     }
   };
 

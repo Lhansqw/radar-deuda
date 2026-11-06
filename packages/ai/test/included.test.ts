@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IncludedAiProvider, INCLUDED_DEFAULT_MODEL } from '../src/providers/included.js';
-import { fakeFetch, json, noSleep } from './helpers/fake-fetch.js';
+import { fakeFetch, json, noSleep } from '../../sources/test/helpers/fake-fetch.js';
 
 const BASE = 'https://prueba.supabase.co/functions/v1/ia';
 const TOKEN = 'eyJ.token-de-sesion.firma';

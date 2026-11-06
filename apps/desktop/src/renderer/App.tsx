@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { AccountState } from '../shared/account.js';
+import { errorMessage } from '../shared/errors.js';
 import type { Project } from '../shared/model.js';
 import { AddGithubDialog } from './components/AddGithubDialog.js';
 import { Icon } from './components/Icon.js';
@@ -29,7 +30,7 @@ export function App({ account }: { account: Extract<AccountState, { status: 'sig
 
   const run = useCallback((fn: () => Promise<unknown>) => {
     setError(null);
-    fn().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+    fn().catch((err: unknown) => setError(errorMessage(err)));
   }, []);
 
   const added = useCallback(

@@ -4,6 +4,7 @@
  */
 import { parseArgs } from 'node:util';
 import { fetchOpenRouterModels, type OpenRouterModel } from '@radar/ai';
+import { errorMessage } from '@radar/engine';
 import type { FetchLike } from '@radar/sources';
 
 export const MODELS_HELP = `
@@ -45,7 +46,7 @@ export function parseModelsArgs(argv: string[]): { kind: 'run'; options: ModelsO
       },
     });
   } catch (err) {
-    return { kind: 'error', message: err instanceof Error ? err.message : String(err) };
+    return { kind: 'error', message: errorMessage(err) };
   }
   const v = parsed.values;
   if (v.help) return { kind: 'help' };
