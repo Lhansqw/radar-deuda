@@ -134,6 +134,13 @@ certificado y las actualizaciones automáticas firmadas.
 | Caché del motor, de la IA y de OSV/npm (compartida con la CLI) | `%LOCALAPPDATA%\radar-deuda\cache` |
 | Clones de GitHub | `%LOCALAPPDATA%\radar-deuda\repos` |
 
+En los demás sistemas, las mismas carpetas están en:
+
+| | Datos (`%APPDATA%\radar-deuda`) | Caché y clones (`%LOCALAPPDATA%\radar-deuda`) |
+|---|---|---|
+| macOS | `~/Library/Application Support/radar-deuda` | `~/Library/Caches/radar-deuda` (caché) y `…/repos` |
+| Linux | `~/.config/radar-deuda` | `~/.cache/radar-deuda` (o `$XDG_CACHE_HOME`) y `…/repos` |
+
 Configuración → Aplicación muestra las rutas. La base de datos lleva su versión de
 esquema y se migra al abrir; una base de datos de una versión más nueva no se abre (para
 no estropearla). Quitar un proyecto borra su historial, nunca la carpeta ni el
@@ -141,8 +148,14 @@ repositorio.
 
 Las claves también se aceptan por variables de entorno (`RADAR_OPENROUTER_API_KEY`,
 `RADAR_ANTHROPIC_API_KEY`, `RADAR_OPENAI_API_KEY`, `RADAR_GITHUB_TOKEN`), como en la CLI.
-Si hay una guardada, tiene preferencia. En Linux sin llavero del sistema no se pueden
-guardar credenciales: solo funcionan las variables.
+Si hay una guardada, tiene preferencia. En Linux sin llavero del sistema (GNOME Keyring,
+KWallet) no se pueden guardar credenciales ni la sesión: Chromium cifraría con una clave
+fija, y la aplicación lo trata como «sin cifrado» (`trustedCipher` en `credentials.ts`).
+Solo funcionan las variables.
+
+En macOS, la aplicación sigue abierta al cerrar la ventana (se vuelve a abrir desde el
+Dock) y tiene el menú de la aplicación y Edición, necesarios para Cmd+Q, Cmd+C, Cmd+V…
+(`src/main/menu.ts`).
 
 ## Desarrollo
 
@@ -155,8 +168,8 @@ npm run e2e:desktop    # compila y ejecuta la prueba de extremo a extremo
 | Variable | Uso |
 |---|---|
 | `RADAR_SUPABASE_URL`, `RADAR_SUPABASE_PUBLISHABLE_KEY` | Otro proyecto de Supabase para las cuentas, en lugar del de `nube.json` ([CUENTAS.md](CUENTAS.md)) |
-| `RADAR_DATA_DIR` | Carpeta de datos (base de datos) en lugar de `%APPDATA%\radar-deuda` |
-| `RADAR_CACHE_DIR` | Caché y clones en lugar de `%LOCALAPPDATA%\radar-deuda` |
+| `RADAR_DATA_DIR` | Carpeta de datos (base de datos) en lugar de la del sistema (ver «Datos») |
+| `RADAR_CACHE_DIR` | Caché y clones en lugar de los del sistema |
 | `RADAR_E2E_ELECTRON` | Ejecutable de Electron para la prueba, si no es el de `node_modules` |
 | `RADAR_E2E_KEEP=1` | No borrar la carpeta temporal de la prueba |
 

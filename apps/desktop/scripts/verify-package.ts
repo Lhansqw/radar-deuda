@@ -3,6 +3,7 @@ import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { FuseV1Options, getCurrentFuseWire } from '@electron/fuses';
+import type { PackageLayout } from './package-layout.js';
 
 /**
  * Comprueba la aplicación empaquetada (lo que npm run dist acaba de generar):
@@ -12,8 +13,8 @@ import { FuseV1Options, getCurrentFuseWire } from '@electron/fuses';
  *    (prueba de arranque, src/main/smoke.ts).
  * 3. Los fuses funcionan de verdad: ni ELECTRON_RUN_AS_NODE la convierte en un
  *    Node, ni NODE_OPTIONS inyecta código, ni --inspect abre el depurador.
- * 4. En Windows, un app.asar alterado no se carga (integridad del ASAR; en
- *    Linux Electron no la comprueba).
+ * 4. En Windows y macOS, un app.asar alterado no se carga (integridad del ASAR;
+ *    en Linux Electron no la comprueba).
  */
 
 /** Estado de un fuse en el binario: el carácter '0' o '1' (@electron/fuses no exporta su enumeración). */
@@ -83,10 +84,11 @@ async function checkFuses(exe: string): Promise<void> {
 }
 
 /** Cambia un byte del código de la aplicación dentro de una copia de app.asar. */
-async function tamperedCopy(unpacked: string): Promise<string> {
+async function tamperedCopy({ unpacked, asar: asarRel }: PackageLayout): Promise<string> {
   const copy = await mkdtemp(path.join(os.tmpdir(), 'radar-alterado-'));
-  await cp(unpacked, copy, { recursive: true });
-  const asar = path.join(copy, 'resources', 'app.asar');
+  // Los enlaces simbólicos tal cual: los frameworks de macOS los usan (Versions/Current).
+  await cp(unpacked, copy, { recursive: true, verbatimSymlinks: true });
+  const asar = path.join(copy, asarRel);
   const bytes = await readFile(asar);
   const at = bytes.indexOf(Buffer.from(SMOKE_OK));
   if (at === -1) throw new Error('No se encontró el texto que alterar en app.asar.');
@@ -95,7 +97,8 @@ async function tamperedCopy(unpacked: string): Promise<string> {
   return copy;
 }
 
-export async function verifyPackage(unpacked: string, exe: string): Promise<void> {
+export async function verifyPackage(layout: PackageLayout): Promise<void> {
+  const { unpacked, exe } = layout;
   console.log('Comprobando el paquete:');
   await checkFuses(exe);
 
@@ -122,13 +125,13 @@ export async function verifyPackage(unpacked: string, exe: string): Promise<void
   const inspect = await run(exe, ['--inspect=0', '--prueba-arranque']);
   check(inspect.code === 0 && !/Debugger listening/i.test(inspect.output), '--inspect no abre el depurador del proceso principal', inspect.output);
 
-  if (process.platform !== 'win32') {
+  if (process.platform === 'linux') {
     console.log('  – Integridad del ASAR: Electron solo la comprueba en Windows y macOS.');
     return;
   }
-  const copy = await tamperedCopy(unpacked);
+  const copy = await tamperedCopy(layout);
   try {
-    const tampered = await run(path.join(copy, path.basename(exe)), ['--prueba-arranque'], {}, 60_000);
+    const tampered = await run(path.join(copy, path.relative(unpacked, exe)), ['--prueba-arranque'], {}, 60_000);
     check(tampered.code !== 0 && !tampered.output.includes(SMOKE_OK), 'Un app.asar alterado no se carga', tampered.output);
   } finally {
     await removeTemp(copy);

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { defaultCacheDir } from '@radar/engine';
 import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
 import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
-import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, Menu, nativeTheme, safeStorage, shell } from 'electron';
 import { errorMessage } from '../shared/errors.js';
 import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
@@ -14,7 +14,9 @@ import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
 import type { AppDeps } from './handlers.js';
+import { trustedCipher } from './credentials.js';
 import { registerIpc } from './ipc.js';
+import { menuTemplate } from './menu.js';
 import { devServerFromEnv } from './policy.js';
 import { registerAppScheme, serveRenderer } from './protocol.js';
 import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
@@ -35,7 +37,9 @@ const distDir = __dirname;
 /** Prueba de arranque de la aplicación empaquetada (smoke.ts): datos temporales y salir. */
 const smoke = process.argv.includes(SMOKE_FLAG);
 
-// Datos en %APPDATA%\radar-deuda (o la carpeta indicada, para pruebas aisladas).
+// Datos en la carpeta de datos del sistema (%APPDATA%\radar-deuda en Windows,
+// ~/Library/Application Support/radar-deuda en macOS, ~/.config/radar-deuda en
+// Linux) o en la indicada, para pruebas aisladas.
 const dataDirFromEnv = process.env['RADAR_DATA_DIR'];
 app.setPath('userData', dataDirFromEnv ?? (smoke ? mkdtempSync(path.join(os.tmpdir(), 'radar-datos-')) : path.join(app.getPath('appData'), 'radar-deuda')));
 
@@ -54,7 +58,10 @@ if (!smoke && !app.requestSingleInstanceLock()) {
       win.focus();
     }
   });
-  app.on('window-all-closed', () => app.quit());
+  // En macOS la aplicación sigue abierta sin ventanas (se vuelve a abrir desde el Dock).
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin' || smoke) app.quit();
+  });
   app
     .whenReady()
     .then(start)
@@ -97,10 +104,14 @@ function createWindow(): BrowserWindow {
 function start(): void {
   // La interfaz es oscura: la barra de título y los controles nativos también.
   nativeTheme.themeSource = 'dark';
+  const template = menuTemplate(process.platform, app.isPackaged);
+  if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   hardenApp(devServerUrl);
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 
   const dataDir = app.getPath('userData');
+  // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
+  const cipher = trustedCipher(safeStorage);
   const spawn = ({ memoryLimitMb }: { memoryLimitMb: number }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb);
   const broadcast = (channel: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
@@ -146,7 +157,7 @@ function start(): void {
   // Cuentas (fase 13): sin sesión no se abre ninguna base de datos; con sesión, la del usuario.
   const account = new AccountService({
     config: cloudConfig(process.env, builtCloud),
-    storage: new EncryptedSessionStorage(path.join(dataDir, 'sesion.bin'), safeStorage),
+    storage: new EncryptedSessionStorage(path.join(dataDir, 'sesion.bin'), cipher),
     onChange: (change) => router?.change(change),
   });
   router = new SessionRouter({
@@ -155,7 +166,7 @@ function start(): void {
     open: (userId) =>
       openWorkspace(userId, {
         dataDir,
-        cipher: safeStorage,
+        cipher,
         spawn,
         emit: (state) => broadcast(JOB_EVENT_CHANNEL, state),
         cloud: async () => {
@@ -196,6 +207,10 @@ function start(): void {
       });
     return;
   }
+  // macOS: al pulsar el icono del Dock sin ventanas abiertas, se abre una nueva.
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) win = createWindow();
+  });
   // Limpieza en segundo plano de lo que lleva 90 días sin usarse (la caché es compartida con la CLI).
   setTimeout(() => void pruneCache(defaultCacheDir(), 90).catch(() => undefined), 20_000).unref();
 }
