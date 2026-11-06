@@ -1,27 +1,36 @@
-# Instalador para Windows (fase 12)
+# Instaladores para Windows, Linux y macOS (fase 12)
 
-## Generarlo
+## Generarlos
 
 ```powershell
 npm ci
 $env:RADAR_SUPABASE_URL = "https://<proyecto>.supabase.co"      # conexión para las cuentas
 $env:RADAR_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_..."      # (docs/CUENTAS.md)
-npm run dist             # instalador en apps\desktop\release\
-npm run dist -- --carpeta     # solo la aplicación empaquetada (release\win-unpacked), más rápido
+npm run dist             # instaladores del sistema actual en apps\desktop\release\
+npm run dist -- --carpeta     # solo la aplicación empaquetada (release\win-unpacked…), más rápido
 npm run dist -- --sin-prueba  # sin la comprobación del paquete
 ```
 
 Las dos variables de Supabase se incrustan en la aplicación (no son secretas; la clave
 secreta detiene la compilación). Sin ellas, la aplicación instalada no deja iniciar sesión.
+También se pueden poner en `apps/desktop/nube.json`.
 
-El resultado es `radar-deuda-<versión>-instalador-windows-x64.exe`. La integración continua
-lo genera en cada push a `main` y lo publica como artefacto (`instalador-windows`) en la
-ejecución de GitHub Actions.
+Cada sistema genera solo sus propios instaladores:
 
-En Linux, `npm run dist` genera solo la carpeta (`release/linux-unpacked`), para comprobar el
-paquete. Necesita una pantalla: `xvfb-run -a npm run dist`.
+| Sistema | Archivos en `apps/desktop/release` | Artefacto de CI |
+|---|---|---|
+| Windows | `radar-deuda-<versión>-instalador-windows-x64.exe` (NSIS) | `instalador-windows` |
+| Linux | `radar-deuda-<versión>-linux-x86_64.AppImage` y `radar-deuda-<versión>-linux-amd64.deb` | `instalador-linux` |
+| macOS | `radar-deuda-<versión>-macos-arm64.dmg` (Apple Silicon) y `radar-deuda-<versión>-macos-x64.dmg` (Intel) | `instalador-macos` |
 
-## Qué instala
+La integración continua los genera en cada push a `main` y los publica como artefactos de
+la ejecución de GitHub Actions.
+
+En Linux, la comprobación del paquete necesita una pantalla: `xvfb-run -a npm run dist`. En
+macOS se comprueba la aplicación de la arquitectura del equipo (la otra se empaqueta, pero
+no se arranca).
+
+## Qué instala (Windows)
 
 | | |
 |---|---|
@@ -36,6 +45,34 @@ paquete. Necesita una pantalla: `xvfb-run -a npm run dist`.
 Requisitos: Windows 10 o 11 de 64 bits y Git en el `PATH` (para el historial y los
 repositorios de GitHub; sin Git, el análisis de carpetas funciona igual).
 
+## Qué instala (Linux)
+
+| | |
+|---|---|
+| AppImage | Un solo archivo, sin instalar: `chmod +x radar-deuda-*.AppImage` y ejecutarlo. Necesita FUSE 2 (`sudo apt install libfuse2t64` en Ubuntu 24.04) |
+| .deb | `sudo apt install ./radar-deuda-*.deb`. Queda en `/opt/Radar de Deuda Técnica`, con `radar-deuda` en el `PATH` y acceso en el menú. Instala Git y libsecret como dependencias, configura el sandbox de Chromium y, en Ubuntu 24.04 o posterior, su perfil de AppArmor |
+| Datos | Cuentas y sesión en `~/.config/radar-deuda`; caché y clones en `~/.cache/radar-deuda` (o `$XDG_CACHE_HOME`) |
+| Credenciales | Cifradas con el llavero del escritorio (GNOME Keyring, KWallet). Sin llavero, Chromium cifraría con una clave fija conocida por cualquiera: la aplicación no lo acepta, no guarda credenciales ni la sesión, y solo funcionan las variables de entorno |
+
+**AppImage en Ubuntu 23.10 o posterior.** Ubuntu restringe los espacios de nombres de
+usuario que usa el sandbox de Chromium, y una AppImage no puede instalar un perfil de
+AppArmor. Si no arranca por el sandbox, usa el .deb. La aplicación no se lanza con
+`--no-sandbox`: el sandbox es parte de su modelo de seguridad ([SEGURIDAD.md](SEGURIDAD.md)).
+
+No se puede ejecutar como `root` (Chromium no lo admite con el sandbox).
+
+## Qué instala (macOS)
+
+| | |
+|---|---|
+| Instalar | Abrir el .dmg y arrastrar la aplicación a Aplicaciones |
+| Primera apertura | Sin firma de Apple, macOS la bloquea: clic derecho → **Abrir** → **Abrir** (en macOS 15: Ajustes del Sistema → Privacidad y seguridad → «Abrir igualmente»). También: `xattr -dr com.apple.quarantine "/Applications/Radar de Deuda Técnica.app"` |
+| Datos | Cuentas y sesión en `~/Library/Application Support/radar-deuda`; caché y clones en `~/Library/Caches/radar-deuda` |
+| Credenciales | Cifradas con el Llavero de macOS (la primera vez puede pedir permiso para usarlo) |
+| Git | Viene con las Command Line Tools de Xcode (`xcode-select --install`) |
+
+Requisitos: macOS 12 o posterior (los de Electron 44).
+
 ## Cómo está hecho
 
 La aplicación ya viene empaquetada por esbuild (procesos de Node) y Vite (interfaz) en
@@ -44,7 +81,7 @@ La aplicación ya viene empaquetada por esbuild (procesos de Node) y Vite (inter
 1. mete `dist/` y `package.json` en un `app.asar` de unos 4,4 MB (sin los mapas de código);
 2. escribe los *fuses* en el binario de Electron;
 3. guarda en el ejecutable el hash del `app.asar` (integridad);
-4. genera el instalador NSIS y, si hay certificado, firma el ejecutable y el instalador.
+4. genera los instaladores (NSIS, AppImage y .deb, o .dmg) y, si hay certificado, los firma.
 
 La configuración está en [`apps/desktop/electron-builder.yml`](../apps/desktop/electron-builder.yml)
 y el script en [`apps/desktop/scripts/dist.ts`](../apps/desktop/scripts/dist.ts).
@@ -82,9 +119,9 @@ Al terminar, `npm run dist` comprueba el ejecutable empaquetado
    ya ignora casi todo `NODE_OPTIONS`; el fuse desactiva el resto, incluido
    `NODE_EXTRA_CA_CERTS`.
 5. `--inspect` no abre el depurador.
-6. En Windows, una copia con un byte del código cambiado dentro de `app.asar` no arranca.
+6. En Windows y macOS, una copia con un byte del código cambiado dentro de `app.asar` no arranca.
 
-Cada comprobación superada se muestra con ✓ (seis en Windows; cinco en Linux, que no
+Cada comprobación superada se muestra con ✓ (seis en Windows y macOS; cinco en Linux, que no
 comprueba la integridad del ASAR) y la salida termina con «Paquete comprobado.». Si una
 falla, `npm run dist` se detiene con su mensaje y las últimas líneas de la salida de la
 aplicación.
@@ -107,6 +144,26 @@ basta así. Para distribuirlo, electron-builder firma solo si encuentra un certi
 
 Firmar después de escribir los fuses es el orden correcto, y es el que sigue
 electron-builder.
+
+### macOS
+
+Escribir los fuses invalida la firma de Electron, y Apple Silicon no abre aplicaciones sin
+firma. Por eso, sin certificado, `npm run dist` firma *ad-hoc* (`resetAdHocDarwinSignature`
+en los fuses e `identity: '-'` en `scripts/dist.ts`). Así arranca, pero Gatekeeper avisa la
+primera vez (ver «Qué instala (macOS)»). Para distribuirla sin aviso hace falta una cuenta
+de Apple Developer:
+
+- **Firma:** `CSC_LINK` (ruta o base64 del .p12 «Developer ID Application») y
+  `CSC_KEY_PASSWORD`, o `CSC_NAME` si el certificado ya está en el llavero. Con ellas se firma
+  con *hardened runtime* y solo los permisos que necesita V8
+  ([`build/entitlements.mac.plist`](../apps/desktop/build/entitlements.mac.plist)).
+- **Notarización:** además, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` y `APPLE_TEAM_ID`.
+  electron-builder envía la aplicación a Apple y grapa el resultado al .dmg.
+
+### Linux
+
+La AppImage y el .deb no se firman: su integridad depende del canal por el que se descarguen
+(los artefactos de GitHub Actions).
 
 ## Pendiente
 
