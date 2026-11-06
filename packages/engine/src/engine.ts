@@ -19,6 +19,7 @@ import type {
   Finding,
   ProgressEvent,
   ProjectAnalyzer,
+  ProjectContext,
   Severity,
   SkippedFile,
 } from './types.js';
@@ -50,99 +51,37 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
 
   onProgress?.({ phase: 'discovery', done: 0, total: 0 });
   const { root, files, skipped: discoverySkipped, radarignore } = await discoverFiles(rootInput, config, signal);
-  const skipped: SkippedFile[] = [...discoverySkipped];
-  const errors: AnalyzerError[] = [];
 
   const cHash = configHash(config);
   const cacheDir = options.cacheDir === undefined ? defaultCacheDir() : options.cacheDir;
   const cache = cacheDir === null ? AnalysisCache.disabled(cHash) : await AnalysisCache.open(cacheDir, root, cHash);
-
-  const findings: Finding[] = [];
-  const artifacts = new Map<string, Map<string, unknown>>(fileAnalyzers.map((a) => [a.id, new Map()]));
-  let cacheHits = 0;
-  let analyzed = 0;
-  let done = 0;
-  const analyzedFiles: FileMeta[] = [];
-
-  const collect = (analyzer: FileAnalyzer, meta: FileMeta, result: FileAnalysisResult): void => {
-    findings.push(...result.findings);
-    if (result.artifact !== undefined) artifacts.get(analyzer.id)?.set(meta.relPath, result.artifact);
+  const run: Run = {
+    config,
+    cache,
+    ...(signal ? { signal } : {}),
+    ...(onProgress ? { onProgress } : {}),
+    findings: [],
+    errors: [],
+    skipped: [...discoverySkipped],
+    artifacts: new Map(fileAnalyzers.map((a) => [a.id, new Map()])),
   };
 
-  await mapWithConcurrency(
-    files,
-    config.concurrency,
-    async (meta) => {
-      const applicable = fileAnalyzers.filter((a) => a.supports(meta));
-      const outcome = await processFile(meta, applicable, config, cache, errors);
-      if (outcome.status === 'skipped') {
-        skipped.push({ relPath: meta.relPath, reason: outcome.reason });
-        if (outcome.extraFinding) findings.push(outcome.extraFinding);
-        if (outcome.codeLines !== undefined) artifacts.get('size')?.set(meta.relPath, { codeLines: outcome.codeLines } satisfies SizeArtifact);
-      } else {
-        for (const [analyzer, result] of outcome.results) collect(analyzer, meta, result);
-        analyzedFiles.push(meta);
-        if (outcome.fromCache) cacheHits++;
-        else analyzed++;
-      }
-      done++;
-      if (onProgress && (done % 25 === 0 || done === files.length)) {
-        onProgress({ phase: 'files', done, total: files.length, file: meta.relPath });
-      }
-    },
-    signal,
-  );
+  const counts = await analyzeFiles(run, files, fileAnalyzers);
 
   signal?.throwIfAborted();
   onProgress?.({ phase: 'cross-file', done: 0, total: 1 });
-
   const readText = repoReader(root);
-  for (const analyzer of fileAnalyzers) {
-    if (!analyzer.finalize) continue;
-    try {
-      const store = cache.finalizeStore(keyOf(analyzer));
-      findings.push(...(await analyzer.finalize(artifacts.get(analyzer.id) ?? new Map(), config, { readText, store })));
-    } catch (err) {
-      errors.push({ analyzer: keyOf(analyzer), message: errorMessage(err) });
-    }
-  }
+  await runFinalizers(run, fileAnalyzers, readText);
 
   signal?.throwIfAborted();
   onProgress?.({ phase: 'project', done: 0, total: projectAnalyzers.length });
-  const ctx = {
-    root,
-    files: analyzedFiles.sort((a, b) => a.relPath.localeCompare(b.relPath)),
-    config,
-    readText,
-    exists: repoExists(root),
-  };
-  const extraCoverage: CoverageNote[] = [];
-  if (radarignore !== null) {
-    extraCoverage.push({ area: 'Exclusiones', status: 'partial', detail: `.radarignore excluye ${radarignore} patrón(es): esos archivos no se analizan.` });
-  }
-  for (const analyzer of projectAnalyzers) {
-    signal?.throwIfAborted();
-    try {
-      findings.push(...(await analyzer.analyzeProject(ctx)));
-      extraCoverage.push(...(analyzer.coverage?.() ?? []));
-    } catch (err) {
-      if (signal?.aborted) throw err;
-      errors.push({ analyzer: `${analyzer.id}@${analyzer.version}`, message: errorMessage(err) });
-    }
-  }
+  const projectFiles = counts.analyzedFiles.sort((a, b) => a.relPath.localeCompare(b.relPath));
+  const extraCoverage = await runProjectAnalyzers(run, projectAnalyzers, { root, files: projectFiles, config, readText, exists: repoExists(root) }, radarignore);
 
-  cache.prune(new Set(files.map((f) => f.relPath)));
-  try {
-    await cache.save();
-  } catch (err) {
-    errors.push({ analyzer: 'cache', message: `No se pudo guardar la caché: ${errorMessage(err)}` });
-  }
-
-  let codeLines = 0;
-  for (const art of artifacts.get('size')?.values() ?? []) codeLines += (art as SizeArtifact).codeLines;
+  await saveCache(run, files);
 
   const testFiles = new Set(files.filter((f) => f.isTest).map((f) => f.relPath));
-  const deduped = dedupeById(findings).map((f) => adjustForTestCode(f, testFiles));
+  const deduped = dedupeById(run.findings).map((f) => adjustForTestCode(f, testFiles));
   sortFindings(deduped);
   const cpu = process.cpuUsage(cpuStart);
   onProgress?.({ phase: 'done', done: files.length, total: files.length });
@@ -153,22 +92,118 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
     root,
     generatedAt: new Date().toISOString(),
     config,
-    score: computeScore(deduped, codeLines),
+    score: computeScore(deduped, totalCodeLines(run.artifacts)),
     findings: deduped,
     summary: summarize(deduped),
-    coverage: mergeCoverage(buildCoverage(files, skipped), extraCoverage),
-    errors,
+    coverage: mergeCoverage(buildCoverage(files, run.skipped), extraCoverage),
+    errors: run.errors,
     stats: {
       durationMs: Math.round(performance.now() - started),
       filesDiscovered: files.length,
-      filesAnalyzed: analyzed,
-      cacheHits,
-      skipped: skipped.sort((a, b) => a.relPath.localeCompare(b.relPath)),
+      filesAnalyzed: counts.analyzed,
+      cacheHits: counts.cacheHits,
+      skipped: run.skipped.sort((a, b) => a.relPath.localeCompare(b.relPath)),
       cpuUserMs: Math.round(cpu.user / 1000),
       cpuSystemMs: Math.round(cpu.system / 1000),
       peakRssMb: Math.round(process.resourceUsage().maxRSS / 1024),
     },
   };
+}
+
+/** Lo que van acumulando las fases de un análisis. */
+interface Run {
+  config: AnalysisConfig;
+  cache: AnalysisCache;
+  signal?: AbortSignal;
+  onProgress?: (event: ProgressEvent) => void;
+  findings: Finding[];
+  errors: AnalyzerError[];
+  skipped: SkippedFile[];
+  /** Artefactos por analizador y archivo, para sus finalizadores. */
+  artifacts: Map<string, Map<string, unknown>>;
+}
+
+/** Fase 1: cada archivo con los analizadores que lo admiten (o desde la caché). */
+async function analyzeFiles(run: Run, files: readonly FileMeta[], fileAnalyzers: readonly FileAnalyzer[]): Promise<{ analyzedFiles: FileMeta[]; analyzed: number; cacheHits: number }> {
+  const analyzedFiles: FileMeta[] = [];
+  let analyzed = 0;
+  let cacheHits = 0;
+  let done = 0;
+  await mapWithConcurrency(
+    files,
+    run.config.concurrency,
+    async (meta) => {
+      const applicable = fileAnalyzers.filter((a) => a.supports(meta));
+      const outcome = await processFile(meta, applicable, run.config, run.cache, run.errors);
+      if (outcome.status === 'skipped') {
+        run.skipped.push({ relPath: meta.relPath, reason: outcome.reason });
+        if (outcome.extraFinding) run.findings.push(outcome.extraFinding);
+        if (outcome.codeLines !== undefined) run.artifacts.get('size')?.set(meta.relPath, { codeLines: outcome.codeLines } satisfies SizeArtifact);
+      } else {
+        for (const [analyzer, result] of outcome.results) {
+          run.findings.push(...result.findings);
+          if (result.artifact !== undefined) run.artifacts.get(analyzer.id)?.set(meta.relPath, result.artifact);
+        }
+        analyzedFiles.push(meta);
+        if (outcome.fromCache) cacheHits++;
+        else analyzed++;
+      }
+      done++;
+      if (run.onProgress && (done % 25 === 0 || done === files.length)) {
+        run.onProgress({ phase: 'files', done, total: files.length, file: meta.relPath });
+      }
+    },
+    run.signal,
+  );
+  return { analyzedFiles, analyzed, cacheHits };
+}
+
+/** Fase 2: los analizadores que comparan archivos entre sí (p. ej. duplicación). */
+async function runFinalizers(run: Run, fileAnalyzers: readonly FileAnalyzer[], readText: (rel: string) => Promise<string | null>): Promise<void> {
+  for (const analyzer of fileAnalyzers) {
+    if (!analyzer.finalize) continue;
+    try {
+      const store = run.cache.finalizeStore(keyOf(analyzer));
+      run.findings.push(...(await analyzer.finalize(run.artifacts.get(analyzer.id) ?? new Map(), run.config, { readText, store })));
+    } catch (err) {
+      run.errors.push({ analyzer: keyOf(analyzer), message: errorMessage(err) });
+    }
+  }
+}
+
+/** Fase 3: los analizadores del proyecto entero (arquitectura, dependencias…). Devuelve sus notas de cobertura. */
+async function runProjectAnalyzers(run: Run, projectAnalyzers: readonly ProjectAnalyzer[], ctx: ProjectContext, radarignore: number | null): Promise<CoverageNote[]> {
+  const coverage: CoverageNote[] = [];
+  if (radarignore !== null) {
+    coverage.push({ area: 'Exclusiones', status: 'partial', detail: `.radarignore excluye ${radarignore} patrón(es): esos archivos no se analizan.` });
+  }
+  for (const analyzer of projectAnalyzers) {
+    run.signal?.throwIfAborted();
+    try {
+      run.findings.push(...(await analyzer.analyzeProject(ctx)));
+      coverage.push(...(analyzer.coverage?.() ?? []));
+    } catch (err) {
+      if (run.signal?.aborted) throw err;
+      run.errors.push({ analyzer: `${analyzer.id}@${analyzer.version}`, message: errorMessage(err) });
+    }
+  }
+  return coverage;
+}
+
+/** Guarda la caché sin los archivos que ya no existen; si falla, el análisis sigue siendo válido. */
+async function saveCache(run: Run, files: readonly FileMeta[]): Promise<void> {
+  run.cache.prune(new Set(files.map((f) => f.relPath)));
+  try {
+    await run.cache.save();
+  } catch (err) {
+    run.errors.push({ analyzer: 'cache', message: `No se pudo guardar la caché: ${errorMessage(err)}` });
+  }
+}
+
+function totalCodeLines(artifacts: Run['artifacts']): number {
+  let codeLines = 0;
+  for (const art of artifacts.get('size')?.values() ?? []) codeLines += (art as SizeArtifact).codeLines;
+  return codeLines;
 }
 
 type FileOutcome =
