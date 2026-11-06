@@ -1,7 +1,7 @@
 # Integración continua: cada push a main y cada pull request.
 #
-# - comprobar: tipos, lint y pruebas en Windows (la plataforma de destino) y
-#   Ubuntu, con Node 24 (.nvmrc) y la versión mínima admitida (22).
+# - comprobar: tipos, lint y pruebas en Windows, macOS y Ubuntu, con Node 24
+#   (.nvmrc) y la versión mínima admitida (22).
 # - dependencias: vulnerabilidades conocidas y firmas del registro de npm.
 # - calidad: el radar se analiza a sí mismo y falla con hallazgos altos o
 #   críticos; la cobertura de las pruebas no puede bajar de sus mínimos. El
@@ -10,7 +10,9 @@
 #   las pruebas de sus políticas de seguridad por filas.
 # - escritorio: la aplicación de Electron de extremo a extremo en Windows, y el
 #   instalador (con los fuses y el ASAR comprobados) como artefacto.
-# - paquete-linux: el mismo paquete en Linux, comprobado con una pantalla virtual.
+# - paquete-linux: AppImage y .deb, comprobados con una pantalla virtual.
+# - paquete-macos: la aplicación de extremo a extremo en macOS (Apple Silicon) y
+#   los .dmg (firma ad-hoc) como artefacto.
 #
 # Las acciones van fijadas por commit (no por etiqueta) para que una etiqueta
 # movida no cambie lo que se ejecuta; Dependabot las mantiene al día.
@@ -40,6 +42,8 @@ jobs:
       matrix:
         include:
           - os: windows-latest
+            node: '24'
+          - os: macos-latest
             node: '24'
           - os: ubuntu-latest
             node: '24'
@@ -182,7 +186,7 @@ jobs:
           retention-days: 30
 
   paquete-linux:
-    name: Paquete (Linux)
+    name: Instaladores (Linux)
     needs: comprobar
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -201,5 +205,45 @@ jobs:
       # Ubuntu 24.04 restringe los espacios de nombres de usuario que usa el sandbox de Chromium.
       - name: Permitir el sandbox de Chromium
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: Paquete y su comprobación
+      - name: Instaladores (con la comprobación del paquete)
         run: xvfb-run -a npm run dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: instalador-linux
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+  paquete-macos:
+    name: Aplicación de escritorio e instaladores (macOS)
+    needs: comprobar
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Prueba de extremo a extremo
+        run: npm run e2e:desktop
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: capturas-escritorio-macos
+          path: apps/desktop/e2e/capturas/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Instaladores (con la comprobación del paquete)
+        run: npm run dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: instalador-macos
+          path: apps/desktop/release/*.dmg
+          if-no-files-found: error
+          retention-days: 30
