@@ -4,6 +4,7 @@ import { errorMessage } from '../../../shared/errors.js';
 import type { CloudSettings } from '../../../shared/settings.js';
 import type { SyncState } from '../../../shared/sync.js';
 import { Icon } from '../../components/Icon.js';
+import { useAction } from '../../lib/action.js';
 import { formatDateTime } from '../../lib/format.js';
 import { CheckField, FormError, SettingsSection } from './SettingsSection.js';
 
@@ -87,21 +88,8 @@ function statusText(s: SyncState): string {
 
 function CloudCopy({ cloud, onCloudChange, onSettingsChanged }: { cloud: CloudSettings; onCloudChange: (patch: Partial<CloudSettings>) => void; onSettingsChanged: () => void }) {
   const state = useSyncState();
-  const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = async (fn: () => Promise<unknown>): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, error, run } = useAction();
 
   return (
     <div className="cloud-copy">

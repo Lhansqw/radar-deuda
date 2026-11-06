@@ -5,6 +5,7 @@ import { errorMessage } from '../../shared/errors.js';
 import type { CodeSnippet } from '../../shared/model.js';
 import { Icon } from '../components/Icon.js';
 import { SeverityMark } from '../components/SeverityMark.js';
+import { useAction } from '../lib/action.js';
 import { formatEffort } from '../lib/format.js';
 import { CATEGORY_LABEL, CONFIDENCE_LABEL } from '../lib/labels.js';
 import { FixProposal } from './FixProposal.js';
@@ -158,19 +159,8 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
 const CLAIM_LABEL = { evidencia: 'Evidencia', inferencia: 'Inferencia', recomendacion: 'Recomendación' } as const;
 
 function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<void>; onOpenSettings: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const explain = async (): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await onExplain();
-    } catch (err) {
-      setError(errorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, error, run } = useAction();
+  const explain = (): Promise<void> => run(onExplain);
   return (
     <section className="ai-ask" aria-label="Explicación de la IA">
       <p>
