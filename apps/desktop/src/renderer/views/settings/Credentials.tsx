@@ -24,10 +24,10 @@ export function Credentials({ status, onChange }: { status: SecretsStatus | null
     <SettingsSection
       id="s-claves"
       title="Credenciales"
-      intro="Se guardan cifradas con el sistema (en Windows, DPAPI) y nunca vuelven a mostrarse. También se aceptan las variables de entorno de la línea de comandos."
+      intro="Se guardan cifradas con el sistema (DPAPI en Windows, el Llavero en macOS, el llavero del escritorio en Linux) y nunca vuelven a mostrarse. También se aceptan las variables de entorno de la línea de comandos."
     >
       {status && !status.encryptionAvailable ? (
-        <p className="form-error">Este equipo no ofrece un almacén cifrado: no se pueden guardar credenciales. Usa las variables de entorno indicadas.</p>
+        <p className="form-error">Este equipo no ofrece un almacén cifrado (en Linux, instala o desbloquea un llavero como GNOME Keyring o KWallet): no se pueden guardar credenciales. Usa las variables de entorno indicadas.</p>
       ) : null}
       {status ? SECRET_NAMES.map((name) => <SecretRow key={name} name={name} status={status} onChange={onChange} />) : null}
     </SettingsSection>

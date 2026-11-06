@@ -14,6 +14,34 @@ export interface Cipher {
   decryptString(encrypted: Buffer): string;
 }
 
+/** safeStorage de Electron: en Linux dice además con qué almacén cifra. */
+export interface SystemCipher extends Cipher {
+  getSelectedStorageBackend?(): string;
+}
+
+/**
+ * En Linux sin llavero del sistema (GNOME Keyring, KWallet…), safeStorage cifra
+ * con una clave fija escrita en Chromium («basic_text»): sigue diciendo que el
+ * cifrado está disponible, pero cualquiera que lea el archivo lo descifra. Eso se
+ * trata como no disponible, igual que en Windows o macOS sin cifrado: no se
+ * guardan credenciales ni la sesión.
+ */
+export function trustedCipher(cipher: SystemCipher, platform: NodeJS.Platform = process.platform): Cipher {
+  const weak = (): boolean => {
+    if (platform !== 'linux' || !cipher.getSelectedStorageBackend) return false;
+    const backend = cipher.getSelectedStorageBackend();
+    return backend === 'basic_text' || backend === 'unknown';
+  };
+  return {
+    isEncryptionAvailable: () => cipher.isEncryptionAvailable() && !weak(),
+    encryptString: (plain) => {
+      if (weak()) throw new Error('El cifrado del sistema no está disponible.');
+      return cipher.encryptString(plain);
+    },
+    decryptString: (encrypted) => cipher.decryptString(encrypted),
+  };
+}
+
 /** Variables de entorno que también se aceptan (las mismas que la CLI). */
 export const ENV_VARS: Readonly<Record<SecretName, string>> = {
   openrouter: 'RADAR_OPENROUTER_API_KEY',
