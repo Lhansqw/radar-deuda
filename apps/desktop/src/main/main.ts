@@ -13,6 +13,7 @@ import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
 import type { AppDeps } from './handlers.js';
+import { trustedCipher } from './credentials.js';
 import { registerIpc } from './ipc.js';
 import { menuTemplate } from './menu.js';
 import { devServerFromEnv } from './policy.js';
@@ -108,6 +109,8 @@ function start(): void {
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 
   const dataDir = app.getPath('userData');
+  // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
+  const cipher = trustedCipher(safeStorage);
   const spawn = ({ memoryLimitMb }: { memoryLimitMb: number }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb);
   const broadcast = (channel: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
@@ -153,7 +156,7 @@ function start(): void {
   // Cuentas (fase 13): sin sesión no se abre ninguna base de datos; con sesión, la del usuario.
   const account = new AccountService({
     config: cloudConfig(process.env, builtCloud),
-    storage: new EncryptedSessionStorage(path.join(dataDir, 'sesion.bin'), safeStorage),
+    storage: new EncryptedSessionStorage(path.join(dataDir, 'sesion.bin'), cipher),
     onChange: (change) => router?.change(change),
   });
   router = new SessionRouter({
@@ -162,7 +165,7 @@ function start(): void {
     open: (userId) =>
       openWorkspace(userId, {
         dataDir,
-        cipher: safeStorage,
+        cipher,
         spawn,
         emit: (state) => broadcast(JOB_EVENT_CHANNEL, state),
         cloud: async () => {

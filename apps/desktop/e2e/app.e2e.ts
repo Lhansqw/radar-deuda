@@ -76,8 +76,11 @@ async function simulate(app: ElectronApplication): Promise<void> {
   await app.evaluate(
     ({ dialog, safeStorage }, [folder, supabaseUrl, signupCode]) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
-      if (!safeStorage.isEncryptionAvailable()) {
+      // Sin cifrado del sistema (o en Linux sin llavero, credentials.ts: trustedCipher), uno simulado.
+      const weakLinux = process.platform === 'linux' && ['basic_text', 'unknown'].includes(safeStorage.getSelectedStorageBackend());
+      if (!safeStorage.isEncryptionAvailable() || weakLinux) {
         safeStorage.isEncryptionAvailable = () => true;
+        safeStorage.getSelectedStorageBackend = () => 'gnome_libsecret';
         safeStorage.encryptString = (text: string) => Buffer.from(`simulado:${Buffer.from(text).toString('base64')}`);
         safeStorage.decryptString = (data: Buffer) => Buffer.from(data.toString().slice(9), 'base64').toString();
       }
