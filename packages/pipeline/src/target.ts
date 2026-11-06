@@ -15,7 +15,7 @@ export interface SourceOptions {
   history: boolean;
   /** Token de solo lectura para repositorios privados. Nunca se guarda en disco. */
   githubToken?: string;
-  /** Carpeta de los clones (por defecto, la de la aplicación en %LOCALAPPDATA%). */
+  /** Carpeta de los clones (por defecto, la de la aplicación en la caché del sistema). */
   reposDir?: string;
 }
 

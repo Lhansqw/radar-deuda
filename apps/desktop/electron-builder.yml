@@ -45,6 +45,9 @@ electronFuses:
   enableCookieEncryption: true
   grantFileProtocolExtraPrivileges: false
   loadBrowserProcessSpecificV8Snapshot: false
+  # macOS: escribir los fuses invalida la firma; se vuelve a firmar ad-hoc para que
+  # Apple Silicon la abra aunque no haya certificado (con certificado se firma después).
+  resetAdHocDarwinSignature: true
 
 win:
   target:
@@ -71,8 +74,52 @@ nsis:
   deleteAppDataOnUninstall: false
   artifactName: radar-deuda-${version}-instalador-windows-x64.${ext}
 
-# Solo para comprobar el paquete en Linux (CI y desarrollo): carpeta sin instalador.
+# Linux: AppImage (un archivo que funciona en casi cualquier distribución) y .deb
+# (Debian y Ubuntu, con acceso en el menú, el perfil de AppArmor y el sandbox de
+# Chromium configurados al instalar). Ver docs/INSTALADOR.md.
 linux:
-  target: dir
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
   icon: build/icon.png
   category: Development
+  synopsis: Detecta y gestiona la deuda técnica de tus repositorios
+  maintainer: Lhansqw <timi101mu@gmail.com>
+  artifactName: radar-deuda-${version}-linux-${arch}.${ext}
+
+deb:
+  # Las de electron-builder por defecto, más git (el análisis lo usa) y su llavero (libsecret).
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - git
+
+# macOS: un .dmg para Apple Silicon y otro para Intel. Sin certificado de Apple
+# la firma es ad-hoc (obligatoria en Apple Silicon) y macOS pide confirmación la
+# primera vez que se abre. Con CSC_LINK y CSC_KEY_PASSWORD (certificado
+# «Developer ID Application») se firma de verdad, y con APPLE_ID,
+# APPLE_APP_SPECIFIC_PASSWORD y APPLE_TEAM_ID además se notariza.
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  icon: build/icon.png
+  category: public.app-category.developer-tools
+  # Con certificado: hardened runtime (requisito para notarizar). Sin certificado,
+  # scripts/dist.ts firma ad-hoc y sin hardened runtime.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  darkModeSupport: true
+
+dmg:
+  artifactName: radar-deuda-${version}-macos-${arch}.${ext}

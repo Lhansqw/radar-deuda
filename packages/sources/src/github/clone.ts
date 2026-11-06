@@ -14,6 +14,8 @@ export function defaultReposDir(env: NodeJS.ProcessEnv = process.env): string {
     const base = env['LOCALAPPDATA'] ?? path.join(os.homedir(), 'AppData', 'Local');
     return path.join(base, 'radar-deuda', 'repos');
   }
+  // Junto a la caché del motor (defaultCacheDir en @radar/engine).
+  if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Caches', 'radar-deuda', 'repos');
   return path.join(env['XDG_CACHE_HOME'] ?? path.join(os.homedir(), '.cache'), 'radar-deuda', 'repos');
 }
 
