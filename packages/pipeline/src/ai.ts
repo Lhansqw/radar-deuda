@@ -18,7 +18,6 @@ import {
   projectSummary,
   proposeFix,
   runAi,
-  type Budget,
   type ChatAnswer,
   type ChatTurn,
   type LlmProvider,
@@ -60,28 +59,27 @@ export interface ApiKeys {
 }
 
 /** Claves de las variables de entorno RADAR_*_API_KEY (la forma de pasarlas en la CLI). */
+const KEY_ENV_VARS = {
+  openrouter: 'RADAR_OPENROUTER_API_KEY',
+  anthropic: 'RADAR_ANTHROPIC_API_KEY',
+  openai: 'RADAR_OPENAI_API_KEY',
+} as const satisfies Partial<Record<keyof ApiKeys, string>>;
+
 export function keysFromEnv(env: NodeJS.ProcessEnv = process.env): ApiKeys {
-  // Los espacios y saltos de línea al principio o al final son el error de pegado más común.
-  const read = (name: string): string | undefined => {
-    const v = (env[name] ?? '').trim();
-    return v === '' ? undefined : v;
-  };
   const keys: ApiKeys = {};
-  const openrouter = read('RADAR_OPENROUTER_API_KEY');
-  const anthropic = read('RADAR_ANTHROPIC_API_KEY');
-  const openai = read('RADAR_OPENAI_API_KEY');
-  if (openrouter) keys.openrouter = openrouter;
-  if (anthropic) keys.anthropic = anthropic;
-  if (openai) keys.openai = openai;
+  for (const [name, variable] of Object.entries(KEY_ENV_VARS) as Array<[keyof typeof KEY_ENV_VARS, string]>) {
+    // Los espacios y saltos de línea al principio o al final son el error de pegado más común.
+    const value = (env[variable] ?? '').trim();
+    if (value !== '') keys[name] = value;
+  }
   return keys;
 }
 
 export function createProvider(o: AiOptions, keys: ApiKeys): LlmProvider {
   switch (o.provider) {
     case 'lmstudio':
-      return new OpenAiCompatibleProvider({ ...PRESETS.lmstudio, ...(o.url ? { baseUrl: o.url } : {}) });
     case 'ollama':
-      return new OpenAiCompatibleProvider({ ...PRESETS.ollama, ...(o.url ? { baseUrl: o.url } : {}) });
+      return new OpenAiCompatibleProvider({ ...PRESETS[o.provider], ...(o.url ? { baseUrl: o.url } : {}) });
     case 'anthropic':
       return new AnthropicProvider({ apiKey: keys.anthropic ?? '' });
     case 'openrouter':
@@ -161,12 +159,44 @@ export interface AiStepResult {
   label: string;
 }
 
+/** Privacidad si no se eligió: con un proveedor local nada sale del equipo; en la nube, solo metadatos. */
+function defaultPrivacy(o: AiOptions, provider: LlmProvider): PrivacyMode {
+  return o.privacy ?? (provider.locality === 'local' ? 'local' : 'metadatos');
+}
+
+/** Caché de las respuestas de la IA, dentro de la del motor. */
+function aiCacheDir(cacheBase: string | null): string | null {
+  return cacheBase ? path.join(cacheBase, 'ai') : null;
+}
+
 /** Ejecuta la capa de IA sobre un informe ya generado. */
 export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiKeys, hooks: PipelineHooks, signal: AbortSignal, cacheBase: string | null): Promise<AiStepResult> {
   const provider = createProvider(o, keys);
-  const privacy: PrivacyMode = o.privacy ?? (provider.locality === 'local' ? 'local' : 'metadatos');
+  const privacy = defaultPrivacy(o, provider);
   const model = await chooseModel(o, provider, signal);
-  const planModel = o.planModel ?? (o.provider === 'anthropic' ? ANTHROPIC_MODELS.balanced : model);
+  const planModel = capableModel(o, model);
+  await announce(o, provider, { privacy, model, planModel }, hooks, signal);
+
+  const section = await runAi(report, {
+    provider,
+    model,
+    planModel,
+    privacy,
+    readText: reportReader(report),
+    cacheDir: aiCacheDir(cacheBase),
+    budget: { maxRequests: o.limit * 2 + 4, maxCostUsd: o.budgetUsd },
+    limit: o.limit,
+    plan: o.findingIds ? false : o.plan,
+    ...(o.findingIds ? { findingIds: o.findingIds } : {}),
+    signal,
+    onProgress: (done, total) => hooks.progress?.({ phase: 'ai', done, total }),
+  });
+  return { section, label: `${provider.label} · ${model}${planModel !== model ? ` (plan: ${planModel})` : ''}` };
+}
+
+/** Explica al usuario qué se va a enviar, a quién y con qué modelos, antes de enviar nada. */
+async function announce(o: AiOptions, provider: LlmProvider, run: { privacy: PrivacyMode; model: string; planModel: string }, hooks: PipelineHooks, signal: AbortSignal): Promise<void> {
+  const { privacy, model, planModel } = run;
   if (o.provider === 'incluida') {
     hooks.info('IA incluida: el modelo de la aplicación, a través de su proyecto de Supabase (sin clave propia); su proveedor recibe lo que se envía según la privacidad elegida.');
   }
@@ -188,24 +218,6 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
         : `IA en la nube (${provider.label}): solo se envían metadatos de los hallazgos, sin código. Presupuesto máximo ${o.budgetUsd.toFixed(2)} USD.`,
     );
   } else hooks.info(`IA local (${provider.label}, modelo ${model}): nada sale del equipo.`);
-
-  const readText = reportReader(report);
-  const budget: Budget = { maxRequests: o.limit * 2 + 4, maxCostUsd: o.budgetUsd };
-  const section = await runAi(report, {
-    provider,
-    model,
-    planModel,
-    privacy,
-    readText,
-    cacheDir: cacheBase ? path.join(cacheBase, 'ai') : null,
-    budget,
-    limit: o.limit,
-    plan: o.findingIds ? false : o.plan,
-    ...(o.findingIds ? { findingIds: o.findingIds } : {}),
-    signal,
-    onProgress: (done, total) => hooks.progress?.({ phase: 'ai', done, total }),
-  });
-  return { section, label: `${provider.label} · ${model}${planModel !== model ? ` (plan: ${planModel})` : ''}` };
 }
 
 /** Lee archivos del repositorio analizado sin salir de su carpeta. */
@@ -281,7 +293,7 @@ export async function proposeFixStep(report: AnalysisReport, findingId: string, 
     model,
     privacy,
     readText: reportReader(report),
-    cacheDir: s.cacheBase ? path.join(s.cacheBase, 'ai') : null,
+    cacheDir: aiCacheDir(s.cacheBase),
     budget: { maxRequests: 3, maxCostUsd: o.budgetUsd },
     signal: s.signal,
   });
@@ -296,7 +308,7 @@ export interface AskStepOptions {
 export async function askStep(report: AnalysisReport, history: readonly ChatTurn[], question: string, o: AiOptions, keys: ApiKeys, s: AskStepOptions): Promise<ChatAnswer> {
   const provider = createProvider(o, keys);
   const model = await chooseModel(o, provider, s.signal);
-  const privacy: PrivacyMode = o.privacy ?? (provider.locality === 'local' ? 'local' : 'metadatos');
+  const privacy = defaultPrivacy(o, provider);
   return askAboutReport(report, history, question, {
     provider,
     model,
