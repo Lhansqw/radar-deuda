@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { errorMessage } from '../../../shared/errors.js';
 import type { CatalogModel } from '../../../shared/model.js';
 import { Icon } from '../../components/Icon.js';
 import { CATALOG_PAGE, fallbackBlocked, filterCatalog, modelContext, modelPrice, type CatalogFilter } from '../../lib/catalog.js';
-import { errorText } from './SettingsSection.js';
 
 interface ModelChoice {
   model: string;
@@ -64,7 +64,7 @@ function useCatalog(open: boolean): { catalog: CatalogModel[] | null; error: str
     window.radar.ai
       .models()
       .then((m) => !cancelled && setCatalog(m))
-      .catch((err: unknown) => !cancelled && setError(errorText(err)));
+      .catch((err: unknown) => !cancelled && setError(errorMessage(err)));
     return () => {
       cancelled = true;
     };

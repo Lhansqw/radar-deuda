@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { findingRefs } from '@radar/engine/refs';
 import type { AiExplanation, AnalysisReport, Evidence, Finding, Location } from '@radar/engine';
+import { errorMessage } from '../../shared/errors.js';
 import type { CodeSnippet } from '../../shared/model.js';
 import { Icon } from '../components/Icon.js';
 import { SeverityMark } from '../components/SeverityMark.js';
@@ -109,7 +110,7 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
     window.radar.files
       .snippet(analysisId, location.file, Math.max(1, location.startLine - CONTEXT), location.endLine + CONTEXT)
       .then((snippet) => !cancelled && setState({ key, snippet, error: null }))
-      .catch((err: unknown) => !cancelled && setState({ key, snippet: null, error: err instanceof Error ? err.message : String(err) }));
+      .catch((err: unknown) => !cancelled && setState({ key, snippet: null, error: errorMessage(err) }));
     return () => {
       cancelled = true;
     };
@@ -165,7 +166,7 @@ function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<voi
     try {
       await onExplain();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }

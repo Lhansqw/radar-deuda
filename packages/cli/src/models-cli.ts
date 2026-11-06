@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { errorMessage } from '@radar/engine';
 import { MODELS_HELP, parseModelsArgs, runModels } from './models.js';
 
 async function main(): Promise<number> {
@@ -16,7 +17,7 @@ async function main(): Promise<number> {
     console.log(await runModels(parsed.options));
     return 0;
   } catch (err) {
-    console.error(`No se pudo obtener el catálogo de OpenRouter: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`No se pudo obtener el catálogo de OpenRouter: ${errorMessage(err)}`);
     return 2;
   }
 }

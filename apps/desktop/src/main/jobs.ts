@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import type { AiOptions, ApiKeys } from '@radar/pipeline';
+import { errorMessage } from '../shared/errors.js';
 import type { JobLogEntry, JobPhase, JobState } from '../shared/jobs.js';
 import type { Project } from '../shared/model.js';
 import { LOCAL_PROVIDERS, type AppSettings, type AiSettings } from '../shared/settings.js';
@@ -220,7 +221,7 @@ export class JobManager {
           s.analysisId = summary.id;
         } catch (err) {
           r.worker.kill();
-          this.finish('failed', `No se pudo guardar el análisis: ${err instanceof Error ? err.message : String(err)}`);
+          this.finish('failed', `No se pudo guardar el análisis: ${errorMessage(err)}`);
           return;
         }
         // Con IA, el análisis ya está guardado y visible mientras la IA trabaja.

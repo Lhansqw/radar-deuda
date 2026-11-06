@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { errorMessage } from '../shared/errors.js';
 import type { SyncState } from '../shared/sync.js';
 import type { CloudLedger } from './cloud-ledger.js';
 import { decodeCloudReport, encodeCloudReport } from './cloud-report.js';
@@ -119,7 +120,7 @@ export class CloudSync {
       return state;
     } catch (err) {
       const offline = err instanceof CloudError && err.offline;
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       // Si se cerró la sesión a mitad (base de datos cerrada), no queda nada que hacer.
       if (this.disposed) return this.state;
       const state = this.set({ status: offline ? 'offline' : 'error', message, pending: this.d.ledger.pendingCount() });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { errorMessage } from '../../../shared/errors.js';
 import type { IncludedQuota } from '../../../shared/model.js';
 import { LOCAL_PROVIDERS, type AiProviderName, type AiSettings, type PrivacySetting, type ReasoningLevel } from '../../../shared/settings.js';
 import { dataCollectionChange, providerChange } from '../../lib/settings.js';
@@ -89,7 +90,7 @@ function IncludedQuotaField() {
     let alive = true;
     window.radar.ai.includedQuota().then(
       (value) => alive && setQuota({ value, error: null }),
-      (err: unknown) => alive && setQuota({ value: null, error: err instanceof Error ? err.message : String(err) }),
+      (err: unknown) => alive && setQuota({ value: null, error: errorMessage(err) }),
     );
     return () => {
       alive = false;

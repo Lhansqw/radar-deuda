@@ -3,6 +3,7 @@ import { compareReports, defaultCacheDir, safeJoin, sha1, type AnalysisReport } 
 import { fetchOpenRouterModels, IncludedAiProvider, OpenRouterProvider, type OpenRouterModel } from '@radar/ai';
 import type { FetchLike } from '@radar/sources';
 import { askStep, previewFix, proposeFixStep, runAiStep, type AiOptions, type ApiKeys } from '@radar/pipeline';
+import { errorMessage } from '../shared/errors.js';
 import type { CatalogModel, ChatMessage, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, StoredFixProposal } from '../shared/model.js';
 import type { AppSettings } from '../shared/settings.js';
 import { mergeAiSection } from './ai-merge.js';
@@ -61,7 +62,7 @@ export class AiService {
       headers: { 'user-agent': 'radar-deuda', ...(key ? { authorization: `Bearer ${key}` } : {}) },
       ...(this.d.fetch ? { fetch: this.d.fetch } : {}),
     }).catch((err: unknown) => {
-      throw new AiServiceError(`No se pudo obtener la lista de modelos de OpenRouter: ${err instanceof Error ? err.message : String(err)}`);
+      throw new AiServiceError(`No se pudo obtener la lista de modelos de OpenRouter: ${errorMessage(err)}`);
     });
     const models = list.map(toCatalogModel).sort((a, b) => (a.outputPerMTok ?? Infinity) - (b.outputPerMTok ?? Infinity) || a.id.localeCompare(b.id));
     this.catalog = { at: Date.now(), models };

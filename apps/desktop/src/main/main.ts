@@ -6,6 +6,7 @@ import { defaultCacheDir } from '@radar/engine';
 import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
 import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
 import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell } from 'electron';
+import { errorMessage } from '../shared/errors.js';
 import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { createAccountHandlers } from './account-handlers.js';
@@ -178,7 +179,7 @@ function start(): void {
   if (smoke) {
     void runSmokeTest(win, (memoryLimitMb) => spawn({ memoryLimitMb }))
       .catch((err: unknown) => {
-        console.error(`Prueba de arranque: ${err instanceof Error ? err.message : String(err)}`);
+        console.error(`Prueba de arranque: ${errorMessage(err)}`);
         return false;
       })
       .then((ok) => {
