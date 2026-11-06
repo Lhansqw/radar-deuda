@@ -1,15 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AnalysisReport } from '@radar/engine';
-import { AccountService } from '../src/main/account-service.js';
-import { cloudConfig, ENV_KEY, ENV_URL } from '../src/main/cloud-config.js';
 import { cloudReport, decodeCloudReport, encodeCloudReport } from '../src/main/cloud-report.js';
 import { CloudError, SupabaseRepo, type NewCloudAnalysis } from '../src/main/cloud-repo.js';
-import { EncryptedSessionStorage } from '../src/main/session-storage.js';
-import { FAKE_KEY, FAKE_URL, FakeSupabase } from './helpers/fake-supabase.js';
+import { signedInAccount } from './helpers/account.js';
+import { FakeSupabase } from './helpers/fake-supabase.js';
 import { report } from './helpers/report.js';
 
 const cleanup: Array<() => Promise<void> | void> = [];
@@ -17,23 +12,10 @@ afterEach(async () => {
   for (const f of cleanup.splice(0)) await f();
 });
 
-const cipher = { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() };
-const PASSWORD = 'contraseña-larga-1';
 
 /** Una cuenta con la sesión iniciada contra el Supabase simulado, y su acceso a la base de datos. */
 async function signedIn(server: FakeSupabase, email: string): Promise<SupabaseRepo> {
-  if (!server.users.has(email)) server.addUser(email, PASSWORD);
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'radar-nube-'));
-  cleanup.push(() => rm(dir, { recursive: true, force: true }));
-  const account = new AccountService({
-    config: cloudConfig({ [ENV_URL]: FAKE_URL, [ENV_KEY]: FAKE_KEY }, null),
-    storage: new EncryptedSessionStorage(path.join(dir, 'sesion.bin'), cipher),
-    onChange: () => undefined,
-    fetch: server.fetch,
-    retryReads: false,
-  });
-  cleanup.push(() => account.dispose());
-  await account.signIn(email, PASSWORD, false);
+  const account = await signedInAccount(server, email, cleanup);
   const db = await account.database();
   if (!db) throw new Error('sin sesión');
   return new SupabaseRepo(db);
