@@ -30,15 +30,25 @@ mini ventana "const {app,BrowserWindow}=require('electron'); app.whenReady().the
 mini hijo "const {app,utilityProcess}=require('electron'); const path=require('path'); app.whenReady().then(()=>{const p=utilityProcess.fork(path.join(__dirname,'hijo.js')); p.on('message',m=>{console.log('MINI-HIJO-OK',m); app.quit();}); p.on('exit',c=>{console.log('MINI-HIJO-SALIO',c); app.quit();});}); setTimeout(()=>{console.log('MINI-TIEMPO'); app.exit(3);},25000);" "process.parentPort.postMessage('ok');"
 mini seguro "const {app,safeStorage}=require('electron'); app.whenReady().then(()=>{console.log('MINI-SEGURO-ANTES'); console.log('MINI-SEGURO', safeStorage.isEncryptionAvailable()); app.quit();}); setTimeout(()=>{console.log('MINI-TIEMPO'); app.exit(3);},25000);"
 
-echo "== La aplicación real colgada: procesos y pila del proceso principal"
-RADAR_DATA_DIR="$(mktemp -d)" ELECTRON_ENABLE_LOGGING=1 "$APP/Contents/MacOS/radar-deuda" --prueba-arranque >"$WORK/real.txt" 2>&1 &
+echo "== La aplicación real con distintas opciones (60 s como máximo cada una)"
+real() {
+  local etiqueta="$1"; shift
+  RADAR_DATA_DIR="$(mktemp -d)" ELECTRON_ENABLE_LOGGING=1 perl -e 'alarm 60; exec @ARGV' "$APP/Contents/MacOS/radar-deuda" "$@" --prueba-arranque >"$WORK/r.txt" 2>&1
+  local c=$?
+  echo "-- $etiqueta: código $c (142 = colgada) | confirmación: $(grep -c 'Prueba de arranque superada' "$WORK/r.txt")"
+  grep -Ev "$FILTRO" "$WORK/r.txt" | grep -v '^$' | tail -n 4 | cut -c1-240
+  pkill -9 -f 'radar-deuda.app' 2>/dev/null
+}
+real "base"
+real "--disable-gpu" --disable-gpu
+real "--in-process-gpu" --in-process-gpu
+real "--disable-gpu-sandbox" --disable-gpu-sandbox
+real "--disable-gpu --disable-software-rasterizer" --disable-gpu --disable-software-rasterizer
+
+echo "== Pila del proceso principal colgado"
+RADAR_DATA_DIR="$(mktemp -d)" "$APP/Contents/MacOS/radar-deuda" --prueba-arranque >/dev/null 2>&1 &
 PID=$!
-sleep 25
-ps -axo pid,ppid,etime,command | grep -i 'radar' | grep -v grep | cut -c1-200 | head -12
-echo "-- sample del proceso principal (5 s):"
-sample "$PID" 5 -file "$WORK/sample.txt" >/dev/null 2>&1
-grep -n 'CrBrowserMain' -A22 "$WORK/sample.txt" | cut -c1-200 | head -40
-kill -9 "$PID" 2>/dev/null
-pkill -9 -f 'radar-deuda.app' 2>/dev/null
-echo "-- salida de la aplicación:"
-grep -Ev "$FILTRO" "$WORK/real.txt" | tail -n 25 | cut -c1-260
+sleep 20
+sample "$PID" 3 -file "$WORK/sample.txt" 2>&1 | tail -n 3
+head -n 70 "$WORK/sample.txt" 2>&1 | cut -c1-200
+kill -9 "$PID" 2>/dev/null; pkill -9 -f 'radar-deuda.app' 2>/dev/null
