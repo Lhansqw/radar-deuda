@@ -70,5 +70,25 @@ version "3. paquete con el Info.plist de Electron" "$v" Electron
 echo "-- registro del sistema sobre la caída:"
 log show --last 3m --style compact --predicate 'process == "radar-deuda" OR eventMessage CONTAINS "radar-deuda"' 2>/dev/null | grep -v 'linkd\|intents' | tail -n 25 | cut -c1-260
 
+echo "== Aplicaciones mínimas dentro del mismo paquete (¿cae el paquete o el código?)"
+mini() {
+  local nombre="$1" main="$2" hijo="${3:-}"
+  local dir="$WORK/mini-$nombre" copia="$WORK/mini-$nombre.app"
+  rm -rf "$dir" "$copia"; mkdir -p "$dir"
+  printf '{"name":"mini","version":"1.0.0","main":"main.js"}' >"$dir/package.json"
+  printf '%s\n' "$main" >"$dir/main.js"
+  [ -n "$hijo" ] && printf '%s\n' "$hijo" >"$dir/hijo.js"
+  npx --no-install asar pack "$dir" "$WORK/mini-$nombre.asar" >/dev/null 2>&1
+  cp -R "$APP" "$copia"; cp "$WORK/mini-$nombre.asar" "$copia/Contents/Resources/app.asar"
+  npx --no-install @electron/fuses write --app "$copia" EnableEmbeddedAsarIntegrityValidation=off >/dev/null 2>&1
+  codesign --force --deep --sign - "$copia" >/dev/null 2>&1
+  RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 45; exec @ARGV' "$copia/Contents/MacOS/radar-deuda" >"$WORK/m.txt" 2>&1
+  echo "-- mínima '$nombre': código $? | $(grep -v 'linkd\|intents\|Process Instance\|Will NOT' "$WORK/m.txt" | tail -n 3 | tr '\n' ' ' | cut -c1-200)"
+}
+mini hola "console.log('MINI-HOLA'); require('electron').app.quit();"
+mini sqlite "const {DatabaseSync}=require('node:sqlite'); const d=new DatabaseSync(':memory:'); d.exec('create table t(a)'); console.log('MINI-SQLITE-OK'); require('electron').app.quit();"
+mini ventana "const {app,BrowserWindow}=require('electron'); app.whenReady().then(async()=>{const w=new BrowserWindow({show:false}); await w.loadURL('data:text/html,<p>hola</p>'); console.log('MINI-VENTANA-OK'); app.quit();}); setTimeout(()=>{console.log('MINI-TIEMPO'); app.exit(3);},30000);"
+mini hijo "const {app,utilityProcess}=require('electron'); const path=require('path'); app.whenReady().then(()=>{const p=utilityProcess.fork(path.join(__dirname,'hijo.js')); p.on('message',m=>{console.log('MINI-HIJO-OK',m); app.quit();}); p.on('exit',c=>{console.log('MINI-HIJO-SALIO',c); app.quit();});}); setTimeout(()=>{console.log('MINI-TIEMPO'); app.exit(3);},30000);" "process.parentPort.postMessage('ok');"
+
 echo "== Traza de la caída (lldb, paquete original)"
 RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 120; exec @ARGV' lldb --batch -o run -k 'bt 30' -k 'register read pc lr' -k 'image lookup -a $pc' -- "$APP/Contents/MacOS/radar-deuda" --prueba-arranque 2>&1 | tail -n 60
