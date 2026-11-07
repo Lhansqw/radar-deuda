@@ -4,6 +4,7 @@
   "private": true,
   "description": "Aplicación de escritorio de Radar de Deuda Técnica (Electron + React).",
   "author": "Lhansqw",
+  "homepage": "https://github.com/Lhansqw/radar-deuda",
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
