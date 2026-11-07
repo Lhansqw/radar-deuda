@@ -59,7 +59,8 @@ async function run(exe: string, args: string[], env: Record<string, string> = {}
       child.stderr.on('data', (d: Buffer) => (output += d.toString()));
       const timer = setTimeout(() => {
         output += `\n[la comprobación detuvo la aplicación: no terminó en ${timeoutMs / 1000} s]`;
-        child.kill();
+        // SIGKILL: una aplicación colgada puede ignorar SIGTERM y la comprobación no terminaría nunca.
+        child.kill('SIGKILL');
       }, timeoutMs);
       child.on('error', (error) => {
         clearTimeout(timer);
