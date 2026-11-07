@@ -46,5 +46,29 @@ echo "-- U. Electron sin empaquetar con el mismo código (apps/desktop, --prueba
 RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 90; exec @ARGV' node_modules/electron/dist/Electron.app/Contents/MacOS/Electron apps/desktop --prueba-arranque 2>&1 | tail -n 4
 echo "   código de salida: ${PIPESTATUS[0]}"
 
+echo "== Composición del paquete"
+ls -1 "$APP/Contents" "$APP/Contents/Frameworks" "$APP/Contents/MacOS" "$APP/Contents/Resources" | head -50
+for k in CFBundleName CFBundleDisplayName CFBundleExecutable CFBundleIdentifier LSMinimumSystemVersion NSPrincipalClass; do
+  echo "   $k = $(/usr/libexec/PlistBuddy -c "Print :$k" "$APP/Contents/Info.plist" 2>&1)"
+done
+echo "   (Electron sin empaquetar) CFBundleName = $(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' node_modules/electron/dist/Electron.app/Contents/Info.plist 2>&1), CFBundleExecutable = $(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' node_modules/electron/dist/Electron.app/Contents/Info.plist 2>&1)"
+
+echo "== Variantes del paquete con --version (¿qué lo hace caer?)"
+version() {
+  local etiqueta="$1" app="$2"
+  RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 30; exec @ARGV' "$app/Contents/MacOS/$3" --version >"$WORK/v.txt" 2>&1
+  echo "-- $etiqueta: código $? | $(head -c 80 "$WORK/v.txt" | tr '\n' ' ')"
+}
+control="$WORK/electron-control.app"; rm -rf "$control"; cp -R node_modules/electron/dist/Electron.app "$control"
+version "control: Electron.app sin empaquetar" "$control" Electron
+v="$WORK/v-sin-licencias.app"; rm -rf "$v"; cp -R "$APP" "$v"; rm -f "$v/Contents/THIRD_PARTY_LICENSES.txt"; codesign --force --deep --sign - "$v" >/dev/null 2>&1
+version "1. paquete sin THIRD_PARTY_LICENSES.txt" "$v" radar-deuda
+v="$WORK/v-sin-asar.app"; rm -rf "$v"; cp -R "$APP" "$v"; rm -f "$v/Contents/Resources/app.asar"; codesign --force --deep --sign - "$v" >/dev/null 2>&1
+version "2. paquete sin app.asar" "$v" radar-deuda
+v="$WORK/v-plist-electron.app"; rm -rf "$v"; cp -R "$APP" "$v"; cp node_modules/electron/dist/Electron.app/Contents/Info.plist "$v/Contents/Info.plist"; mv "$v/Contents/MacOS/radar-deuda" "$v/Contents/MacOS/Electron"; codesign --force --deep --sign - "$v" >/dev/null 2>&1
+version "3. paquete con el Info.plist de Electron" "$v" Electron
+echo "-- registro del sistema sobre la caída:"
+log show --last 3m --style compact --predicate 'process == "radar-deuda" OR eventMessage CONTAINS "radar-deuda"' 2>/dev/null | grep -v 'linkd\|intents' | tail -n 25 | cut -c1-260
+
 echo "== Traza de la caída (lldb, paquete original)"
 RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 120; exec @ARGV' lldb --batch -o run -k 'bt 30' -k 'register read pc lr' -k 'image lookup -a $pc' -- "$APP/Contents/MacOS/radar-deuda" --prueba-arranque 2>&1 | tail -n 60
