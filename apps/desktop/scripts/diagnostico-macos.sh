@@ -9,8 +9,9 @@ WORK="$(mktemp -d)"
 # Ejecuta la copia con un límite de tiempo y muestra cómo termina.
 arrancar() {
   local etiqueta="$1" app="$2" datos
+  shift 2
   datos="$(mktemp -d)"
-  RADAR_DATA_DIR="$datos" perl -e 'alarm 90; exec @ARGV' "$app/Contents/MacOS/radar-deuda" --prueba-arranque >"$WORK/salida.txt" 2>&1
+  RADAR_DATA_DIR="$datos" perl -e 'alarm 90; exec @ARGV' "$app/Contents/MacOS/radar-deuda" "${@:---prueba-arranque}" >"$WORK/salida.txt" 2>&1
   local codigo=$?
   echo "-- $etiqueta: código de salida $codigo (128+n = señal n; 142 = tiempo agotado) | $(grep -c 'Prueba de arranque superada' "$WORK/salida.txt") confirmación(es)"
   tail -n 3 "$WORK/salida.txt"
@@ -36,5 +37,14 @@ variante "C. EnableEmbeddedAsarIntegrityValidation=off" EnableEmbeddedAsarIntegr
 variante "D. GrantFileProtocolExtraPrivileges=on" GrantFileProtocolExtraPrivileges=on
 variante "E. los tres cambiados a la vez" EnableCookieEncryption=off EnableEmbeddedAsarIntegrityValidation=off GrantFileProtocolExtraPrivileges=on
 
+echo "== Separar empaquetado y código (sobre una copia del paquete original)"
+copia="$WORK/original.app"; rm -rf "$copia"; cp -R "$APP" "$copia"
+arrancar "G. --version (¿llega a arrancar el ejecutable?)" "$copia" --version
+arrancar "H. --no-sandbox --prueba-arranque" "$copia" --no-sandbox --prueba-arranque
+arrancar "I. --disable-gpu --prueba-arranque" "$copia" --disable-gpu --prueba-arranque
+echo "-- U. Electron sin empaquetar con el mismo código (apps/desktop, --prueba-arranque)"
+RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 90; exec @ARGV' node_modules/electron/dist/Electron.app/Contents/MacOS/Electron apps/desktop --prueba-arranque 2>&1 | tail -n 4
+echo "   código de salida: ${PIPESTATUS[0]}"
+
 echo "== Traza de la caída (lldb, paquete original)"
-RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 120; exec @ARGV' lldb --batch -o run -o 'bt 25' -o 'image list -b' -- "$APP/Contents/MacOS/radar-deuda" --prueba-arranque 2>&1 | tail -n 60
+RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 120; exec @ARGV' lldb --batch -o run -k 'bt 30' -k 'register read pc lr' -k 'image lookup -a $pc' -- "$APP/Contents/MacOS/radar-deuda" --prueba-arranque 2>&1 | tail -n 60
