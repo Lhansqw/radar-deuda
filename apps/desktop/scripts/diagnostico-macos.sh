@@ -36,19 +36,16 @@ real() {
   RADAR_DATA_DIR="$(mktemp -d)" ELECTRON_ENABLE_LOGGING=1 perl -e 'alarm 60; exec @ARGV' "$APP/Contents/MacOS/radar-deuda" "$@" --prueba-arranque >"$WORK/r.txt" 2>&1
   local c=$?
   echo "-- $etiqueta: código $c (142 = colgada) | confirmación: $(grep -c 'Prueba de arranque superada' "$WORK/r.txt")"
-  grep -Ev "$FILTRO" "$WORK/r.txt" | grep -v '^$' | tail -n 4 | cut -c1-240
+  grep -Ev "$FILTRO" "$WORK/r.txt" | grep -v '^$' | tail -n 14 | cut -c1-240
   pkill -9 -f 'radar-deuda.app' 2>/dev/null
 }
 real "base"
 real "--disable-gpu" --disable-gpu
-real "--in-process-gpu" --in-process-gpu
-real "--disable-gpu-sandbox" --disable-gpu-sandbox
-real "--disable-gpu --disable-software-rasterizer" --disable-gpu --disable-software-rasterizer
 
 echo "== Pila del proceso principal colgado"
 RADAR_DATA_DIR="$(mktemp -d)" "$APP/Contents/MacOS/radar-deuda" --prueba-arranque >/dev/null 2>&1 &
 PID=$!
 sleep 20
 sample "$PID" 3 -file "$WORK/sample.txt" 2>&1 | tail -n 3
-head -n 70 "$WORK/sample.txt" 2>&1 | cut -c1-200
+grep -n "Sort by top of stack" -A18 "$WORK/sample.txt" | cut -c1-200
 kill -9 "$PID" 2>/dev/null; pkill -9 -f 'radar-deuda.app' 2>/dev/null

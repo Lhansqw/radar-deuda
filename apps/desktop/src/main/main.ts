@@ -35,6 +35,9 @@ const distDir = __dirname;
 
 /** Prueba de arranque de la aplicación empaquetada (smoke.ts): datos temporales y salir. */
 const smoke = process.argv.includes(SMOKE_FLAG);
+// TEMPORAL (diagnóstico de macOS): marcas del arranque.
+const trace = (m: string): void => { if (smoke) console.log(`[arranque] ${m}`); };
+trace('módulo cargado');
 
 // Datos en la carpeta de datos del sistema (%APPDATA%\radar-deuda en Windows,
 // ~/Library/Application Support/radar-deuda en macOS, ~/.config/radar-deuda en
@@ -101,16 +104,22 @@ function createWindow(): BrowserWindow {
 }
 
 function start(): void {
+  trace('start');
   // La interfaz es oscura: la barra de título y los controles nativos también.
   nativeTheme.themeSource = 'dark';
   const template = menuTemplate(process.platform, app.isPackaged);
   if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  trace('menú listo');
   hardenApp(devServerUrl);
+  trace('hardenApp listo');
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 
+  trace('serveRenderer listo');
   const dataDir = app.getPath('userData');
   // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
+  trace('antes de trustedCipher');
   const cipher = trustedCipher(safeStorage);
+  trace('trustedCipher listo');
   const spawn = ({ memoryLimitMb }: { memoryLimitMb: number }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb);
   const broadcast = (channel: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
@@ -183,9 +192,12 @@ function start(): void {
     sessions.dispose();
     account.dispose();
   });
+  trace('router listo');
   registerIpc(() => sessions.handlers(), devServerUrl);
+  trace('ipc listo');
 
   win = createWindow();
+  trace('ventana creada');
   if (smoke) {
     void runSmokeTest(win, (memoryLimitMb) => spawn({ memoryLimitMb }))
       .catch((err: unknown) => {
