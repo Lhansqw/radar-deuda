@@ -61,8 +61,14 @@ async function run(exe: string, args: string[], env: Record<string, string> = {}
         output += `\n[la comprobación detuvo la aplicación: no terminó en ${timeoutMs / 1000} s]`;
         child.kill();
       }, timeoutMs);
-      child.on('exit', (code) => {
+      child.on('error', (error) => {
         clearTimeout(timer);
+        resolve({ code: 1, output: `${output}\n[no se pudo ejecutar: ${error.message}]` });
+      });
+      child.on('exit', (code, signal) => {
+        clearTimeout(timer);
+        // Sin esto, una aplicación que el sistema mata (firma inválida, fallo al arrancar) no deja ninguna pista.
+        if (code !== 0) output += `\n[la aplicación terminó con código ${code ?? 'ninguno'}${signal ? ` y señal ${signal}` : ''}]`;
         resolve({ code: code ?? 1, output });
       });
     });
@@ -72,7 +78,7 @@ async function run(exe: string, args: string[], env: Record<string, string> = {}
 }
 
 function check(ok: boolean, message: string, detail = ''): void {
-  if (!ok) throw new Error(`${message}${detail ? `\n${detail.trim().split('\n').slice(-15).join('\n')}` : ''}`);
+  if (!ok) throw new Error(`${message}${detail ? `\n${detail.trim().split('\n').slice(-40).join('\n')}` : ''}`);
   console.log(`  ✓ ${message}`);
 }
 
@@ -103,6 +109,11 @@ export async function verifyPackage(layout: PackageLayout): Promise<void> {
   await checkFuses(exe);
 
   const smoke = await run(exe, ['--prueba-arranque']);
+  if (smoke.code !== 0 || !smoke.output.includes(SMOKE_OK)) {
+    // Solo si falla: repetir con el registro de Chromium para ver por qué (una caída al arrancar suele no decir nada).
+    const logged = await run(exe, ['--prueba-arranque'], { ELECTRON_ENABLE_LOGGING: '1' });
+    smoke.output += `\n--- de nuevo, con el registro de Chromium ---\n${logged.output}`;
+  }
   check(smoke.code === 0 && smoke.output.includes(SMOKE_OK), 'Arranca: la interfaz y el proceso de análisis funcionan desde el ASAR', smoke.output);
 
   // Si funcionara como Node, «--prueba-arranque» sería una opción desconocida de Node y no la aplicación.
