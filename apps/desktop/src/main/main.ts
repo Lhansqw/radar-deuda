@@ -162,12 +162,14 @@ function start(): void {
     },
   };
 
+  trace('appDeps listo');
   // Cuentas (fase 13): sin sesión no se abre ninguna base de datos; con sesión, la del usuario.
   const account = new AccountService({
     config: cloudConfig(process.env, builtCloud),
     storage: new EncryptedSessionStorage(path.join(dataDir, 'sesion.bin'), cipher),
     onChange: (change) => router?.change(change),
   });
+  trace('cuentas listo');
   router = new SessionRouter({
     account: createAccountHandlers(account),
     app: appDeps,
@@ -186,6 +188,7 @@ function start(): void {
       }),
     notify: (state) => broadcast(ACCOUNT_EVENT_CHANNEL, state),
   });
+  trace('router creado');
   // La sesión guardada (si la hay) llega por onChange en cuanto se lee, ya con el enrutador creado.
   const sessions = router;
   app.on('will-quit', () => {
