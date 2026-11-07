@@ -40,11 +40,24 @@ if (process.platform === 'darwin') {
   console.log(macSigned ? 'macOS: firma con el certificado de CSC_LINK / CSC_NAME.' : 'macOS: sin certificado de Apple, firma ad-hoc (ver docs/INSTALADOR.md).');
 }
 
+// En macOS el nombre del paquete y el de sus procesos ayudantes («<nombre> Helper») salen de productName.
+// Con la tilde de «Técnica», Electron 44 aborta al arrancar (SIGTRAP, comprobado en macOS 15 con apps
+// mínimas): el nombre interno va sin tilde y Finder y el Dock siguen mostrando el nombre con ella.
+const MAC_BUNDLE_NAME = 'Radar de Deuda Tecnica';
+const MAC_DISPLAY_NAME = 'Radar de Deuda Técnica';
+
 await build({
   projectDir: appDir,
   targets: platform.createTarget(onlyFolder ? 'dir' : undefined),
   publish: 'never',
-  ...(process.platform === 'darwin' && !macSigned ? { config: { mac: { identity: '-', hardenedRuntime: false } } } : {}),
+  ...(process.platform === 'darwin'
+    ? {
+        config: {
+          productName: MAC_BUNDLE_NAME,
+          mac: { ...(macSigned ? {} : { identity: '-', hardenedRuntime: false }), extendInfo: { CFBundleDisplayName: MAC_DISPLAY_NAME } },
+        },
+      }
+    : {}),
 });
 
 const layout = packageLayout(releaseDir);
