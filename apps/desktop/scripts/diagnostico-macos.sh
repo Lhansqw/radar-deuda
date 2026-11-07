@@ -71,6 +71,20 @@ echo "-- registro del sistema sobre la caída:"
 log show --last 3m --style compact --predicate 'process == "radar-deuda" OR eventMessage CONTAINS "radar-deuda"' 2>/dev/null | grep -v 'linkd\|intents' | tail -n 25 | cut -c1-260
 
 echo "== Aplicaciones mínimas dentro del mismo paquete (¿cae el paquete o el código?)"
+# Copia con los nombres internos en ASCII (sin la tilde de «Técnica»): ayudantes y CFBundleName.
+ascii_rename() {
+  local app="$1" h base suf nuevo
+  for h in "$app"/Contents/Frameworks/*Helper*.app; do
+    base="$(basename "$h" .app)"
+    suf="${base#*Helper}"
+    nuevo="Radar Helper$suf"
+    mv "$h/Contents/MacOS/$base" "$h/Contents/MacOS/$nuevo"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $nuevo" -c "Set :CFBundleName $nuevo" -c "Set :CFBundleDisplayName $nuevo" "$h/Contents/Info.plist" >/dev/null 2>&1
+    mv "$h" "$(dirname "$h")/$nuevo.app"
+  done
+  /usr/libexec/PlistBuddy -c "Set :CFBundleName Radar" -c "Set :CFBundleDisplayName Radar" "$app/Contents/Info.plist" >/dev/null 2>&1
+}
+
 mini() {
   local nombre="$1" main="$2" hijo="${3:-}"
   local dir="$WORK/mini-$nombre" copia="$WORK/mini-$nombre.app"
@@ -80,6 +94,7 @@ mini() {
   [ -n "$hijo" ] && printf '%s\n' "$hijo" >"$dir/hijo.js"
   npx --no-install asar pack "$dir" "$WORK/mini-$nombre.asar" >/dev/null 2>&1
   cp -R "$APP" "$copia"; cp "$WORK/mini-$nombre.asar" "$copia/Contents/Resources/app.asar"
+  [ -n "${ASCII:-}" ] && ascii_rename "$copia"
   npx --no-install @electron/fuses write --app "$copia" EnableEmbeddedAsarIntegrityValidation=off >/dev/null 2>&1
   codesign --force --deep --sign - "$copia" >/dev/null 2>&1
   RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 45; exec @ARGV' "$copia/Contents/MacOS/radar-deuda" >"$WORK/m.txt" 2>&1
@@ -89,6 +104,14 @@ mini hola "console.log('MINI-HOLA'); require('electron').app.quit();"
 mini sqlite "const {DatabaseSync}=require('node:sqlite'); const d=new DatabaseSync(':memory:'); d.exec('create table t(a)'); console.log('MINI-SQLITE-OK'); require('electron').app.quit();"
 mini ventana "const {app,BrowserWindow}=require('electron'); app.whenReady().then(async()=>{const w=new BrowserWindow({show:false}); await w.loadURL('data:text/html,<p>hola</p>'); console.log('MINI-VENTANA-OK'); app.quit();}); setTimeout(()=>{console.log('MINI-TIEMPO'); app.exit(3);},30000);"
 mini hijo "const {app,utilityProcess}=require('electron'); const path=require('path'); app.whenReady().then(()=>{const p=utilityProcess.fork(path.join(__dirname,'hijo.js')); p.on('message',m=>{console.log('MINI-HIJO-OK',m); app.quit();}); p.on('exit',c=>{console.log('MINI-HIJO-SALIO',c); app.quit();});}); setTimeout(()=>{console.log('MINI-TIEMPO'); app.exit(3);},30000);" "process.parentPort.postMessage('ok');"
+
+echo "== Mismas pruebas con los nombres internos en ASCII (sin tilde)"
+export ASCII=1
+mini ascii-hola "console.log('MINI-HOLA'); require('electron').app.quit();"
+mini ascii-ventana "const {app,BrowserWindow}=require('electron'); app.whenReady().then(async()=>{const w=new BrowserWindow({show:false}); await w.loadURL('data:text/html,<p>hola</p>'); console.log('MINI-VENTANA-OK'); app.quit();}); setTimeout(()=>{console.log('MINI-TIEMPO'); app.exit(3);},30000);"
+unset ASCII
+real="$WORK/real-ascii.app"; rm -rf "$real"; cp -R "$APP" "$real"; ascii_rename "$real"; codesign --force --deep --sign - "$real" >/dev/null 2>&1
+arrancar "R. la aplicación real con nombres ASCII (--prueba-arranque)" "$real"
 
 echo "== Traza de la caída (lldb, paquete original)"
 RADAR_DATA_DIR="$(mktemp -d)" perl -e 'alarm 120; exec @ARGV' lldb --batch -o run -k 'bt 30' -k 'register read pc lr' -k 'image lookup -a $pc' -- "$APP/Contents/MacOS/radar-deuda" --prueba-arranque 2>&1 | tail -n 60
