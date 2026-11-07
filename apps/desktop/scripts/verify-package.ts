@@ -112,7 +112,7 @@ export async function verifyPackage(layout: PackageLayout): Promise<void> {
   const smoke = await run(exe, ['--prueba-arranque']);
   if (smoke.code !== 0 || !smoke.output.includes(SMOKE_OK)) {
     // Solo si falla: repetir con el registro de Chromium para ver por qué (una caída al arrancar suele no decir nada).
-    const logged = await run(exe, ['--prueba-arranque'], { ELECTRON_ENABLE_LOGGING: '1' });
+    const logged = await run(exe, ['--prueba-arranque'], { ELECTRON_ENABLE_LOGGING: '1' }, 45_000);
     smoke.output += `\n--- de nuevo, con el registro de Chromium ---\n${logged.output}`;
   }
   check(smoke.code === 0 && smoke.output.includes(SMOKE_OK), 'Arranca: la interfaz y el proceso de análisis funcionan desde el ASAR', smoke.output);
