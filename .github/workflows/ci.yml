@@ -257,6 +257,7 @@ jobs:
           ls -t ~/Library/Logs/DiagnosticReports/ 2>/dev/null | head || true
           f=$(ls -t ~/Library/Logs/DiagnosticReports/*radar* 2>/dev/null | head -1)
           [ -n "$f" ] && head -c 14000 "$f" || echo 'sin informe de caída'
+          bash apps/desktop/scripts/diagnostico-macos.sh || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: instalador-macos
