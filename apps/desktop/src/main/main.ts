@@ -13,7 +13,7 @@ import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
 import type { AppDeps } from './handlers.js';
-import { trustedCipher } from './credentials.js';
+import { trustedCipher, type Cipher } from './credentials.js';
 import { registerIpc } from './ipc.js';
 import { menuTemplate } from './menu.js';
 import { devServerFromEnv } from './policy.js';
@@ -35,6 +35,17 @@ const distDir = __dirname;
 
 /** Prueba de arranque de la aplicación empaquetada (smoke.ts): datos temporales y salir. */
 const smoke = process.argv.includes(SMOKE_FLAG);
+
+/** Sin cifrado del sistema: nada se guarda en disco (la sesión solo vive en memoria). */
+const NO_CIPHER: Cipher = {
+  isEncryptionAvailable: () => false,
+  encryptString: () => {
+    throw new Error('El cifrado del sistema no está disponible.');
+  },
+  decryptString: () => {
+    throw new Error('El cifrado del sistema no está disponible.');
+  },
+};
 
 // Datos en la carpeta de datos del sistema (%APPDATA%\radar-deuda en Windows,
 // ~/Library/Application Support/radar-deuda en macOS, ~/.config/radar-deuda en
@@ -110,7 +121,10 @@ function start(): void {
 
   const dataDir = app.getPath('userData');
   // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
-  const cipher = trustedCipher(safeStorage);
+  // La prueba de arranque no usa el llavero: comprueba el paquete, no el cifrado del sistema. En macOS, el elemento
+  // «<nombre> Safe Storage» que creó otra copia de la aplicación (otra firma) hace que el sistema pida permiso con un
+  // diálogo, y en un equipo sin pantalla (integración continua) nadie lo contesta y la aplicación se queda esperando.
+  const cipher = smoke ? NO_CIPHER : trustedCipher(safeStorage);
   const spawn = ({ memoryLimitMb }: { memoryLimitMb: number }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb);
   const broadcast = (channel: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
