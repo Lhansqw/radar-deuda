@@ -1,6 +1,7 @@
 {
   "name": "radar-deuda",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Plataforma de escritorio para detectar y gestionar deuda técnica en repositorios (motor de análisis + IA).",
   "type": "module",

@@ -141,3 +141,8 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/CALIDAD.md](docs/CALIDAD.md) | Fase 11: pruebas, cobertura, integración continua y refactorización de la deuda propia |
 | [docs/CUENTAS.md](docs/CUENTAS.md) | Fase 13: preparar Supabase, conectar la aplicación, cuentas, copia en la nube y su seguridad |
 | [docs/IA-INCLUIDA.md](docs/IA-INCLUIDA.md) | Fase 14: la IA sin claves para el usuario, cómo instalar la función «ia» y su cupo, y su seguridad |
+| [docs/PRODUCCION.md](docs/PRODUCCION.md) | Lista para poner la aplicación en manos de usuarios reales: Supabase, correo, IA y publicación de versiones |
+
+## Licencia
+
+[MIT](LICENSE).

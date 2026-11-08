@@ -1,0 +1,143 @@
+# Publicación de una versión: al subir una etiqueta vX.Y.Z.
+#
+# 1. comprobar: la etiqueta coincide con la versión de apps/desktop/package.json
+#    y crea la versión en GitHub Releases como **borrador**.
+# 2. windows, linux y macos: generan los instaladores (con la comprobación del
+#    paquete de npm run dist) y los suben al borrador.
+#
+# El borrador no lo ve nadie, tampoco el aviso de versiones nuevas de la
+# aplicación (main/updates.ts). Se publica a mano en GitHub después de probar
+# los instaladores. Ver docs/INSTALADOR.md, «Publicar una versión».
+name: Publicar versión
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  npm_config_fund: 'false'
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  comprobar:
+    name: Comprobar la versión y crear el borrador
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: La etiqueta coincide con la versión de la aplicación
+        run: |
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::La etiqueta $TAG no coincide con la versión de apps/desktop/package.json ($version)."
+            exit 1
+          fi
+      - name: Crear el borrador
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Las notas propias van delante de las generadas a partir de los commits.
+        run: |
+          cat > notas.md <<'NOTAS'
+          ## Instalar
+
+          | Sistema | Archivo |
+          |---|---|
+          | Windows 10 u 11 | `radar-deuda-…-instalador-windows-x64.exe` |
+          | macOS (Apple Silicon / Intel) | `radar-deuda-…-macos-arm64.dmg` / `…-macos-x64.dmg` |
+          | Linux | `.AppImage` (cualquier distribución) o `.deb` (Debian y Ubuntu) |
+
+          Los instaladores no están firmados. En Windows aparece «Windows protegió su PC»: pulsa
+          **Más información → Ejecutar de todas formas**. En macOS, la primera vez: clic derecho
+          sobre la aplicación → **Abrir** → **Abrir**.
+
+          Si ya tienes una versión instalada, instala esta encima: se conservan los proyectos, el
+          historial y los ajustes.
+          NOTAS
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --generate-notes --notes-file notas.md --title "Radar de Deuda Técnica $TAG"
+
+  windows:
+    name: Instalador (Windows)
+    needs: comprobar
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Tipos, lint y pruebas
+        run: npm run check
+      - name: Instalador (con la comprobación del paquete)
+        run: npm run dist
+      - name: Subir al borrador
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" apps/desktop/release/*.exe --repo "$GITHUB_REPOSITORY" --clobber
+
+  linux:
+    name: Instaladores (Linux)
+    needs: comprobar
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Permitir el sandbox de Chromium
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Instaladores (con la comprobación del paquete)
+        run: xvfb-run -a npm run dist
+      - name: Subir al borrador
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" apps/desktop/release/*.AppImage apps/desktop/release/*.deb --repo "$GITHUB_REPOSITORY" --clobber
+
+  macos:
+    name: Instaladores (macOS)
+    needs: comprobar
+    runs-on: macos-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Instaladores (con la comprobación del paquete)
+        run: npm run dist
+      - name: Subir al borrador
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" apps/desktop/release/*.dmg --repo "$GITHUB_REPOSITORY" --clobber

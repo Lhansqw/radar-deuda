@@ -55,6 +55,7 @@ export const VALIDATORS: Validators = {
   'app:copyText': (a) => (count(a, 1), [text(a[0], 'Texto no válido.', 2_000_000)]),
   'app:storage': (a) => (count(a, 0), []),
   'app:clearCache': (a) => (count(a, 0), []),
+  'app:checkUpdate': (a) => (count(a, 0), []),
   'projects:list': (a) => (count(a, 0), []),
   'projects:addFolder': (a) => (count(a, 0), []),
   'projects:addGithub': (a) => {

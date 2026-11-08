@@ -34,6 +34,7 @@ const app: AppDeps = {
   savePatch: async () => null,
   storage: async () => ({ cache: { files: 0, bytes: 0, parts: [] }, clones: { files: 0, bytes: 0 } }),
   clearCache: async () => ({ files: 0, bytes: 0 }),
+  checkUpdate: async () => ({ current: '0.1.0', latest: null, url: null, newer: false }),
   removeClone: async () => undefined,
 };
 

@@ -1,6 +1,7 @@
 {
   "name": "@radar/desktop",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Aplicación de escritorio de Radar de Deuda Técnica (Electron + React).",
   "author": "Lhansqw",

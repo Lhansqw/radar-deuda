@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { compareReports, type AnalysisReport } from '@radar/engine';
 import type { AccountChannel, AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
-import type { StorageInfo } from '../shared/model.js';
+import type { StorageInfo, UpdateInfo } from '../shared/model.js';
 import { normalizeSettings, type AppSettings } from '../shared/settings.js';
 import type { AiService } from './ai-service.js';
 import type { CloudSync } from './cloud-sync.js';
@@ -28,6 +28,8 @@ export interface HandlerDeps {
   copyText: (text: string) => void;
   storage: () => Promise<StorageInfo>;
   clearCache: () => Promise<{ files: number; bytes: number }>;
+  /** Última versión publicada (updates.ts). */
+  checkUpdate: () => Promise<UpdateInfo>;
   /** Borra el clon de un repositorio de GitHub (owner/repo) que creó la aplicación. */
   removeClone: (repo: string) => Promise<void>;
   /** Diálogo para guardar un parche; devuelve la ruta elegida o null si se cancela. */
@@ -70,6 +72,7 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
     },
     'app:storage': () => d.storage(),
     'app:clearCache': () => d.clearCache(),
+    'app:checkUpdate': () => d.checkUpdate(),
 
     'projects:list': () => d.store.listProjects(),
     'projects:addFolder': async () => {

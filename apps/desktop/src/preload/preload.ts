@@ -42,6 +42,7 @@ const api: RadarApi = {
     copyText: (text) => invoke('app:copyText', text),
     storage: () => invoke('app:storage'),
     clearCache: () => invoke('app:clearCache'),
+    checkUpdate: () => invoke('app:checkUpdate'),
   },
   projects: {
     list: () => invoke('projects:list'),
