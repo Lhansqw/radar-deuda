@@ -118,3 +118,13 @@ export interface IncludedQuota {
   limit: number;
   remaining: number;
 }
+
+/** Última versión publicada en GitHub Releases comparada con la instalada. */
+export interface UpdateInfo {
+  current: string;
+  /** null si no hay ninguna versión publicada. */
+  latest: string | null;
+  /** Página de la versión en GitHub, donde están los instaladores. */
+  url: string | null;
+  newer: boolean;
+}

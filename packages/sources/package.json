@@ -1,6 +1,7 @@
 {
   "name": "@radar/sources",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Fuentes de datos con efectos externos: Git local, GitHub y bases de datos de dependencias. Nunca ejecuta código del repositorio analizado.",
   "type": "module",

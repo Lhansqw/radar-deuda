@@ -1,6 +1,7 @@
 {
   "name": "@radar/pipeline",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Orquestación de un análisis completo (origen local o de GitHub, motor, historial de Git, dependencias en línea e IA). La usan la CLI y la aplicación de escritorio.",
   "type": "module",

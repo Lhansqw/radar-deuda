@@ -43,7 +43,7 @@ describe('ajustes', () => {
   });
 
   it('rechaza tipos y rangos incorrectos y devuelve todos los errores a la vez', () => {
-    const bad = { analysis: { history: 'sí', historyMonths: 0, online: false, memoryLimitMb: 100 }, ai: { ...DEFAULT_SETTINGS.ai, limit: 51, budgetUsd: 0, provider: 'otro' }, cloud: { sync: 1 } };
+    const bad = { analysis: { history: 'sí', historyMonths: 0, online: false, memoryLimitMb: 100 }, ai: { ...DEFAULT_SETTINGS.ai, limit: 51, budgetUsd: 0, provider: 'otro' }, cloud: { sync: 1 }, updates: { check: 'sí' } };
     expect(errorsOf(bad)).toEqual([
       'Historial de Git: debe ser sí o no.',
       'Meses de historial: debe ser un número entero entre 1 y 120.',
@@ -52,6 +52,7 @@ describe('ajustes', () => {
       'Presupuesto: debe ser mayor que 0 y como mucho 50 USD.',
       'Hallazgos a explicar: debe ser un número entero entre 1 y 50.',
       'Copia en la nube: debe ser sí o no.',
+      'Buscar versiones nuevas: debe ser sí o no.',
     ]);
     expect(errorsOf(null)).toEqual(['Formato de ajustes no válido.']);
   });
@@ -63,12 +64,14 @@ describe('ajustes', () => {
       analysis: { ...DEFAULT_SETTINGS.analysis, online: true },
       ai: { ...DEFAULT_SETTINGS.ai, provider: 'anthropic' },
       cloud: { sync: true },
+      updates: { check: true },
     });
     // Una sección inválida no arrastra a las otras.
     expect(normalizeSettings({ analysis: { online: true }, ai: { limit: 999 }, cloud: { sync: false } })).toEqual({
       analysis: { ...DEFAULT_SETTINGS.analysis, online: true },
       ai: DEFAULT_SETTINGS.ai,
       cloud: { sync: false },
+      updates: { check: true },
     });
     expect(normalizeSettings({ analysis: { online: true }, cloud: { sync: 'no' } })).toEqual({ ...DEFAULT_SETTINGS, analysis: { ...DEFAULT_SETTINGS.analysis, online: true } });
     // Nunca devuelve el mismo objeto que los valores por defecto (se puede modificar sin efectos laterales).

@@ -5,6 +5,7 @@ import type { Project } from '../shared/model.js';
 import { AddGithubDialog } from './components/AddGithubDialog.js';
 import { Icon } from './components/Icon.js';
 import { Sidebar, type View } from './components/Sidebar.js';
+import { UpdateNotice } from './components/UpdateNotice.js';
 import { EMPTY_FILTER } from './lib/findings.js';
 import { useProjectData, useProjectMemory, useRadar } from './state.js';
 import { ProjectWorkspace } from './views/ProjectWorkspace.js';
@@ -68,6 +69,7 @@ export function App({ account }: { account: Extract<AccountState, { status: 'sig
         settingsAvailable
       />
       <main className="workspace">
+        <UpdateNotice />
         {error ? <ErrorNotice message={error} onClose={() => setError(null)} /> : null}
         {view === 'ajustes' ? (
           <div className="workspace-body">

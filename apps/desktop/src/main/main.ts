@@ -22,6 +22,7 @@ import { registerAppScheme, serveRenderer } from './protocol.js';
 import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
 import { EncryptedSessionStorage } from './session-storage.js';
 import { checkRenderer, checkWorker, SMOKE_FLAG } from './smoke.js';
+import { checkForUpdate } from './updates.js';
 import { spawnAnalysisWorker } from './worker-process.js';
 import { openWorkspace, SessionRouter } from './workspace.js';
 
@@ -140,6 +141,7 @@ function start(): void {
       return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
     },
     clearCache: () => clearCache(defaultCacheDir()),
+    checkUpdate: () => checkForUpdate(app.getVersion()),
     removeClone: async (repo) => {
       const ref = parseGitHubRepo(repo);
       if (ref) await removeClone(ref, defaultReposDir());

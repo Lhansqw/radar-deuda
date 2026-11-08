@@ -1,6 +1,7 @@
 {
   "name": "@radar/cli",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Línea de comandos de Radar de Deuda Técnica: orquesta el motor y las fuentes (Git, GitHub, dependencias en línea).",
   "type": "module",

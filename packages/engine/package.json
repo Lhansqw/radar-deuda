@@ -1,6 +1,7 @@
 {
   "name": "@radar/engine",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Motor de análisis determinista de deuda técnica, independiente de la interfaz.",
   "type": "module",

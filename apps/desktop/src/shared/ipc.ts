@@ -7,7 +7,7 @@
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { AccountState, SignUpResult } from './account.js';
 import type { JobState } from './jobs.js';
-import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal } from './model.js';
+import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal, UpdateInfo } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
 import type { SyncState } from './sync.js';
@@ -45,6 +45,8 @@ export interface IpcContract {
   'app:storage': { args: []; result: StorageInfo };
   /** Vacía la caché (no los clones). */
   'app:clearCache': { args: []; result: { files: number; bytes: number } };
+  /** Última versión publicada en GitHub Releases (solo avisa: no descarga nada). */
+  'app:checkUpdate': { args: []; result: UpdateInfo };
   'projects:list': { args: []; result: Project[] };
   /** Abre el selector de carpetas del sistema; null si se cancela. */
   'projects:addFolder': { args: []; result: Project | null };
@@ -131,6 +133,7 @@ export const CHANNELS = [
   'app:copyText',
   'app:storage',
   'app:clearCache',
+  'app:checkUpdate',
   'projects:list',
   'projects:addFolder',
   'projects:addGithub',
