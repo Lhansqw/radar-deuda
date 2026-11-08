@@ -21,10 +21,6 @@ export function countNonBlankLines(lines: readonly string[]): number {
   return n;
 }
 
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
 /** Ejecuta `worker` sobre `items` con un máximo de `limit` tareas simultáneas. */
 export async function mapWithConcurrency<T>(
   items: readonly T[],

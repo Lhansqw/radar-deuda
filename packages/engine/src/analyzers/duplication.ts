@@ -6,7 +6,7 @@ import { isJsLike } from './shared.js';
 import { loadTypeScript } from './ts-runtime.js';
 
 export { findCandidates, refineCandidates, type Candidate, type RefineOptions, type Region } from './duplication-pairs.js';
-export { fingerprints, fingerprintSource, forEachToken, FP_STRIDE, K, tokenSequence, W, type DuplicationArtifact, type Fingerprint } from './duplication-tokens.js';
+export { fingerprints, fingerprintSource, forEachToken, FP_STRIDE, type DuplicationArtifact, type Fingerprint } from './duplication-tokens.js';
 
 /**
  * Detección de código duplicado (clones de tipo 1: idénticos salvo espacios y
