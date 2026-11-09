@@ -1,5 +1,6 @@
 import { checkApiKey, KEY_RULES } from '@radar/ai';
 import type { ApiKeys } from '@radar/pipeline';
+import { errorMessage } from '../shared/errors.js';
 import { SECRET_NAMES, type SecretName, type SecretsStatus } from '../shared/secrets.js';
 import type { Store } from './store.js';
 
@@ -146,6 +147,6 @@ function validate(name: SecretName, value: string): void {
   try {
     checkApiKey(value, KEY_RULES[name], name);
   } catch (err) {
-    throw new CredentialError(err instanceof Error ? err.message : String(err));
+    throw new CredentialError(errorMessage(err));
   }
 }

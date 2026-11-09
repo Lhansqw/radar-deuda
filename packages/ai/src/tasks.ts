@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { SEVERITY_ORDER, type AiExplanation, type AiPlan, type AiSection, type AnalysisReport, type Finding, type Severity } from '@radar/engine';
+import { errorMessage, SEVERITY_ORDER, type AiExplanation, type AiPlan, type AiSection, type AnalysisReport, type Finding, type Severity } from '@radar/engine';
 import { AiResponseCache } from './cache.js';
 import { assertProviderAllowed, buildFindingContext, type ContextLimits, type PrivacyMode } from './context.js';
 import { EXPLAIN_FORMAT_HINT, EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM, PLAN_FORMAT_HINT, PLAN_PROMPT_VERSION, PLAN_SYSTEM } from './prompts.js';
@@ -84,8 +84,6 @@ export interface AiRunOptions {
   signal?: AbortSignal;
   onProgress?: (done: number, total: number) => void;
 }
-
-const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 /**
  * Ejecuta la capa de IA sobre un informe: explica los hallazgos
@@ -209,7 +207,7 @@ class AiRun {
       return null;
     } catch (err) {
       if (this.o.signal?.aborted) throw err;
-      return { privacy: this.o.privacy, explanations: [], usage: this.tracker.summary(), errors: [{ message: message(err) }] };
+      return { privacy: this.o.privacy, explanations: [], usage: this.tracker.summary(), errors: [{ message: errorMessage(err) }] };
     }
   }
 
@@ -273,7 +271,7 @@ class AiRun {
       return;
     }
     if (err instanceof BudgetExceededError) this.budgetHit = true;
-    this.errors.push({ findingId, message: message(err) });
+    this.errors.push({ findingId, message: errorMessage(err) });
   }
 
   private progress(): void {
@@ -286,7 +284,7 @@ class AiRun {
       return await buildPlan(this.report, explanations, this.deps, this.o.planModel ?? this.o.model, this.o.privacy, summary);
     } catch (err) {
       if (this.o.signal?.aborted) throw err;
-      if (!this.fatal.error) this.errors.push({ message: `No se pudo generar el plan: ${message(err)}` });
+      if (!this.fatal.error) this.errors.push({ message: `No se pudo generar el plan: ${errorMessage(err)}` });
       return undefined;
     } finally {
       this.progress();

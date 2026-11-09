@@ -7,7 +7,7 @@
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
 import type { AccountState, SignUpResult } from './account.js';
 import type { JobState } from './jobs.js';
-import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal } from './model.js';
+import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal, UpdateInfo } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
 import type { AppSettings } from './settings.js';
 import type { SyncState } from './sync.js';
@@ -28,8 +28,7 @@ export interface IpcContract {
   /** `remember`: seguir conectado al cerrar la aplicación (sesión cifrada en el equipo). */
   'account:signIn': { args: [email: string, password: string, remember: boolean]; result: SignUpResult };
   'account:signUp': { args: [email: string, password: string]; result: SignUpResult };
-  /** Confirma el correo con el código del mensaje de Supabase. */
-  'account:confirmEmail': { args: [email: string, code: string]; result: AccountState };
+  /** Vuelve a enviar el correo con el enlace de confirmación del registro. */
   'account:resendConfirmation': { args: [email: string]; result: null };
   /** Envía el código para elegir una contraseña nueva. */
   'account:requestPasswordReset': { args: [email: string]; result: null };
@@ -45,6 +44,8 @@ export interface IpcContract {
   'app:storage': { args: []; result: StorageInfo };
   /** Vacía la caché (no los clones). */
   'app:clearCache': { args: []; result: { files: number; bytes: number } };
+  /** Última versión publicada en GitHub Releases (solo avisa: no descarga nada). */
+  'app:checkUpdate': { args: []; result: UpdateInfo };
   'projects:list': { args: []; result: Project[] };
   /** Abre el selector de carpetas del sistema; null si se cancela. */
   'projects:addFolder': { args: []; result: Project | null };
@@ -112,7 +113,6 @@ export const ACCOUNT_CHANNELS = [
   'account:state',
   'account:signIn',
   'account:signUp',
-  'account:confirmEmail',
   'account:resendConfirmation',
   'account:requestPasswordReset',
   'account:resetPassword',
@@ -131,6 +131,7 @@ export const CHANNELS = [
   'app:copyText',
   'app:storage',
   'app:clearCache',
+  'app:checkUpdate',
   'projects:list',
   'projects:addFolder',
   'projects:addGithub',

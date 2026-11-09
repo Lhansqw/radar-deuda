@@ -12,6 +12,7 @@ import { layoutRadar, RADAR_RINGS } from '../src/renderer/lib/radar.js';
 import { buildTree, flattenTree } from '../src/renderer/lib/tree.js';
 import { visibleRange } from '../src/renderer/lib/virtual.js';
 import { scanSteps } from '../src/renderer/lib/scan.js';
+import { runAction } from '../src/renderer/lib/action.js';
 
 describe('scanSteps', () => {
   const phases = (s: ReturnType<typeof scanSteps>) => s.map((x) => x.phase);
@@ -262,5 +263,24 @@ describe('respuestas de la IA', () => {
     expect(blocks[1]).toEqual({ kind: 'ul', items: [[{ kind: 'text', text: 'uno' }], [{ kind: 'text', text: 'dos' }]] });
     // El texto nunca se interpreta como HTML: llega tal cual a React, que lo escapa.
     expect(parseInline('<img src=x onerror=alert(1)>')).toEqual([{ kind: 'text', text: '<img src=x onerror=alert(1)>' }]);
+  });
+});
+
+describe('runAction', () => {
+  const record = () => {
+    const log: string[] = [];
+    return { log, setBusy: (b: boolean) => log.push(`busy:${b}`), setError: (e: string | null) => log.push(`error:${e}`) };
+  };
+
+  it('marca ocupado, borra el error anterior y termina sin error', async () => {
+    const r = record();
+    await runAction(async () => undefined, r.setBusy, r.setError);
+    expect(r.log).toEqual(['busy:true', 'error:null', 'busy:false']);
+  });
+
+  it('si falla, guarda el mensaje y deja de estar ocupado', async () => {
+    const r = record();
+    await runAction(() => Promise.reject(new Error('sin red')), r.setBusy, r.setError);
+    expect(r.log).toEqual(['busy:true', 'error:null', 'error:sin red', 'busy:false']);
   });
 });

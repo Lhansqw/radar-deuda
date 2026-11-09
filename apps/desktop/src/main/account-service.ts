@@ -37,10 +37,11 @@ export interface AccountServiceDeps {
  * Cuentas de usuario con Supabase Auth (correo y contraseña), en el proceso
  * principal. La interfaz solo recibe AccountState: nunca los tokens.
  *
- * Una aplicación de escritorio no puede abrir los enlaces de los correos de
- * Supabase, así que la confirmación del registro y la recuperación de la
- * contraseña usan el código de un solo uso de esos correos ({{ .Token }} en
- * las plantillas, ver docs/CUENTAS.md).
+ * El registro se confirma con el enlace del correo de Supabase: se abre en el
+ * navegador y, de vuelta en la aplicación, se inicia sesión con la contraseña.
+ * La recuperación de la contraseña usa el código de un solo uso del correo
+ * ({{ .Token }} en la plantilla, ver docs/CUENTAS.md): sin una página web
+ * propia, el enlace no tendría dónde pedir la contraseña nueva.
  */
 export class AccountService {
   private readonly client: SupabaseClient<Database> | null;
@@ -101,7 +102,7 @@ export class AccountService {
   /**
    * Inicia sesión. Con `remember`, la sesión sobrevive al cierre de la
    * aplicación (cifrada). Si la cuenta aún no confirmó su correo, no es un
-   * error: hay que pedir el código.
+   * error: falta pulsar el enlace del correo.
    */
   async signIn(email: string, password: string, remember: boolean): Promise<SignUpResult> {
     const auth = await this.auth();
@@ -115,7 +116,7 @@ export class AccountService {
     return { confirmEmail: false };
   }
 
-  /** Crea la cuenta. Si el proyecto pide confirmar el correo, Supabase envía un código. */
+  /** Crea la cuenta. Si el proyecto pide confirmar el correo, Supabase envía un enlace. */
   async signUp(email: string, password: string): Promise<SignUpResult> {
     check(emailProblem(email) ?? newPasswordProblem(password));
     const auth = await this.auth();
@@ -129,17 +130,7 @@ export class AccountService {
     return { confirmEmail: true };
   }
 
-  /** Confirma el correo con el código del mensaje de Supabase y entra. */
-  async confirmEmail(email: string, code: string): Promise<AccountState> {
-    const auth = await this.auth();
-    this.d.storage.setPersist(true);
-    const { data, error } = await auth.verifyOtp({ email: normalizeEmail(email), token: code.trim(), type: 'email' });
-    if (error || !data.session) throw accountError(error ?? new AccountError('Supabase no devolvió ninguna sesión.'));
-    this.signedIn(data.session.user, email, false);
-    return this.current.state;
-  }
-
-  /** Vuelve a enviar el código de confirmación del registro. */
+  /** Vuelve a enviar el correo con el enlace de confirmación del registro. */
   async resendConfirmation(email: string): Promise<null> {
     const auth = await this.auth();
     const { error } = await auth.resend({ type: 'signup', email: normalizeEmail(email) });

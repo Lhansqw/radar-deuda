@@ -23,7 +23,6 @@ const fakeAccount: AccountApi = {
   state: async () => signedIn,
   signIn: async () => ({ confirmEmail: false }),
   signUp: async () => ({ confirmEmail: true }),
-  confirmEmail: async () => signedIn,
   resendConfirmation: async () => null,
   requestPasswordReset: async () => null,
   resetPassword: async () => signedIn,
@@ -67,6 +66,7 @@ function setup(over: Partial<HandlerDeps> = {}) {
     savePatch: async () => null,
     storage: async () => ({ cache: { files: 0, bytes: 0, parts: [] }, clones: { files: 0, bytes: 0 } }),
     clearCache: async () => ({ files: 0, bytes: 0 }),
+    checkUpdate: async () => ({ current: '0.1.0', latest: null, url: null, newer: false }),
     removeClone: async () => undefined,
     sync: fakeSync,
     ...over,
@@ -105,8 +105,7 @@ describe('contrato IPC', () => {
     expect(await call('account:signIn', 'ana@ejemplo.com', 'contraseña-larga', 'sí')).toEqual({ ok: false, error: 'Opción no válida.' });
     expect(await call('account:signIn', 'ana@ejemplo.com', '', true)).toEqual({ ok: false, error: 'Contraseña no válida.' });
     expect(await call('account:signIn', 42, 'contraseña-larga', true)).toEqual({ ok: false, error: 'Correo no válido.' });
-    expect(await call('account:confirmEmail', 'ana@ejemplo.com', '12a456')).toEqual({ ok: false, error: 'El código son los dígitos que llegaron a tu correo.' });
-    expect(await call('account:confirmEmail', 'ana@ejemplo.com', ' 123456 ')).toMatchObject({ ok: true, value: { status: 'signed-in' } });
+    expect(await call('account:resetPassword', 'ana@ejemplo.com', '12a456', 'contraseña-larga')).toEqual({ ok: false, error: 'El código son los dígitos que llegaron a tu correo.' });
     expect(await call('account:setNewPassword', 'x'.repeat(1001))).toEqual({ ok: false, error: 'Contraseña no válida.' });
     expect(await call('account:signOut')).toEqual({ ok: true, value: { status: 'signed-out' } });
   });

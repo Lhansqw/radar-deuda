@@ -47,4 +47,3 @@ export function FormError({ error }: { error: string | null | undefined }) {
   ) : null;
 }
 
-export const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));

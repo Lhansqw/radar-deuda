@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { findingRefs } from '@radar/engine/refs';
 import type { AiExplanation, AnalysisReport, Evidence, Finding, Location } from '@radar/engine';
+import { errorMessage } from '../../shared/errors.js';
 import type { CodeSnippet } from '../../shared/model.js';
 import { Icon } from '../components/Icon.js';
 import { SeverityMark } from '../components/SeverityMark.js';
+import { useAction } from '../lib/action.js';
 import { formatEffort } from '../lib/format.js';
 import { CATEGORY_LABEL, CONFIDENCE_LABEL } from '../lib/labels.js';
 import { FixProposal } from './FixProposal.js';
@@ -109,7 +111,7 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
     window.radar.files
       .snippet(analysisId, location.file, Math.max(1, location.startLine - CONTEXT), location.endLine + CONTEXT)
       .then((snippet) => !cancelled && setState({ key, snippet, error: null }))
-      .catch((err: unknown) => !cancelled && setState({ key, snippet: null, error: err instanceof Error ? err.message : String(err) }));
+      .catch((err: unknown) => !cancelled && setState({ key, snippet: null, error: errorMessage(err) }));
     return () => {
       cancelled = true;
     };
@@ -157,19 +159,8 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
 const CLAIM_LABEL = { evidencia: 'Evidencia', inferencia: 'Inferencia', recomendacion: 'Recomendación' } as const;
 
 function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<void>; onOpenSettings: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const explain = async (): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await onExplain();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, error, run } = useAction();
+  const explain = (): Promise<void> => run(onExplain);
   return (
     <section className="ai-ask" aria-label="Explicación de la IA">
       <p>

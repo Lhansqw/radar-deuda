@@ -22,7 +22,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 10 | Caché del historial, carga perezosa del compilador, límite de memoria, `.radarignore` y mantenimiento de la caché | ✅ |
 | 11 | Refactorización de la deuda propia, auditorías de seguridad y de rendimiento (repositorios reales), cobertura de pruebas e integración continua | ✅ |
 | 12 | Instalador para Windows: ASAR con integridad, *fuses* de Electron, licencias de terceros y prueba del paquete | ✅ |
-| 13a | Cuentas de usuario con Supabase: inicio de sesión obligatorio, confirmación del correo y recuperación con código, datos separados por cuenta | ✅ |
+| 13a | Cuentas de usuario con Supabase: inicio de sesión obligatorio, confirmación del correo con enlace y recuperación con código, datos separados por cuenta | ✅ |
 | 13b | Copia de proyectos e historial en PostgreSQL (Supabase), sin código y con seguridad por filas probada en la integración continua | ✅ |
 | 14 | IA incluida: gpt-oss-120b (Groq) sin que el usuario configure ninguna clave, a través de una función de Supabase con cupo diario por cuenta | ✅ |
 | 15 | Linux (AppImage y .deb) y macOS (.dmg para Apple Silicon e Intel), comprobados en la integración continua | ✅ |
@@ -141,3 +141,8 @@ ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador 
 | [docs/CALIDAD.md](docs/CALIDAD.md) | Fase 11: pruebas, cobertura, integración continua y refactorización de la deuda propia |
 | [docs/CUENTAS.md](docs/CUENTAS.md) | Fase 13: preparar Supabase, conectar la aplicación, cuentas, copia en la nube y su seguridad |
 | [docs/IA-INCLUIDA.md](docs/IA-INCLUIDA.md) | Fase 14: la IA sin claves para el usuario, cómo instalar la función «ia» y su cupo, y su seguridad |
+| [docs/PRODUCCION.md](docs/PRODUCCION.md) | Lista para poner la aplicación en manos de usuarios reales: Supabase, correo, IA y publicación de versiones |
+
+## Licencia
+
+[MIT](LICENSE).

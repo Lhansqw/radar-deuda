@@ -65,6 +65,11 @@ Necesitas el proyecto de [CUENTAS.md](CUENTAS.md) ya preparado.
    el límite que antes se nota (unas pocas decenas de explicaciones al día, o unos pocos
    análisis completos con IA automática). Para más uso, sube de plan en Groq o añade el
    respaldo de OpenRouter.
+
+   **Para usuarios reales**, usa las dos cosas: el plan Developer de Groq (pago por uso,
+   con límites mucho más altos) con un límite de gasto en su consola, y
+   `OPENROUTER_API_KEY` de respaldo por si Groq está saturado. El cupo por cuenta
+   (`RADAR_IA_LIMITE_DIARIO`) limita lo que puede gastar cada usuario.
 3. **Secretos de la función.** En el panel de Supabase, en Edge Functions → Secrets, añade:
 
    | Secreto | Valor |

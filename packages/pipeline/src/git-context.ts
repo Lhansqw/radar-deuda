@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { sha1, type AnalysisReport } from '@radar/engine';
+import { errorMessage, sha1, type AnalysisReport } from '@radar/engine';
 import { computeHotspots, fileChurn, getRepoInfo, type FileChurn } from '@radar/sources';
 import { historyStart } from './target.js';
 import type { PipelineHooks } from './types.js';
@@ -62,7 +62,7 @@ export async function addGitContext(
   try {
     info = await getRepoInfo(report.root, signal);
   } catch (err) {
-    hooks.warn(`Git no disponible: ${err instanceof Error ? err.message : String(err)}`);
+    hooks.warn(`Git no disponible: ${errorMessage(err)}`);
     return;
   }
   if (!info) return;

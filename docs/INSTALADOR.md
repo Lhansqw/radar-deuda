@@ -39,8 +39,8 @@ no se arranca).
 | Accesos directos | Menú Inicio y escritorio |
 | Idioma del instalador | Español |
 | Datos | Proyectos, historial y credenciales de cada cuenta en `%APPDATA%\radar-deuda\usuarios`, y la sesión cifrada en `%APPDATA%\radar-deuda\sesion.bin`; caché y clones en `%LOCALAPPDATA%\radar-deuda`. Desinstalar **no** los borra |
-| Licencias | `THIRD_PARTY_LICENSES.txt` (lo empaquetado desde npm), `LICENSE.electron.txt` y `LICENSES.chromium.html`, junto al ejecutable |
-| Actualizaciones | No hay actualizaciones automáticas: la versión nueva se instala encima de la anterior y conserva los datos |
+| Licencias | El instalador muestra la del proyecto (MIT) antes de instalar. Junto al ejecutable: `LICENSE.txt` (la del proyecto), `THIRD_PARTY_LICENSES.txt` (lo empaquetado desde npm), `LICENSE.electron.txt` y `LICENSES.chromium.html` |
+| Actualizaciones | La aplicación avisa al abrir si hay una versión nueva en GitHub Releases (se puede desactivar en Configuración → Aplicación). No descarga nada: la versión nueva se instala encima de la anterior y conserva los datos |
 
 Requisitos: Windows 10 o 11 de 64 bits y Git en el `PATH` (para el historial y los
 repositorios de GitHub; sin Git, el análisis de carpetas funciona igual).
@@ -165,11 +165,30 @@ de Apple Developer:
 La AppImage y el .deb no se firman: su integridad depende del canal por el que se descarguen
 (los artefactos de GitHub Actions).
 
+## Publicar una versión
+
+Los instaladores se publican en GitHub Releases con
+[`.github/workflows/release.yml`](../.github/workflows/release.yml):
+
+1. Sube la versión en `apps/desktop/package.json` (por ejemplo `0.2.0`) y haz commit.
+2. Crea y sube la etiqueta con esa misma versión:
+   ```powershell
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. El workflow comprueba que la etiqueta coincide con la versión, crea la versión como
+   **borrador** y sube el instalador de Windows, la AppImage y el .deb, y los dos .dmg.
+4. Descarga los instaladores del borrador, pruébalos y pulsa **Publish release** en GitHub.
+   Hasta entonces nadie la ve, tampoco el aviso de versiones nuevas de la aplicación.
+
+El aviso ([`main/updates.ts`](../apps/desktop/src/main/updates.ts)) consulta
+`api.github.com/repos/Lhansqw/radar-deuda/releases/latest`, compara la versión con la
+instalada y solo enlaza a páginas de versiones de este repositorio. Ignora borradores y
+versiones de prueba (`-beta`, `-rc`).
+
 ## Pendiente
 
-- **Actualizaciones automáticas.** No hay: añadirlas exige publicar las versiones
-  firmadas en un servidor y comprobar su firma antes de instalarlas (electron-updater).
-  Hasta entonces, cada versión se instala a mano.
-- **Licencia del propio proyecto.** El repositorio no declara ninguna; el instalador no
-  muestra una página de licencia. Si se publica, conviene añadirla (`nsis.license`).
+- **Actualizaciones automáticas.** Sin instaladores firmados la aplicación solo avisa:
+  descargar e instalar sola exige comprobar la firma de lo que descarga (electron-updater).
+  Con certificado de firma, es el siguiente paso.
 - **Electron 45.** Ya existe; la rama 44 sigue con soporte y es la que está probada.

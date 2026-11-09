@@ -31,7 +31,6 @@ const SUPABASE_URL = 'https://prueba.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_prueba_0123456789';
 const EMAIL = 'ana@ejemplo.com';
 const PASSWORD = 'una-contraseña-larga';
-const SIGNUP_CODE = '123456';
 const SECRET_IN_DEMO = 'Xk9#mP2vL8qR4nT7';
 
 function git(...args: string[]): void {
@@ -68,13 +67,13 @@ function log(message: string): void {
 /**
  * Sustituye en el proceso principal el cifrado del sistema (si no hay llavero,
  * como en Linux sin escritorio) y fetch por un OpenRouter y un Supabase Auth
- * simulados (registro con código de confirmación e inicio de sesión).
+ * simulados (registro con enlace de confirmación e inicio de sesión).
  */
 async function simulate(app: ElectronApplication): Promise<void> {
   // tsx conserva los nombres de las funciones con un ayudante __name que no viaja con el código evaluado.
   await app.evaluate('globalThis.__name = (fn) => fn');
   await app.evaluate(
-    ({ dialog, safeStorage }, [folder, supabaseUrl, signupCode]) => {
+    ({ dialog, safeStorage }, [folder, supabaseUrl]) => {
       dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [folder] })) as typeof dialog.showOpenDialog;
       // Sin cifrado del sistema (o en Linux sin llavero, credentials.ts: trustedCipher), uno simulado.
       const weakLinux = process.platform === 'linux' && ['basic_text', 'unknown'].includes(safeStorage.getSelectedStorageBackend());
@@ -90,6 +89,11 @@ async function simulate(app: ElectronApplication): Promise<void> {
       // Supabase Auth: cuentas en memoria, tokens con la forma de los de verdad.
       type FakeUser = { id: string; email: string; password: string; confirmed: boolean };
       const users = new Map<string, FakeUser>();
+      // Pulsar el enlace del correo de confirmación.
+      (globalThis as unknown as { clickConfirmationLink: (email: string) => void }).clickConfirmationLink = (email) => {
+        const u = users.get(email);
+        if (u) u.confirmed = true;
+      };
       const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
       const publicUser = (u: FakeUser) => ({ id: u.id, aud: 'authenticated', role: 'authenticated', email: u.email, email_confirmed_at: u.confirmed ? new Date().toISOString() : null, app_metadata: { provider: 'email' }, user_metadata: {}, created_at: new Date().toISOString() });
       const session = (u: FakeUser) => {
@@ -105,11 +109,6 @@ async function simulate(app: ElectronApplication): Promise<void> {
           const created = user ?? { id: crypto.randomUUID(), email: body.email ?? '', password: body.password ?? '', confirmed: false };
           users.set(created.email, created);
           return json(publicUser(created));
-        }
-        if (route === 'POST /auth/v1/verify') {
-          if (!user || body.token !== signupCode) return authError('otp_expired', 403);
-          user.confirmed = true;
-          return json(session(user));
         }
         if (route === 'POST /auth/v1/token?password') {
           if (!user || user.password !== body.password) return authError('invalid_credentials', 400);
@@ -213,7 +212,7 @@ async function simulate(app: ElectronApplication): Promise<void> {
         return json({ error: { message: `Sin simular: ${url}` } }, 404);
       };
     },
-    [repo, SUPABASE_URL, SIGNUP_CODE] as const,
+    [repo, SUPABASE_URL] as const,
   );
 }
 
@@ -228,8 +227,8 @@ async function waitFor<T>(probe: () => Promise<T | null>, timeoutMs: number, fai
   }
 }
 
-/** Crea la cuenta y confirma el correo con el código, como haría el usuario. */
-async function signUp(page: Page): Promise<void> {
+/** Crea la cuenta, pulsa el enlace del correo y entra, como haría el usuario. */
+async function signUp(app: ElectronApplication, page: Page): Promise<void> {
   await page.getByRole('heading', { name: 'Inicia sesión' }).waitFor();
   await shot(page, 'inicio-de-sesion');
   await page.getByRole('button', { name: 'Crear una' }).click();
@@ -238,12 +237,11 @@ async function signUp(page: Page): Promise<void> {
   await page.getByLabel('Repite la contraseña').fill(PASSWORD);
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
   await page.getByRole('heading', { name: 'Confirma tu correo' }).waitFor();
-  await page.getByLabel('Código del correo').fill('111111');
-  await page.getByRole('button', { name: 'Confirmar' }).click();
-  await page.getByText('El código no es correcto o ya caducó. Pide uno nuevo.').waitFor();
-  await page.getByLabel('Código del correo').fill(SIGNUP_CODE);
+  await page.getByRole('button', { name: 'Ya lo confirmé: entrar' }).click();
+  await page.getByText('Tu correo aún no está confirmado.', { exact: false }).waitFor();
   await shot(page, 'confirmar-correo');
-  await page.getByRole('button', { name: 'Confirmar' }).click();
+  await app.evaluate((_electron, email) => (globalThis as unknown as { clickConfirmationLink: (e: string) => void }).clickConfirmationLink(email), EMAIL);
+  await page.getByRole('button', { name: 'Ya lo confirmé: entrar' }).click();
 }
 
 async function analyze(page: Page): Promise<void> {
@@ -306,7 +304,7 @@ async function main(): Promise<void> {
 
     // Sin sesión, la interfaz no llega a ningún dato.
     await assert.rejects(page.evaluate(() => (globalThis as unknown as { radar: { projects: { list: () => Promise<unknown> } } }).radar.projects.list()), /Inicia sesión para continuar/);
-    await signUp(page);
+    await signUp(app, page);
     await page.getByRole('heading', { name: 'Añade tu primer proyecto' }).waitFor();
     assert.equal(await page.locator('.sidebar-account .email').textContent(), EMAIL);
     const kept = await page.evaluate(() => {
@@ -314,7 +312,7 @@ async function main(): Promise<void> {
       return { local: w.localStorage.length, session: w.sessionStorage.length, cookie: w.document.cookie };
     });
     assert.deepEqual(kept, { local: 0, session: 0, cookie: '' }, 'La interfaz guardó algo de la sesión');
-    log('cuenta creada y correo confirmado con el código; la sesión no llega a la interfaz');
+    log('cuenta creada y correo confirmado con el enlace; la sesión no llega a la interfaz');
 
     await shot(page, 'bienvenida');
     await page.getByRole('button', { name: 'Añadir carpeta' }).first().click();

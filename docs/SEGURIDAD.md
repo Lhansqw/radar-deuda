@@ -90,9 +90,10 @@ modelo configurado y dentro de un cupo diario por cuenta que el usuario no puede
 | `api.osv.dev`, `registry.npmjs.org` | Con «Vulnerabilidades y versiones» (`--online`) | Nombres y versiones de paquetes |
 | `api.github.com`, `github.com` | Al añadir o analizar un repositorio de GitHub | El repositorio pedido; el token, si lo hay, en una cabecera |
 | `openrouter.ai`, `api.anthropic.com`, `api.openai.com` | Solo al usar la IA | Metadatos del análisis; código solo con «fragmentos» o con permiso explícito para una propuesta |
+| `api.github.com` | Al abrir la aplicación, si «Avisar si hay una versión nueva» está activado, y al pulsar «Buscar ahora» | Nada del usuario: solo pide la última versión publicada |
 | `<proyecto>.supabase.co` | Al iniciar sesión, registrarse, recuperar la contraseña y renovar la sesión; con la copia en la nube activada, al sincronizar; con la IA incluida, al usar la IA | Correo, contraseña y códigos de la cuenta. La copia: lista de proyectos (con su carpeta) y resultados de cada análisis, sin código ni nada de la IA. La IA incluida: lo mismo que se enviaría a cualquier proveedor en la nube, que la función reenvía a Groq (o a OpenRouter de respaldo) |
 
-No hay telemetría ni actualizaciones automáticas. Todas las peticiones tienen tiempo límite,
+No hay telemetría ni actualizaciones automáticas (solo un aviso de versiones nuevas, que no descarga nada y enlaza únicamente a páginas de versiones de este repositorio). Todas las peticiones tienen tiempo límite,
 reintentos solo para errores transitorios y tamaño máximo de respuesta. Una petición con
 credenciales solo sigue redirecciones dentro del mismo servidor.
 

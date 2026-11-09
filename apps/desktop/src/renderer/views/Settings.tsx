@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AccountState } from '../../shared/account.js';
+import { errorMessage } from '../../shared/errors.js';
 import type { AppInfo } from '../../shared/ipc.js';
 import type { SecretsStatus } from '../../shared/secrets.js';
 import type { AppSettings } from '../../shared/settings.js';
@@ -8,7 +9,6 @@ import { AiSection } from './settings/AiSection.js';
 import { AnalysisSection } from './settings/AnalysisSection.js';
 import { AppSection } from './settings/AppSection.js';
 import { Credentials } from './settings/Credentials.js';
-import { errorText } from './settings/SettingsSection.js';
 
 /** Cuánto se ve «Cambios guardados» después de guardar. */
 const SAVED_NOTICE_MS = 2500;
@@ -49,7 +49,7 @@ function useSettingsDraft() {
       setDraft(s);
       setSavedOk(true);
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
     }
   };
 
@@ -88,7 +88,7 @@ export function Settings({ account }: { account: Extract<AccountState, { status:
       <AnalysisSection value={draft.analysis} onChange={(patch) => setDraft({ ...draft, analysis: { ...draft.analysis, ...patch } })} />
       <AiSection value={draft.ai} onChange={(patch) => setDraft({ ...draft, ai: { ...draft.ai, ...patch } })} />
       <Credentials status={secrets} onChange={setSecrets} />
-      {info ? <AppSection info={info} /> : null}
+      {info ? <AppSection info={info} updates={draft.updates} onUpdatesChange={(patch) => setDraft({ ...draft, updates: { ...draft.updates, ...patch } })} /> : null}
       <SaveBar dirty={settings.dirty} error={settings.error} savedOk={settings.savedOk} onSave={() => void settings.save()} onDiscard={settings.discard} />
     </div>
   );

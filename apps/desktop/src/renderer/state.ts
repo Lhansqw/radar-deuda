@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AnalysisReport, ReportComparison } from '@radar/engine';
+import { errorMessage } from '../shared/errors.js';
 import type { JobState } from '../shared/jobs.js';
 import type { AnalysisSummary, Project } from '../shared/model.js';
 
@@ -91,7 +92,7 @@ export function useProjectData(projectId: number | null, revision: number, chose
         const report = id !== null ? await window.radar.analyses.report(id) : null;
         if (!cancelled) setLoaded({ key, analyses, report, analysisId: id, error: null });
       } catch (err) {
-        if (!cancelled) setLoaded({ key, analyses: [], report: null, analysisId: null, error: err instanceof Error ? err.message : String(err) });
+        if (!cancelled) setLoaded({ key, analyses: [], report: null, analysisId: null, error: errorMessage(err) });
       }
     })();
     return () => {

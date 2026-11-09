@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { errorMessage } from '@radar/engine';
 import { FULL_HELP as HELP, parseCli, run, type Io } from './app.js';
 
 async function main(): Promise<number> {
@@ -33,7 +34,7 @@ async function main(): Promise<number> {
       console.error('Análisis cancelado.');
       return 130;
     }
-    console.error(`Error: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`Error: ${errorMessage(err)}`);
     return 2;
   }
 }

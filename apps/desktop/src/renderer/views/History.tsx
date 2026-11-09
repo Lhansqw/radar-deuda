@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Finding, ReportComparison } from '@radar/engine';
+import { errorMessage } from '../../shared/errors.js';
 import type { AnalysisSummary } from '../../shared/model.js';
 import { FindingLine } from '../components/FindingLine.js';
 import { SeverityGlyph } from '../components/SeverityMark.js';
@@ -29,7 +30,7 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
     window.radar.analyses
       .compare(before, after)
       .then((comparison) => !cancelled && setResult({ key, comparison, error: null }))
-      .catch((err: unknown) => !cancelled && setResult({ key, comparison: null, error: err instanceof Error ? err.message : String(err) }));
+      .catch((err: unknown) => !cancelled && setResult({ key, comparison: null, error: errorMessage(err) }));
     return () => {
       cancelled = true;
     };

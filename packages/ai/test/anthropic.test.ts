@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AnthropicProvider, ANTHROPIC_API_VERSION } from '../src/providers/anthropic.js';
 import { FAKE_KEYS } from './helpers/keys.js';
-import { fakeFetch, json, noSleep } from './helpers/fake-fetch.js';
+import { fakeFetch, json, noSleep } from '../../sources/test/helpers/fake-fetch.js';
 
 const req = { model: 'claude-haiku-5-5', system: 'sistema', messages: [{ role: 'user' as const, content: 'hola' }], maxOutputTokens: 200 };
 const okBody = {
