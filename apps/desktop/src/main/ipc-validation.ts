@@ -44,7 +44,6 @@ export const VALIDATORS: Validators = {
     return [email(a[0]), password(a[1]), a[2]];
   },
   'account:signUp': (a) => (count(a, 2), [email(a[0]), password(a[1])]),
-  'account:confirmEmail': (a) => (count(a, 2), [email(a[0]), code(a[1])]),
   'account:resendConfirmation': (a) => (count(a, 1), [email(a[0])]),
   'account:requestPasswordReset': (a) => (count(a, 1), [email(a[0])]),
   'account:resetPassword': (a) => (count(a, 3), [email(a[0]), code(a[1]), password(a[2])]),

@@ -22,7 +22,6 @@ const api: RadarApi = {
     state: () => invoke('account:state'),
     signIn: (email, password, remember) => invoke('account:signIn', email, password, remember),
     signUp: (email, password) => invoke('account:signUp', email, password),
-    confirmEmail: (email, code) => invoke('account:confirmEmail', email, code),
     resendConfirmation: (email) => invoke('account:resendConfirmation', email),
     requestPasswordReset: (email) => invoke('account:requestPasswordReset', email),
     resetPassword: (email, code, password) => invoke('account:resetPassword', email, code, password),

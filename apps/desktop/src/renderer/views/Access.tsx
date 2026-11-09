@@ -5,9 +5,15 @@ import { PasswordField } from '../components/PasswordField.js';
 import { useAction } from '../lib/action.js';
 
 /** Pasos del acceso. El correo se conserva al pasar de uno a otro. */
-type Step = { kind: 'signIn' } | { kind: 'signUp' } | { kind: 'confirm'; sent: boolean } | { kind: 'forgot' } | { kind: 'reset' };
+type Step =
+  | { kind: 'signIn' }
+  | { kind: 'signUp' }
+  /** Esperando a que pulse el enlace del correo; con la contraseña se entra al volver. */
+  | { kind: 'confirm'; sent: boolean; password: string; remember: boolean }
+  | { kind: 'forgot' }
+  | { kind: 'reset' };
 
-/** Espera antes de poder pedir otro código (Supabase limita los correos por hora). */
+/** Espera antes de poder pedir otro correo (Supabase limita los correos por hora). */
 const RESEND_WAIT_S = 60;
 
 interface Ctx {
@@ -42,7 +48,7 @@ export function Access({ state }: { state: Extract<AccountState, { status: 'sign
   let form: ReactNode;
   if (state.status === 'password-reset') form = <NewPasswordForm ctx={ctx} email={state.email} />;
   else if (step.kind === 'signUp') form = <SignUpForm ctx={ctx} />;
-  else if (step.kind === 'confirm') form = <ConfirmForm ctx={ctx} sent={step.sent} />;
+  else if (step.kind === 'confirm') form = <ConfirmForm ctx={ctx} step={step} />;
   else if (step.kind === 'forgot') form = <ForgotForm ctx={ctx} />;
   else if (step.kind === 'reset') form = <ResetForm ctx={ctx} />;
   else form = <SignInForm ctx={ctx} />;
@@ -51,7 +57,7 @@ export function Access({ state }: { state: Extract<AccountState, { status: 'sign
 }
 
 /** Formulario de acceso: campos, el error (junto al botón) y enlaces a otros pasos. */
-function Form({ ctx, title, intro, submit, onSubmit, links, children }: { ctx: Ctx; title: string; intro?: ReactNode; submit: string; onSubmit: () => void; links: ReactNode; children: ReactNode }) {
+function Form({ ctx, title, intro, submit, onSubmit, links, children }: { ctx: Ctx; title: string; intro?: ReactNode; submit: string; onSubmit: () => void; links: ReactNode; children?: ReactNode }) {
   return (
     <form
       className="access-form"
@@ -100,7 +106,7 @@ function SignInForm({ ctx }: { ctx: Ctx }) {
       const problem = firstProblem(emailProblem(ctx.email), password === '' ? 'Escribe tu contraseña.' : null);
       if (problem) throw new Error(problem);
       const r = await window.radar.account.signIn(ctx.email, password, remember);
-      if (r.confirmEmail) ctx.go({ kind: 'confirm', sent: false });
+      if (r.confirmEmail) ctx.go({ kind: 'confirm', sent: false, password, remember });
     });
   return (
     <Form
@@ -140,7 +146,7 @@ function SignUpForm({ ctx }: { ctx: Ctx }) {
       const problem = firstProblem(emailProblem(ctx.email), newPasswordProblem(password), password !== repeat ? 'Las dos contraseñas no coinciden.' : null);
       if (problem) throw new Error(problem);
       const r = await window.radar.account.signUp(ctx.email, password);
-      if (r.confirmEmail) ctx.go({ kind: 'confirm', sent: true });
+      if (r.confirmEmail) ctx.go({ kind: 'confirm', sent: true, password, remember: true });
     });
   return (
     <Form
@@ -165,45 +171,42 @@ function SignUpForm({ ctx }: { ctx: Ctx }) {
   );
 }
 
-function ConfirmForm({ ctx, sent }: { ctx: Ctx; sent: boolean }) {
-  const [code, setCode] = useState('');
-  const resend = useResend(sent);
+/** Confirmación con el enlace del correo: se pulsa en el navegador y, al volver, se entra con la contraseña. */
+function ConfirmForm({ ctx, step }: { ctx: Ctx; step: Extract<Step, { kind: 'confirm' }> }) {
+  const resend = useResend(step.sent);
   const submit = () =>
     void ctx.run(async () => {
-      const problem = codeProblem(code);
-      if (problem) throw new Error(problem);
-      await window.radar.account.confirmEmail(ctx.email, code);
+      const r = await window.radar.account.signIn(ctx.email, step.password, step.remember);
+      if (r.confirmEmail) throw new Error('Tu correo aún no está confirmado. Pulsa el enlace del mensaje que te enviamos y vuelve a intentarlo.');
     });
   return (
     <Form
       ctx={ctx}
       title="Confirma tu correo"
       intro={
-        sent ? (
+        step.sent ? (
           <>
-            Te enviamos un código a <strong>{ctx.email.trim()}</strong>. Si no llega en unos minutos, revisa el correo no deseado. Si ya tenías una cuenta con ese correo, inicia sesión.
+            Te enviamos un enlace a <strong>{ctx.email.trim()}</strong>. Púlsalo y vuelve aquí para entrar. Si no llega en unos minutos, revisa el correo no deseado. Si ya
+            tenías una cuenta con ese correo, inicia sesión.
           </>
         ) : (
           <>
-            La cuenta <strong>{ctx.email.trim()}</strong> aún no confirmó su correo. Pide el código y escríbelo aquí.
+            La cuenta <strong>{ctx.email.trim()}</strong> aún no confirmó su correo. Pulsa el enlace del mensaje de confirmación y vuelve aquí para entrar. Si no lo
+            encuentras, pide otro.
           </>
         )
       }
-      submit="Confirmar"
+      submit="Ya lo confirmé: entrar"
       onSubmit={submit}
       links={
         <>
           <button type="button" className="link" disabled={ctx.busy || resend.wait > 0} onClick={() => void ctx.run(async () => resend.send(() => window.radar.account.resendConfirmation(ctx.email)))}>
-            {resend.label(sent ? 'Reenviar el código' : 'Enviar el código')}
+            {resend.label(step.sent ? 'Reenviar el correo' : 'Enviar otro correo')}
           </button>
-          <button type="button" className="link" onClick={() => ctx.go({ kind: 'signIn' })}>
-            Volver a iniciar sesión
-          </button>
+          <BackToSignIn ctx={ctx} />
         </>
       }
-    >
-      <CodeField value={code} onChange={setCode} />
-    </Form>
+    />
   );
 }
 

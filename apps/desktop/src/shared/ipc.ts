@@ -28,8 +28,7 @@ export interface IpcContract {
   /** `remember`: seguir conectado al cerrar la aplicación (sesión cifrada en el equipo). */
   'account:signIn': { args: [email: string, password: string, remember: boolean]; result: SignUpResult };
   'account:signUp': { args: [email: string, password: string]; result: SignUpResult };
-  /** Confirma el correo con el código del mensaje de Supabase. */
-  'account:confirmEmail': { args: [email: string, code: string]; result: AccountState };
+  /** Vuelve a enviar el correo con el enlace de confirmación del registro. */
   'account:resendConfirmation': { args: [email: string]; result: null };
   /** Envía el código para elegir una contraseña nueva. */
   'account:requestPasswordReset': { args: [email: string]; result: null };
@@ -114,7 +113,6 @@ export const ACCOUNT_CHANNELS = [
   'account:state',
   'account:signIn',
   'account:signUp',
-  'account:confirmEmail',
   'account:resendConfirmation',
   'account:requestPasswordReset',
   'account:resetPassword',

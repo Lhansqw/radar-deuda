@@ -38,13 +38,15 @@ describe('AccountService', () => {
     await expect(account.signIn('ana@ejemplo.com', PASSWORD, true)).rejects.toThrow(/RADAR_SUPABASE_URL/);
   });
 
-  it('registro con confirmación por código: crea la cuenta, confirma el correo y entra', async () => {
+  it('registro con confirmación por enlace: crea la cuenta y, tras pulsar el enlace, entra con la contraseña', async () => {
     const { account, server, changes } = await setup();
     expect(await account.state()).toEqual({ status: 'signed-out' });
     expect(await account.signUp(' Ana@Ejemplo.com ', PASSWORD)).toEqual({ confirmEmail: true });
     expect(server.users.get('ana@ejemplo.com')?.confirmed).toBe(false);
-    await expect(account.confirmEmail('ana@ejemplo.com', '000000')).rejects.toThrow('El código no es correcto o ya caducó. Pide uno nuevo.');
-    expect(await account.confirmEmail('ana@ejemplo.com', ` ${CODES.signup} `)).toEqual({ status: 'signed-in', email: 'ana@ejemplo.com', offline: false });
+    expect(await account.signIn('ana@ejemplo.com', PASSWORD, true)).toEqual({ confirmEmail: true });
+    server.users.get('ana@ejemplo.com')!.confirmed = true; // pulsa el enlace del correo
+    expect(await account.signIn('ana@ejemplo.com', PASSWORD, true)).toEqual({ confirmEmail: false });
+    expect(await account.state()).toEqual({ status: 'signed-in', email: 'ana@ejemplo.com', offline: false });
     expect(changes.at(-1)?.user).toEqual({ id: server.users.get('ana@ejemplo.com')?.id, email: 'ana@ejemplo.com' });
   });
 

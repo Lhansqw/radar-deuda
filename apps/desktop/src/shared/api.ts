@@ -16,7 +16,6 @@ export interface RadarApi {
     state: Fn<'account:state'>;
     signIn: Fn<'account:signIn'>;
     signUp: Fn<'account:signUp'>;
-    confirmEmail: Fn<'account:confirmEmail'>;
     resendConfirmation: Fn<'account:resendConfirmation'>;
     requestPasswordReset: Fn<'account:requestPasswordReset'>;
     resetPassword: Fn<'account:resetPassword'>;

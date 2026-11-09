@@ -42,7 +42,6 @@ const account: AccountApi = {
   state: async () => ({ status: 'signed-out' }),
   signIn: async () => ({ confirmEmail: false }),
   signUp: async () => ({ confirmEmail: true }),
-  confirmEmail: async () => signedIn(ANA.email),
   resendConfirmation: async () => null,
   requestPasswordReset: async () => null,
   resetPassword: async () => signedIn(ANA.email),

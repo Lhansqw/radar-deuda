@@ -24,18 +24,26 @@ La CLI no cambia: no necesita cuenta.
    base de datos saltándose sus reglas: nunca debe ir en la aplicación, en un archivo ni en
    un commit. La aplicación y la compilación la rechazan, y el radar la marca como hallazgo
    crítico si aparece en un repositorio.
-3. **Plantillas de correo.** Una aplicación de escritorio no puede abrir los enlaces de los
-   correos de Supabase: usa el código de un solo uso que Supabase pone en `{{ .Token }}`. En
-   Authentication, en las plantillas de correo, cambia al menos estas dos:
+3. **Plantillas de correo.** El registro se confirma con el **enlace** del correo: la plantilla
+   **Confirm signup** de serie sirve. El enlace confirma la cuenta en Supabase y después
+   abre el navegador en la **Site URL** (Authentication → URL Configuration); la persona
+   vuelve a la aplicación y pulsa «Ya lo confirmé: entrar». Si la Site URL sigue en
+   `http://localhost:3000`, el navegador mostrará un error, aunque la cuenta ya esté
+   confirmada: conviene poner una página propia (por ejemplo, la del proyecto en GitHub). Si
+   quieres, cambia el texto de la plantilla:
 
-   **Confirm signup** — asunto: `Tu código para Radar de Deuda Técnica`
+   **Confirm signup** — asunto: `Confirma tu correo para Radar de Deuda Técnica`
 
    ```html
    <h2>Confirma tu correo</h2>
-   <p>Escribe este código en la aplicación para terminar de crear tu cuenta:</p>
-   <p style="font-size: 28px; letter-spacing: 6px"><strong>{{ .Token }}</strong></p>
+   <p>Pulsa el enlace para terminar de crear tu cuenta y vuelve a la aplicación:</p>
+   <p><a href="{{ .ConfirmationURL }}">Confirmar mi correo</a></p>
    <p>Si no creaste una cuenta en Radar de Deuda Técnica, ignora este mensaje.</p>
    ```
+
+   La recuperación de la contraseña, en cambio, usa el código de un solo uso que Supabase pone
+   en `{{ .Token }}` (sin una página web propia, el enlace no tendría dónde pedir la
+   contraseña nueva). Esta plantilla **hay que cambiarla**:
 
    **Reset password** — asunto: `Tu código para cambiar la contraseña`
 
@@ -204,7 +212,7 @@ debe usar su propio usuario de Windows.
   `RADAR_TEST_DATABASE_URL=postgresql://postgres@localhost:5432/postgres` (un servidor donde
   se pueda crear una base de datos temporal).
 - **Extremo a extremo** (`npm run e2e:desktop`): simula Supabase dentro del proceso
-  principal, crea una cuenta con su código (también uno erróneo), comprueba que sin sesión
+  principal, crea una cuenta y la confirma con el enlace (también intenta entrar antes de pulsarlo), comprueba que sin sesión
   la interfaz no llega a los datos y que no guarda nada de la sesión, que el proyecto y su
   análisis suben solos sin código, y al final cierra la sesión y vuelve a entrar.
 - **Con un proyecto real:** define las dos variables y crea una cuenta con tu correo (el
