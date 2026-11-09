@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Project } from '../../shared/model.js';
+import { useAction } from '../lib/action.js';
 
 /** Alta de un repositorio de GitHub (público, o privado con un token configurado). */
 export function AddGithubDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (p: Project) => void }) {
   const [repo, setRepo] = useState('');
   const [branch, setBranch] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, error, run } = useAction();
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -20,15 +20,7 @@ export function AddGithubDialog({ onClose, onAdded }: { onClose: () => void; onA
 
   async function submit(e: FormEvent): Promise<void> {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      onAdded(await window.radar.projects.addGithub(repo.trim(), branch.trim() === '' ? null : branch.trim()));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
+    await run(async () => onAdded(await window.radar.projects.addGithub(repo.trim(), branch.trim() === '' ? null : branch.trim())));
   }
 
   return (

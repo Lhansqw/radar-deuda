@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
+import { errorMessage } from '../../../shared/errors.js';
 import type { AppInfo } from '../../../shared/ipc.js';
 import type { StorageInfo } from '../../../shared/model.js';
+import type { UpdateSettings } from '../../../shared/settings.js';
 import { formatBytes } from '../../lib/format.js';
-import { errorText, SettingsSection } from './SettingsSection.js';
+import { CheckField, SettingsSection } from './SettingsSection.js';
 
-/** Versiones, dónde guarda los datos y espacio en disco. */
-export function AppSection({ info }: { info: AppInfo }) {
+/** Versiones, actualizaciones, dónde guarda los datos y espacio en disco. */
+export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; updates: UpdateSettings; onUpdatesChange: (patch: Partial<UpdateSettings>) => void }) {
   return (
     <SettingsSection id="s-acerca" title="Aplicación">
       <dl className="about">
@@ -22,8 +24,60 @@ export function AppSection({ info }: { info: AppInfo }) {
         <dt>Clones de GitHub</dt>
         <dd className="mono">{info.reposDir}</dd>
       </dl>
+      <Updates updates={updates} onChange={onUpdatesChange} />
       <Storage />
     </SettingsSection>
+  );
+}
+
+/** Aviso de versiones nuevas: automático al abrir (si está activado) o a mano. */
+function Updates({ updates, onChange }: { updates: UpdateSettings; onChange: (patch: Partial<UpdateSettings>) => void }) {
+  const [notice, setNotice] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const check = async (): Promise<void> => {
+    setBusy(true);
+    setUrl(null);
+    try {
+      const u = await window.radar.app.checkUpdate();
+      if (u.newer && u.url) {
+        setNotice(`Hay una versión nueva: ${u.latest}.`);
+        setUrl(u.url);
+      } else {
+        setNotice(u.latest ? `Tienes la última versión (${u.current}).` : 'Aún no hay versiones publicadas.');
+      }
+    } catch (err) {
+      setNotice(`No se pudo comprobar: ${errorMessage(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="storage">
+      <h3>Actualizaciones</h3>
+      <CheckField
+        checked={updates.check}
+        onChange={(check) => onChange({ check })}
+        label="Avisar al abrir si hay una versión nueva"
+        hint="Consulta en GitHub cuál es la última versión publicada, sin enviar ningún dato tuyo. No descarga nada: la versión nueva se instala encima de la anterior y conserva los datos."
+      />
+      <div className="storage-actions">
+        <button type="button" className="btn btn-small" onClick={() => void check()} disabled={busy}>
+          Buscar ahora
+        </button>
+        {url ? (
+          <button type="button" className="btn btn-small" onClick={() => void window.radar.app.openExternal(url)}>
+            Descargar
+          </button>
+        ) : null}
+        {notice ? (
+          <span className="small" role="status">
+            {notice}
+          </span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -49,7 +103,7 @@ function Storage() {
       setNotice(`Caché vaciada: ${formatBytes(r.bytes)} liberados. El siguiente análisis de cada proyecto será completo.`);
       setInfo(await window.radar.app.storage());
     } catch (err) {
-      setNotice(errorText(err));
+      setNotice(errorMessage(err));
     } finally {
       setBusy(false);
     }

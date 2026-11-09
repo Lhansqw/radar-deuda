@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OpenRouterProvider } from '../src/providers/openrouter.js';
-import { fakeFetch, json, noSleep, type FakeCall } from './helpers/fake-fetch.js';
+import { fakeFetch, json, noSleep, type FakeCall } from '../../sources/test/helpers/fake-fetch.js';
 import { FAKE_KEYS } from './helpers/keys.js';
 
 const KEY = FAKE_KEYS.openrouter;

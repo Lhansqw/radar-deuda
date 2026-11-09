@@ -21,10 +21,6 @@ export function countNonBlankLines(lines: readonly string[]): number {
   return n;
 }
 
-export function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
 /** Ejecuta `worker` sobre `items` con un máximo de `limit` tareas simultáneas. */
 export async function mapWithConcurrency<T>(
   items: readonly T[],
@@ -85,4 +81,9 @@ export function lineAt(lineStarts: readonly number[], pos: number): number {
     else hi = mid - 1;
   }
   return lo + 1;
+}
+
+/** Texto de un error para mostrarlo (los valores lanzados que no son Error, tal cual). */
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

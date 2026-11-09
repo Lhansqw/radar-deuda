@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
 import type { AccountState } from '../shared/account.js';
+import { errorMessage } from '../shared/errors.js';
 import type { Project } from '../shared/model.js';
 import { AddGithubDialog } from './components/AddGithubDialog.js';
 import { Icon } from './components/Icon.js';
 import { Sidebar, type View } from './components/Sidebar.js';
+import { UpdateNotice } from './components/UpdateNotice.js';
 import { EMPTY_FILTER } from './lib/findings.js';
 import { useProjectData, useProjectMemory, useRadar } from './state.js';
 import { ProjectWorkspace } from './views/ProjectWorkspace.js';
@@ -29,7 +31,7 @@ export function App({ account }: { account: Extract<AccountState, { status: 'sig
 
   const run = useCallback((fn: () => Promise<unknown>) => {
     setError(null);
-    fn().catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+    fn().catch((err: unknown) => setError(errorMessage(err)));
   }, []);
 
   const added = useCallback(
@@ -67,6 +69,7 @@ export function App({ account }: { account: Extract<AccountState, { status: 'sig
         settingsAvailable
       />
       <main className="workspace">
+        <UpdateNotice />
         {error ? <ErrorNotice message={error} onClose={() => setError(null)} /> : null}
         {view === 'ajustes' ? (
           <div className="workspace-body">

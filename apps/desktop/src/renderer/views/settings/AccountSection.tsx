@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { AccountState } from '../../../shared/account.js';
+import { errorMessage } from '../../../shared/errors.js';
 import type { CloudSettings } from '../../../shared/settings.js';
 import type { SyncState } from '../../../shared/sync.js';
 import { Icon } from '../../components/Icon.js';
+import { useAction } from '../../lib/action.js';
 import { formatDateTime } from '../../lib/format.js';
-import { CheckField, errorText, FormError, SettingsSection } from './SettingsSection.js';
+import { CheckField, FormError, SettingsSection } from './SettingsSection.js';
 
 /** La cuenta con la sesión iniciada, su copia en la nube y el botón para cerrar la sesión. */
 export function AccountSection({
@@ -29,7 +31,7 @@ export function AccountSection({
       // El proceso principal avisa del cierre y la interfaz vuelve al acceso (Root.tsx).
       await window.radar.account.signOut();
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
       setBusy(false);
     }
   };
@@ -86,21 +88,8 @@ function statusText(s: SyncState): string {
 
 function CloudCopy({ cloud, onCloudChange, onSettingsChanged }: { cloud: CloudSettings; onCloudChange: (patch: Partial<CloudSettings>) => void; onSettingsChanged: () => void }) {
   const state = useSyncState();
-  const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = async (fn: () => Promise<unknown>): Promise<void> => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, error, run } = useAction();
 
   return (
     <div className="cloud-copy">

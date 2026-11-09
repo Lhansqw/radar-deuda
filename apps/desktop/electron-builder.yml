@@ -21,9 +21,13 @@ files:
 extraFiles:
   - from: dist/THIRD_PARTY_LICENSES.txt
     to: THIRD_PARTY_LICENSES.txt
+  # La licencia del propio proyecto (MIT).
+  - from: ../../LICENSE
+    to: LICENSE.txt
 
 asar: true
-# Sin actualizaciones automáticas ni servidor de publicación (ver docs/INSTALADOR.md).
+# Sin actualizaciones automáticas: la aplicación solo avisa de versiones nuevas, que
+# publica .github/workflows/release.yml en GitHub Releases (ver docs/INSTALADOR.md).
 publish: null
 # Nada que compilar: la aplicación no tiene módulos nativos (SQLite viene con Node).
 npmRebuild: false
@@ -70,6 +74,8 @@ nsis:
   shortcutName: Radar de Deuda Técnica
   installerLanguages: [es_ES]
   language: '3082'
+  # Página de la licencia (MIT) antes de instalar.
+  license: ../../LICENSE
   # Desinstalar no borra los proyectos, el historial ni las credenciales (%APPDATA%\radar-deuda).
   deleteAppDataOnUninstall: false
   artifactName: radar-deuda-${version}-instalador-windows-x64.${ext}

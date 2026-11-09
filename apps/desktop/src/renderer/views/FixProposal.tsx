@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { AiFixProposal, Finding } from '@radar/engine';
+import { errorMessage } from '../../shared/errors.js';
 import type { FixPreviewInfo, StoredFixProposal } from '../../shared/model.js';
 import { DiffView } from '../components/DiffView.js';
 import { FixConsentDialog } from '../components/FixConsentDialog.js';
@@ -7,7 +8,6 @@ import { Icon } from '../components/Icon.js';
 import { formatDateTime } from '../lib/format.js';
 import { diffStats, fixAvailability, SECRET_FIX_ADVICE } from '../lib/fix.js';
 
-const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
 /**
@@ -55,7 +55,7 @@ function useFixProposal(analysisId: number, findingId: string) {
     try {
       setStored(await window.radar.ai.proposeFix(analysisId, findingId, consent));
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -69,7 +69,7 @@ function useFixProposal(analysisId: number, findingId: string) {
     try {
       p = await window.radar.ai.fixPreview(analysisId, findingId);
     } catch (err) {
-      setError(errorText(err));
+      setError(errorMessage(err));
       setBusy(false);
       return;
     }
@@ -207,12 +207,12 @@ function FixActions({
     void window.radar.app
       .copyText(proposal.patch)
       .then(() => setNotice('Parche copiado al portapapeles.'))
-      .catch((err: unknown) => onError(errorText(err)));
+      .catch((err: unknown) => onError(errorMessage(err)));
   const save = (): void =>
     void window.radar.files
       .savePatch(analysisId, proposal.findingId)
       .then((path) => path && setNotice(`Parche guardado en ${path}.`))
-      .catch((err: unknown) => onError(errorText(err)));
+      .catch((err: unknown) => onError(errorMessage(err)));
   return (
     <>
       <div className="fix-actions">

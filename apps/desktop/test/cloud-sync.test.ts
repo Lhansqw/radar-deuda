@@ -1,17 +1,12 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AnalysisReport } from '@radar/engine';
-import { AccountService } from '../src/main/account-service.js';
-import { cloudConfig, ENV_KEY, ENV_URL } from '../src/main/cloud-config.js';
 import { SupabaseRepo } from '../src/main/cloud-repo.js';
 import { CloudSync } from '../src/main/cloud-sync.js';
-import { EncryptedSessionStorage } from '../src/main/session-storage.js';
 import { Store } from '../src/main/store.js';
 import type { SyncState } from '../src/shared/sync.js';
-import { FAKE_KEY, FAKE_URL, FakeSupabase } from './helpers/fake-supabase.js';
+import { signedInAccount } from './helpers/account.js';
+import { FakeSupabase } from './helpers/fake-supabase.js';
 import { report } from './helpers/report.js';
 
 const cleanup: Array<() => Promise<void> | void> = [];
@@ -19,26 +14,13 @@ afterEach(async () => {
   for (const f of cleanup.splice(0).reverse()) await f();
 });
 
-const cipher = { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() };
-const PASSWORD = 'contraseña-larga-1';
 const timing = { startedAt: '2026-10-26T12:00:00.000Z', durationMs: 5 };
 
 /** Un equipo: su base de datos local, la cuenta con sesión y la sincronización. */
 async function device(server: FakeSupabase, email = 'ana@ejemplo.com', options: { enabled?: () => boolean } = {}) {
-  if (!server.users.has(email)) server.addUser(email, PASSWORD);
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'radar-sinc-'));
-  cleanup.push(() => rm(dir, { recursive: true, force: true }));
   const store = Store.open(':memory:');
   cleanup.push(() => store.close());
-  const account = new AccountService({
-    config: cloudConfig({ [ENV_URL]: FAKE_URL, [ENV_KEY]: FAKE_KEY }, null),
-    storage: new EncryptedSessionStorage(path.join(dir, 'sesion.bin'), cipher),
-    onChange: () => undefined,
-    fetch: server.fetch,
-    retryReads: false,
-  });
-  cleanup.push(() => account.dispose());
-  await account.signIn(email, PASSWORD, false);
+  const account = await signedInAccount(server, email, cleanup);
   const states: SyncState[] = [];
   const sync = new CloudSync({
     ledger: store.cloudLedger(),

@@ -5,7 +5,7 @@ import type { HandlerDeps, Handlers, WorkspaceHandlers } from './handlers.js';
 /** Lo que los canales de la cuenta necesitan del servicio (se sustituye en las pruebas). */
 export type AccountApi = Pick<
   AccountService,
-  'state' | 'signIn' | 'signUp' | 'confirmEmail' | 'resendConfirmation' | 'requestPasswordReset' | 'resetPassword' | 'setNewPassword' | 'signOut'
+  'state' | 'signIn' | 'signUp' | 'resendConfirmation' | 'requestPasswordReset' | 'resetPassword' | 'setNewPassword' | 'signOut'
 >;
 
 export class SignedOutError extends Error {
@@ -20,7 +20,6 @@ export function createAccountHandlers(account: AccountApi): Pick<Handlers, Accou
     'account:state': () => account.state(),
     'account:signIn': (email, password, remember) => account.signIn(email, password, remember),
     'account:signUp': (email, password) => account.signUp(email, password),
-    'account:confirmEmail': (email, code) => account.confirmEmail(email, code),
     'account:resendConfirmation': (email) => account.resendConfirmation(email),
     'account:requestPasswordReset': (email) => account.requestPasswordReset(email),
     'account:resetPassword': (email, code, password) => account.resetPassword(email, code, password),

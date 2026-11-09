@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import type { AiOptions, ApiKeys } from '@radar/pipeline';
+import { errorMessage } from '../shared/errors.js';
 import type { JobLogEntry, JobPhase, JobState } from '../shared/jobs.js';
 import type { Project } from '../shared/model.js';
 import { LOCAL_PROVIDERS, type AppSettings, type AiSettings } from '../shared/settings.js';
@@ -196,6 +197,34 @@ export class JobManager {
     return { options: aiOptionsFrom(settings.ai, included), keys: aiKeysFrom(this.d.credentials, settings.ai, included) };
   }
 
+  /** El informe del motor: se guarda en cuanto llega (con IA, se ve mientras la IA trabaja). */
+  private saveReport(r: Running, m: Extract<FromWorker, { type: 'report' }>): void {
+    const s = r.state;
+    s.phase = 'saving';
+    try {
+      const summary = this.d.store.saveAnalysis(s.projectId, m.report, { startedAt: s.startedAt, durationMs: m.durationMs });
+      s.analysisId = summary.id;
+    } catch (err) {
+      r.worker.kill();
+      this.finish('failed', `No se pudo guardar el análisis: ${errorMessage(err)}`);
+      return;
+    }
+    if (r.aiRequested) s.phase = 'ai';
+    s.progress = null;
+    this.emit(true);
+  }
+
+  /** La sección de la IA: se añade al informe ya guardado. */
+  private saveAi(r: Running, m: Extract<FromWorker, { type: 'ai' }>): void {
+    if (r.state.analysisId === null) return;
+    const report = this.d.store.getReport(r.state.analysisId);
+    if (report) {
+      report.ai = m.section;
+      this.d.store.updateReport(r.state.analysisId, report);
+    }
+    this.log('info', `IA: ${m.label}.`);
+  }
+
   private onMessage(jobId: string, m: FromWorker): void {
     const r = this.running;
     if (!r || r.state.jobId !== jobId) return;
@@ -213,32 +242,12 @@ export class JobManager {
       case 'log':
         this.log(m.level, m.message);
         return;
-      case 'report': {
-        s.phase = 'saving';
-        try {
-          const summary = this.d.store.saveAnalysis(s.projectId, m.report, { startedAt: s.startedAt, durationMs: m.durationMs });
-          s.analysisId = summary.id;
-        } catch (err) {
-          r.worker.kill();
-          this.finish('failed', `No se pudo guardar el análisis: ${err instanceof Error ? err.message : String(err)}`);
-          return;
-        }
-        // Con IA, el análisis ya está guardado y visible mientras la IA trabaja.
-        if (r.aiRequested) s.phase = 'ai';
-        s.progress = null;
-        this.emit(true);
+      case 'report':
+        this.saveReport(r, m);
         return;
-      }
-      case 'ai': {
-        if (s.analysisId === null) return;
-        const report = this.d.store.getReport(s.analysisId);
-        if (report) {
-          report.ai = m.section;
-          this.d.store.updateReport(s.analysisId, report);
-        }
-        this.log('info', `IA: ${m.label}.`);
+      case 'ai':
+        this.saveAi(r, m);
         return;
-      }
       case 'ai-error':
         s.aiError = m.message;
         this.log('warn', `La IA no se pudo ejecutar: ${m.message}`);

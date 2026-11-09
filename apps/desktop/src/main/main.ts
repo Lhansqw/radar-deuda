@@ -6,6 +6,7 @@ import { defaultCacheDir } from '@radar/engine';
 import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
 import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
 import { app, BrowserWindow, clipboard, dialog, Menu, nativeTheme, safeStorage, shell } from 'electron';
+import { errorMessage } from '../shared/errors.js';
 import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { createAccountHandlers } from './account-handlers.js';
@@ -21,6 +22,7 @@ import { registerAppScheme, serveRenderer } from './protocol.js';
 import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
 import { EncryptedSessionStorage } from './session-storage.js';
 import { checkRenderer, checkWorker, SMOKE_FLAG } from './smoke.js';
+import { checkForUpdate } from './updates.js';
 import { spawnAnalysisWorker } from './worker-process.js';
 import { openWorkspace, SessionRouter } from './workspace.js';
 
@@ -153,6 +155,7 @@ function start(): void {
       return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
     },
     clearCache: () => clearCache(defaultCacheDir()),
+    checkUpdate: () => checkForUpdate(app.getVersion()),
     removeClone: async (repo) => {
       const ref = parseGitHubRepo(repo);
       if (ref) await removeClone(ref, defaultReposDir());
@@ -203,7 +206,7 @@ function start(): void {
   if (smoke) {
     void runSmokeTest(win, (memoryLimitMb) => spawn({ memoryLimitMb }))
       .catch((err: unknown) => {
-        console.error(`Prueba de arranque: ${err instanceof Error ? err.message : String(err)}`);
+        console.error(`Prueba de arranque: ${errorMessage(err)}`);
         return false;
       })
       .then((ok) => {
