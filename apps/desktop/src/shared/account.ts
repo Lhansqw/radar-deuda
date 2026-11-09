@@ -13,7 +13,7 @@ export type AccountState =
   | { status: 'signed-in'; email: string; offline: boolean };
 
 export interface SignUpResult {
-  /** Supabase pide confirmar el correo con el código que acaba de enviar. */
+  /** Falta confirmar el correo con el enlace que Supabase envía al registrarse. */
   confirmEmail: boolean;
 }
 
