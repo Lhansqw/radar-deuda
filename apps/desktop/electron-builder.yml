@@ -72,8 +72,11 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Radar de Deuda Técnica
-  installerLanguages: [es_ES]
-  language: '3082'
+  # Español e inglés, como la aplicación: el instalador usa el del sistema y, si no es
+  # ninguno de los dos, el inglés (1033), igual que la aplicación con «Automático».
+  installerLanguages: [es_ES, en_US]
+  language: '1033'
+  multiLanguageInstaller: true
   # Página de la licencia (MIT) antes de instalar.
   license: ../../LICENSE
   # Desinstalar no borra los proyectos, el historial ni las credenciales (%APPDATA%\radar-deuda).
