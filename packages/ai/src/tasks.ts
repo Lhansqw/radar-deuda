@@ -1,8 +1,8 @@
 import path from 'node:path';
-import { errorMessage, SEVERITY_ORDER, type AiExplanation, type AiPlan, type AiSection, type AnalysisReport, type Finding, type Severity } from '@radar/engine';
+import { errorMessage, SEVERITY_ORDER, type AiExplanation, type AiPlan, type AiSection, type AnalysisReport, type Finding, type Locale, type Severity } from '@radar/engine';
 import { AiResponseCache } from './cache.js';
 import { assertProviderAllowed, buildFindingContext, type ContextLimits, type PrivacyMode } from './context.js';
-import { EXPLAIN_FORMAT_HINT, EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM, PLAN_FORMAT_HINT, PLAN_PROMPT_VERSION, PLAN_SYSTEM } from './prompts.js';
+import { EXPLAIN_FORMAT_HINT, EXPLAIN_PROMPT_VERSION, EXPLAIN_SYSTEM, localizedSystem, PLAN_FORMAT_HINT, PLAN_PROMPT_VERSION, PLAN_SYSTEM } from './prompts.js';
 import { ProviderError, type LlmProvider, type ProviderErrorKind } from './provider.js';
 import { askJson, type RunnerDeps } from './runner.js';
 import { EXPLANATION_SCHEMA, PLAN_SCHEMA } from './schemas.js';
@@ -74,6 +74,8 @@ export interface AiRunOptions {
   readText: (rel: string) => Promise<string | null>;
   cacheDir?: string | null;
   budget?: Budget;
+  /** Idioma de las respuestas (por defecto, español). */
+  locale?: Locale;
   limit?: number;
   concurrency?: number;
   /** Generar el plan de reducción (por defecto sí). */
@@ -240,7 +242,7 @@ class AiRun {
     const ctx = await buildFindingContext(f, { readText: o.readText, mode: o.privacy, projectSummary: summary, ...(o.contextLimits ? { limits: o.contextLimits } : {}) });
     const r = await askJson(this.deps, {
       model: o.model,
-      system: EXPLAIN_SYSTEM,
+      system: localizedSystem(EXPLAIN_SYSTEM, o.locale),
       user: `${ctx.text}\n\n${EXPLAIN_FORMAT_HINT}\nEl id del hallazgo es "${f.id}".`,
       schema: EXPLANATION_SCHEMA,
       maxOutputTokens: 1200,
@@ -281,7 +283,7 @@ class AiRun {
   async plan(explanations: readonly AiExplanation[], summary: string): Promise<AiPlan | undefined> {
     if (!this.wantsPlan || this.budgetHit || this.fatal.error) return undefined;
     try {
-      return await buildPlan(this.report, explanations, this.deps, this.o.planModel ?? this.o.model, this.o.privacy, summary);
+      return await buildPlan(this.report, explanations, this.deps, this.o.planModel ?? this.o.model, this.o.privacy, summary, this.o.locale);
     } catch (err) {
       if (this.o.signal?.aborted) throw err;
       if (!this.fatal.error) this.errors.push({ message: `No se pudo generar el plan: ${errorMessage(err)}` });
@@ -319,7 +321,15 @@ class AiRun {
 }
 
 /** El plan solo usa metadatos (nunca código), así que es válido con cualquier privacidad. */
-async function buildPlan(report: AnalysisReport, explanations: readonly AiExplanation[], deps: RunnerDeps, model: string, privacy: PrivacyMode, summary: string): Promise<AiPlan> {
+async function buildPlan(
+  report: AnalysisReport,
+  explanations: readonly AiExplanation[],
+  deps: RunnerDeps,
+  model: string,
+  privacy: PrivacyMode,
+  summary: string,
+  locale?: Locale,
+): Promise<AiPlan> {
   const candidates = report.findings.filter((f) => f.severity !== 'info').slice(0, 40);
   if (candidates.length === 0) throw new Error('No hay hallazgos que planificar.');
   const hot = new Map<string, number>();
@@ -338,7 +348,7 @@ async function buildPlan(report: AnalysisReport, explanations: readonly AiExplan
   const ids = new Set(candidates.map((f) => f.id));
   const r = await askJson(deps, {
     model,
-    system: PLAN_SYSTEM,
+    system: localizedSystem(PLAN_SYSTEM, locale),
     user: `## Proyecto\n${summary}\nPuntuación de mantenibilidad: ${report.score.score}/100 (${report.score.rating}).\n\n## Hallazgos\n${list}\n\n${PLAN_FORMAT_HINT}`,
     schema: PLAN_SCHEMA,
     maxOutputTokens: 2000,

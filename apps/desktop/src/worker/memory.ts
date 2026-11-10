@@ -1,3 +1,4 @@
+import { translator, type Locale } from '@radar/engine';
 /**
  * Vigilancia de memoria del proceso de análisis. El proceso arranca con un
  * límite de montículo (--max-old-space-size); si V8 lo alcanza, el proceso
@@ -12,8 +13,11 @@ export interface HeapStats {
 export const MEMORY_THRESHOLD = 0.9;
 
 /** Mensaje si el uso de memoria supera el umbral, o null si no. */
-export function memoryPressure(s: HeapStats, threshold = MEMORY_THRESHOLD): string | null {
+export function memoryPressure(s: HeapStats, threshold = MEMORY_THRESHOLD, locale: Locale = 'es'): string | null {
   if (s.heap_size_limit <= 0 || s.used_heap_size < s.heap_size_limit * threshold) return null;
   const mb = (n: number): number => Math.round(n / (1024 * 1024));
-  return `El análisis se detuvo antes de agotar la memoria: usaba ${mb(s.used_heap_size)} MB de un límite de ${mb(s.heap_size_limit)} MB. Sube el límite en Configuración → Análisis o excluye carpetas generadas (build, vendor) con un archivo .radarignore.`;
+  return translator(locale)(
+    `El análisis se detuvo antes de agotar la memoria: usaba ${mb(s.used_heap_size)} MB de un límite de ${mb(s.heap_size_limit)} MB. Sube el límite en Configuración → Análisis o excluye carpetas generadas (build, vendor) con un archivo .radarignore.`,
+    `The analysis stopped before running out of memory: it was using ${mb(s.used_heap_size)} MB of a ${mb(s.heap_size_limit)} MB limit. Raise the limit in Settings → Analysis or exclude generated folders (build, vendor) with a .radarignore file.`,
+  );
 }

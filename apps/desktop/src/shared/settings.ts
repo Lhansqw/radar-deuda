@@ -22,6 +22,20 @@ export const DEFAULT_THEME: ThemeSetting = 'dark';
 
 export const LOCAL_PROVIDERS: ReadonlySet<AiProviderName> = new Set(['lmstudio', 'ollama']);
 
+/** Idiomas de la interfaz, de los hallazgos y de las respuestas de la IA. */
+export type Locale = 'es' | 'en';
+/** «auto»: el idioma del sistema (español si es es-*, inglés en otro caso). */
+export type LanguageSetting = 'auto' | Locale;
+export const LOCALES: readonly Locale[] = ['es', 'en'];
+export const LANGUAGE_SETTINGS: readonly LanguageSetting[] = ['auto', 'es', 'en'];
+export const isLanguageSetting = (v: unknown): v is LanguageSetting => typeof v === 'string' && (LANGUAGE_SETTINGS as readonly string[]).includes(v);
+
+/** Idioma que se usa: el elegido o, en «auto», el del sistema. */
+export function resolveLocale(setting: LanguageSetting, systemLang: string): Locale {
+  if (setting !== 'auto') return setting;
+  return /^es\b/i.test(systemLang) ? 'es' : 'en';
+}
+
 export interface AnalysisSettings {
   /** Puntos críticos con el historial de Git. */
   history: boolean;
@@ -113,36 +127,120 @@ function isHttpUrlWithoutCredentials(value: string): boolean {
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
+/** Textos de los errores de validación, en los dos idiomas. */
+const MESSAGES = {
+  es: {
+    bool: (l: string) => `${l}: debe ser sí o no.`,
+    int: (l: string, min: number, max: number) => `${l}: debe ser un número entero entre ${min} y ${max}.`,
+    oneOf: (l: string) => `${l}: valor no válido.`,
+    str: (l: string) => `${l}: texto no válido.`,
+    list: (l: string) => `${l}: lista no válida.`,
+    labels: {
+      history: 'Historial de Git',
+      historyMonths: 'Meses de historial',
+      online: 'Consultas en línea',
+      memory: 'Memoria del análisis (MB)',
+      provider: 'Proveedor de IA',
+      model: 'Modelo',
+      fallbackModels: 'Modelos de respaldo',
+      localUrl: 'Servidor local',
+      auto: 'IA automática',
+      privacy: 'Privacidad',
+      limit: 'Hallazgos a explicar',
+      plan: 'Plan de reducción',
+      allowDataCollection: 'Permitir retención de datos',
+      zeroDataRetention: 'Retención cero',
+      reasoning: 'Razonamiento',
+      sync: 'Copia en la nube',
+      updates: 'Buscar versiones nuevas',
+    },
+    budget: 'Presupuesto: debe ser mayor que 0 y como mucho 50 USD.',
+    autoNeedsModel: 'Para usar la IA automáticamente con OpenRouter, elige un modelo.',
+    localPrivacy: 'Privacidad "local" impide usar un proveedor en la nube.',
+    localUrl: 'Servidor local: URL no válida (p. ej. http://localhost:1234/v1).',
+    openRouterModel: 'Modelo: en OpenRouter el formato es proveedor/modelo.',
+    maxFallbacks: 'Modelos de respaldo: como mucho 3.',
+    badFallback: (m: string) => `Modelo de respaldo no válido: ${m} (formato proveedor/modelo).`,
+    retentionConflict: 'Retención cero y permitir retención de datos son incompatibles.',
+    badModelId: 'Modelo: identificador no válido.',
+    fallbacksOnlyOpenRouter: 'Los modelos de respaldo solo existen en OpenRouter.',
+    badFormat: 'Formato de ajustes no válido.',
+  },
+  en: {
+    bool: (l: string) => `${l}: must be yes or no.`,
+    int: (l: string, min: number, max: number) => `${l}: must be a whole number between ${min} and ${max}.`,
+    oneOf: (l: string) => `${l}: invalid value.`,
+    str: (l: string) => `${l}: invalid text.`,
+    list: (l: string) => `${l}: invalid list.`,
+    labels: {
+      history: 'Git history',
+      historyMonths: 'Months of history',
+      online: 'Online lookups',
+      memory: 'Analysis memory (MB)',
+      provider: 'AI provider',
+      model: 'Model',
+      fallbackModels: 'Fallback models',
+      localUrl: 'Local server',
+      auto: 'Automatic AI',
+      privacy: 'Privacy',
+      limit: 'Findings to explain',
+      plan: 'Reduction plan',
+      allowDataCollection: 'Allow data retention',
+      zeroDataRetention: 'Zero retention',
+      reasoning: 'Reasoning',
+      sync: 'Cloud copy',
+      updates: 'Check for new versions',
+    },
+    budget: 'Budget: must be greater than 0 and at most 50 USD.',
+    autoNeedsModel: 'To use AI automatically with OpenRouter, choose a model.',
+    localPrivacy: '"Local" privacy does not allow a cloud provider.',
+    localUrl: 'Local server: invalid URL (e.g. http://localhost:1234/v1).',
+    openRouterModel: 'Model: on OpenRouter the format is provider/model.',
+    maxFallbacks: 'Fallback models: at most 3.',
+    badFallback: (m: string) => `Invalid fallback model: ${m} (format provider/model).`,
+    retentionConflict: 'Zero retention and allowing data retention are incompatible.',
+    badModelId: 'Model: invalid identifier.',
+    fallbacksOnlyOpenRouter: 'Fallback models only exist on OpenRouter.',
+    badFormat: 'Invalid settings format.',
+  },
+};
+type Messages = (typeof MESSAGES)['es'];
+// Las dos versiones deben tener las mismas claves.
+const _parity: Record<Locale, Messages> = MESSAGES;
+void _parity;
+
 export type SettingsResult = { ok: true; value: AppSettings } | { ok: false; errors: string[] };
 
 /**
  * Lee los campos de un objeto sin confiar en él: cada campo que no es válido
- * añade su error (en español) y devuelve un valor sustituto para seguir.
+ * añade su error (en el idioma elegido) y devuelve un valor sustituto para seguir.
  */
 class FieldReader {
   readonly errors: string[] = [];
 
+  constructor(readonly m: Messages) {}
+
   bool(o: Record<string, unknown>, k: string, label: string): boolean {
-    if (typeof o[k] !== 'boolean') this.errors.push(`${label}: debe ser sí o no.`);
+    if (typeof o[k] !== 'boolean') this.errors.push(this.m.bool(label));
     return o[k] === true;
   }
 
   int(o: Record<string, unknown>, k: string, min: number, max: number, label: string): number {
     const v = o[k];
-    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) this.errors.push(`${label}: debe ser un número entero entre ${min} y ${max}.`);
+    if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) this.errors.push(this.m.int(label, min, max));
     return typeof v === 'number' ? v : min;
   }
 
   oneOf<T extends string>(o: Record<string, unknown>, k: string, values: readonly T[], label: string): T {
     const v = o[k];
     const ok = typeof v === 'string' && values.includes(v as T);
-    if (!ok) this.errors.push(`${label}: valor no válido.`);
+    if (!ok) this.errors.push(this.m.oneOf(label));
     return (ok ? v : values[0]) as T;
   }
 
   str(o: Record<string, unknown>, k: string, label: string): string {
     const v = o[k];
-    if (typeof v !== 'string' || v.length > 500) this.errors.push(`${label}: texto no válido.`);
+    if (typeof v !== 'string' || v.length > 500) this.errors.push(this.m.str(label));
     return typeof v === 'string' ? v.trim() : '';
   }
 
@@ -150,7 +248,7 @@ class FieldReader {
   strings(o: Record<string, unknown>, k: string, label: string): string[] {
     const v = o[k];
     if (!Array.isArray(v)) {
-      this.errors.push(`${label}: lista no válida.`);
+      this.errors.push(this.m.list(label));
       return [];
     }
     return v
@@ -161,83 +259,91 @@ class FieldReader {
 }
 
 function readAnalysis(r: FieldReader, a: Record<string, unknown>): AnalysisSettings {
+  const L = r.m.labels;
   return {
-    history: r.bool(a, 'history', 'Historial de Git'),
-    historyMonths: r.int(a, 'historyMonths', 1, 120, 'Meses de historial'),
-    online: r.bool(a, 'online', 'Consultas en línea'),
-    memoryLimitMb: r.int(a, 'memoryLimitMb', MEMORY_LIMIT_RANGE.min, MEMORY_LIMIT_RANGE.max, 'Memoria del análisis (MB)'),
+    history: r.bool(a, 'history', L.history),
+    historyMonths: r.int(a, 'historyMonths', 1, 120, L.historyMonths),
+    online: r.bool(a, 'online', L.online),
+    memoryLimitMb: r.int(a, 'memoryLimitMb', MEMORY_LIMIT_RANGE.min, MEMORY_LIMIT_RANGE.max, L.memory),
   };
 }
 
 /** Campo a campo; el orden de lectura es el orden en que se muestran los errores. */
 function readAi(r: FieldReader, ai: Record<string, unknown>): AiSettings {
-  const provider = r.oneOf(ai, 'provider', AI_PROVIDER_NAMES, 'Proveedor de IA');
-  const model = r.str(ai, 'model', 'Modelo');
-  const fallbackModels = r.strings(ai, 'fallbackModels', 'Modelos de respaldo');
+  const L = r.m.labels;
+  const provider = r.oneOf(ai, 'provider', AI_PROVIDER_NAMES, L.provider);
+  const model = r.str(ai, 'model', L.model);
+  const fallbackModels = r.strings(ai, 'fallbackModels', L.fallbackModels);
   const budgetUsd = ai['budgetUsd'];
-  if (typeof budgetUsd !== 'number' || !Number.isFinite(budgetUsd) || budgetUsd <= 0 || budgetUsd > 50) r.errors.push('Presupuesto: debe ser mayor que 0 y como mucho 50 USD.');
-  const localUrl = r.str(ai, 'localUrl', 'Servidor local');
+  if (typeof budgetUsd !== 'number' || !Number.isFinite(budgetUsd) || budgetUsd <= 0 || budgetUsd > 50) r.errors.push(r.m.budget);
+  const localUrl = r.str(ai, 'localUrl', L.localUrl);
   return {
-    auto: r.bool(ai, 'auto', 'IA automática'),
+    auto: r.bool(ai, 'auto', L.auto),
     provider,
     model,
     fallbackModels,
-    privacy: r.oneOf(ai, 'privacy', PRIVACY_SETTINGS, 'Privacidad'),
-    limit: r.int(ai, 'limit', 1, 50, 'Hallazgos a explicar'),
+    privacy: r.oneOf(ai, 'privacy', PRIVACY_SETTINGS, L.privacy),
+    limit: r.int(ai, 'limit', 1, 50, L.limit),
     budgetUsd: typeof budgetUsd === 'number' ? budgetUsd : DEFAULT_SETTINGS.ai.budgetUsd,
-    plan: r.bool(ai, 'plan', 'Plan de reducción'),
-    allowDataCollection: r.bool(ai, 'allowDataCollection', 'Permitir retención de datos'),
-    zeroDataRetention: r.bool(ai, 'zeroDataRetention', 'Retención cero'),
-    reasoning: r.oneOf(ai, 'reasoning', REASONING_LEVELS, 'Razonamiento'),
+    plan: r.bool(ai, 'plan', L.plan),
+    allowDataCollection: r.bool(ai, 'allowDataCollection', L.allowDataCollection),
+    zeroDataRetention: r.bool(ai, 'zeroDataRetention', L.zeroDataRetention),
+    reasoning: r.oneOf(ai, 'reasoning', REASONING_LEVELS, L.reasoning),
     localUrl,
   };
 }
 
 function readCloud(r: FieldReader, c: Record<string, unknown>): CloudSettings {
-  return { sync: r.bool(c, 'sync', 'Copia en la nube') };
+  return { sync: r.bool(c, 'sync', r.m.labels.sync) };
 }
 
 function readUpdates(r: FieldReader, u: Record<string, unknown>): UpdateSettings {
-  return { check: r.bool(u, 'check', 'Buscar versiones nuevas') };
+  return { check: r.bool(u, 'check', r.m.labels.updates) };
 }
 
 /** Reglas que relacionan campos de la IA. */
-function aiRuleErrors(s: AiSettings): string[] {
+function aiRuleErrors(s: AiSettings, m: Messages): string[] {
   return [
     // La IA incluida elige sus modelos en el servidor: el modelo y los respaldos no se usan.
-    ...(s.provider === 'openrouter' ? openRouterErrors(s) : s.provider === 'incluida' ? [] : otherProviderErrors(s)),
-    ...(s.auto && s.provider === 'openrouter' && s.model === '' ? ['Para usar la IA automáticamente con OpenRouter, elige un modelo.'] : []),
-    ...(!LOCAL_PROVIDERS.has(s.provider) && s.privacy === 'local' ? ['Privacidad "local" impide usar un proveedor en la nube.'] : []),
-    ...(s.localUrl !== '' && !isHttpUrlWithoutCredentials(s.localUrl) ? ['Servidor local: URL no válida (p. ej. http://localhost:1234/v1).'] : []),
+    ...(s.provider === 'openrouter' ? openRouterErrors(s, m) : s.provider === 'incluida' ? [] : otherProviderErrors(s, m)),
+    ...(s.auto && s.provider === 'openrouter' && s.model === '' ? [m.autoNeedsModel] : []),
+    ...(!LOCAL_PROVIDERS.has(s.provider) && s.privacy === 'local' ? [m.localPrivacy] : []),
+    ...(s.localUrl !== '' && !isHttpUrlWithoutCredentials(s.localUrl) ? [m.localUrl] : []),
   ];
 }
 
-function openRouterErrors(s: AiSettings): string[] {
+function openRouterErrors(s: AiSettings, m: Messages): string[] {
   const errors: string[] = [];
-  if (s.model !== '' && !OPENROUTER_MODEL.test(s.model)) errors.push('Modelo: en OpenRouter el formato es proveedor/modelo.');
-  if (s.fallbackModels.length > 3) errors.push('Modelos de respaldo: como mucho 3.');
-  const bad = s.fallbackModels.find((m) => !OPENROUTER_MODEL.test(m));
-  if (bad) errors.push(`Modelo de respaldo no válido: ${bad} (formato proveedor/modelo).`);
-  if (s.allowDataCollection && s.zeroDataRetention) errors.push('Retención cero y permitir retención de datos son incompatibles.');
+  if (s.model !== '' && !OPENROUTER_MODEL.test(s.model)) errors.push(m.openRouterModel);
+  if (s.fallbackModels.length > 3) errors.push(m.maxFallbacks);
+  const bad = s.fallbackModels.find((f) => !OPENROUTER_MODEL.test(f));
+  if (bad) errors.push(m.badFallback(bad));
+  if (s.allowDataCollection && s.zeroDataRetention) errors.push(m.retentionConflict);
   return errors;
 }
 
-function otherProviderErrors(s: AiSettings): string[] {
+function otherProviderErrors(s: AiSettings, m: Messages): string[] {
   const errors: string[] = [];
-  if (s.model !== '' && !MODEL_ID.test(s.model)) errors.push('Modelo: identificador no válido.');
-  if (s.fallbackModels.length > 0) errors.push('Los modelos de respaldo solo existen en OpenRouter.');
+  if (s.model !== '' && !MODEL_ID.test(s.model)) errors.push(m.badModelId);
+  if (s.fallbackModels.length > 0) errors.push(m.fallbacksOnlyOpenRouter);
   return errors;
 }
 
 /**
- * Valida unos ajustes completos. Devuelve todos los errores a la vez, en
- * español, para mostrarlos junto al formulario.
+ * Valida unos ajustes completos. Devuelve todos los errores a la vez, en el
+ * idioma pedido, para mostrarlos junto al formulario.
  */
-export function validateSettings(input: unknown): SettingsResult {
-  if (!isObject(input) || !isObject(input['analysis']) || !isObject(input['ai']) || !isObject(input['cloud']) || !isObject(input['updates'])) return { ok: false, errors: ['Formato de ajustes no válido.'] };
-  const r = new FieldReader();
-  const settings: AppSettings = { analysis: readAnalysis(r, input['analysis']), ai: readAi(r, input['ai']), cloud: readCloud(r, input['cloud']), updates: readUpdates(r, input['updates']) };
-  const errors = [...r.errors, ...aiRuleErrors(settings.ai)];
+export function validateSettings(input: unknown, locale: Locale = 'es'): SettingsResult {
+  const m = MESSAGES[locale];
+  if (!isObject(input) || !isObject(input['analysis']) || !isObject(input['ai']) || !isObject(input['cloud']) || !isObject(input['updates'])) return { ok: false, errors: [m.badFormat] };
+  const r = new FieldReader(m);
+  const settings: AppSettings = {
+    analysis: readAnalysis(r, input['analysis']),
+    ai: readAi(r, input['ai']),
+    cloud: readCloud(r, input['cloud']),
+    updates: readUpdates(r, input['updates']),
+  };
+  const errors = [...r.errors, ...aiRuleErrors(settings.ai, m)];
   return errors.length > 0 ? { ok: false, errors } : { ok: true, value: settings };
 }
 

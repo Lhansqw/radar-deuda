@@ -281,6 +281,9 @@ async function main(): Promise<void> {
     mkdirSync(path.join(tmp, 'datos'), { recursive: true });
     writeFileSync(path.join(tmp, 'datos', 'apariencia.json'), JSON.stringify({ theme }));
   }
+  // La prueba comprueba los textos en español: el idioma se fija, sin depender del sistema (main/i18n.ts).
+  mkdirSync(path.join(tmp, 'datos'), { recursive: true });
+  writeFileSync(path.join(tmp, 'datos', 'idioma.json'), JSON.stringify({ language: 'es' }));
   const executablePath = process.env['RADAR_E2E_ELECTRON'] ?? (createRequire(import.meta.url)('electron') as string);
   const app = await electron.launch({
     executablePath,

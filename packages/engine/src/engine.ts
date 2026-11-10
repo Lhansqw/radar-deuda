@@ -24,6 +24,7 @@ import type {
   SkippedFile,
 } from './types.js';
 import { errorMessage, mapWithConcurrency, sha1, sortFindings, splitLines } from './util.js';
+import { translator, type Translate } from './i18n.js';
 
 export interface AnalyzeOptions {
   config?: ConfigOverrides;
@@ -81,7 +82,8 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
   await saveCache(run, files);
 
   const testFiles = new Set(files.filter((f) => f.isTest).map((f) => f.relPath));
-  const deduped = dedupeById(run.findings).map((f) => adjustForTestCode(f, testFiles));
+  const tr = translator(config.locale);
+  const deduped = dedupeById(run.findings).map((f) => adjustForTestCode(f, testFiles, tr));
   sortFindings(deduped);
   const cpu = process.cpuUsage(cpuStart);
   onProgress?.({ phase: 'done', done: files.length, total: files.length });
@@ -95,7 +97,7 @@ export async function analyzeRepository(rootInput: string, options: AnalyzeOptio
     score: computeScore(deduped, totalCodeLines(run.artifacts)),
     findings: deduped,
     summary: summarize(deduped),
-    coverage: mergeCoverage(buildCoverage(files, run.skipped), extraCoverage),
+    coverage: mergeCoverage(buildCoverage(files, run.skipped, tr), extraCoverage),
     errors: run.errors,
     stats: {
       durationMs: Math.round(performance.now() - started),
@@ -276,8 +278,10 @@ function cachedByHash(meta: FileMeta, contentHash: string, analyzers: readonly F
 function tooLarge(meta: FileMeta, buf: Buffer, config: AnalysisConfig): FileOutcome {
   if (!meta.isCode) return { status: 'skipped', reason: 'too-large' };
   const { codeLines, totalLines } = countLines(buf);
-  const note = `No se analizó en profundidad: supera el límite de ${Math.round(config.maxFileSizeBytes / 1024)} KB.`;
-  const extra = largeFileFinding(meta.relPath, codeLines, totalLines, config.thresholds, note);
+  const tr = translator(config.locale);
+  const kb = Math.round(config.maxFileSizeBytes / 1024);
+  const note = tr(`No se analizó en profundidad: supera el límite de ${kb} KB.`, `Not analyzed in depth: it exceeds the ${kb} KB limit.`);
+  const extra = largeFileFinding(meta.relPath, codeLines, totalLines, config.thresholds, note, tr);
   return { status: 'skipped', reason: 'too-large', ...(extra ? { extraFinding: extra } : {}), codeLines };
 }
 
@@ -361,9 +365,9 @@ const DOWNGRADE: Record<Severity, Severity> = { critical: 'high', high: 'medium'
  * datos de ejemplo). Se reduce un nivel la severidad, sin ocultar el hallazgo.
  * Devuelve una copia: los objetos de la caché no se modifican.
  */
-function adjustForTestCode(f: Finding, testFiles: ReadonlySet<string>): Finding {
+function adjustForTestCode(f: Finding, testFiles: ReadonlySet<string>, tr: Translate): Finding {
   if (!TEST_ADJUSTED.has(f.category) || f.locations.length === 0 || !f.locations.every((l) => testFiles.has(l.file))) return f;
-  return { ...f, severity: DOWNGRADE[f.severity], message: `${f.message} (Código de pruebas: severidad reducida un nivel.)` };
+  return { ...f, severity: DOWNGRADE[f.severity], message: `${f.message} ${tr('(Código de pruebas: severidad reducida un nivel.)', '(Test code: severity lowered one level.)')}` };
 }
 
 function dedupeById(findings: Finding[]): Finding[] {
@@ -382,32 +386,60 @@ function summarize(findings: readonly Finding[]): AnalysisReport['summary'] {
   return { bySeverity, byCategory };
 }
 
-function buildCoverage(files: readonly FileMeta[], skipped: readonly SkippedFile[]): CoverageNote[] {
+function buildCoverage(files: readonly FileMeta[], skipped: readonly SkippedFile[], tr: Translate): CoverageNote[] {
   const jsts = files.filter((f) => f.language === 'typescript' || f.language === 'javascript').length;
   const python = files.filter((f) => f.language === 'python').length;
   const otherCode = files.filter((f) => f.isCode && f.language === 'other').length;
-  const measured = [jsts > 0 ? `${jsts} archivo(s) JS/TS con la API del compilador de TypeScript` : null, python > 0 ? `${python} archivo(s) Python con un analizador propio (sin ejecutar el código)` : null].filter((p) => p !== null);
+  const measured = [
+    jsts > 0 ? tr(`${jsts} archivo(s) JS/TS con la API del compilador de TypeScript`, `${jsts} JS/TS file(s) with the TypeScript compiler API`) : null,
+    python > 0 ? tr(`${python} archivo(s) Python con un analizador propio (sin ejecutar el código)`, `${python} Python file(s) with a built-in analyzer (without running the code)`) : null,
+  ].filter((p) => p !== null);
   const notes: CoverageNote[] = [
     {
-      area: 'Complejidad y duplicación',
+      area: tr('Complejidad y duplicación', 'Complexity and duplication'),
       status: measured.length > 0 ? 'analyzed' : 'not-analyzed',
-      detail: measured.length > 0 ? `Analizados: ${measured.join(' y ')}.` : 'No hay archivos JS/TS ni Python.',
+      detail: measured.length > 0 ? tr(`Analizados: ${measured.join(' y ')}.`, `Analyzed: ${measured.join(' and ')}.`) : tr('No hay archivos JS/TS ni Python.', 'There are no JS/TS or Python files.'),
     },
     {
-      area: 'Arquitectura',
+      area: tr('Arquitectura', 'Architecture'),
       status: measured.length > 0 ? 'partial' : 'not-analyzed',
-      detail: 'Ciclos y acoplamiento según las importaciones internas. En JS/TS, las relativas (no se resuelven alias de tsconfig ni paquetes del monorepo); en Python, relativas y absolutas que corresponden a archivos del repositorio.',
+      detail: tr(
+        'Ciclos y acoplamiento según las importaciones internas. En JS/TS, las relativas (no se resuelven alias de tsconfig ni paquetes del monorepo); en Python, relativas y absolutas que corresponden a archivos del repositorio.',
+        'Cycles and coupling based on internal imports. In JS/TS, relative ones (tsconfig aliases and monorepo packages are not resolved); in Python, relative and absolute ones that match files in the repository.',
+      ),
     },
-    { area: 'Secretos', status: 'analyzed', detail: 'Patrones de formatos conocidos y asignaciones de alta entropía en todos los archivos de texto.' },
-    { area: 'Dependencias', status: 'partial', detail: 'Higiene de manifiestos npm. Para vulnerabilidades conocidas y versiones desactualizadas ejecuta con --online.' },
-    { area: 'Pruebas', status: 'partial', detail: 'Heurística por convención de nombres; no mide cobertura real.' },
-    { area: 'Reglas de estilo y errores (ESLint/Semgrep)', status: 'not-analyzed', detail: 'Integración prevista en una fase posterior.' },
+    {
+      area: tr('Secretos', 'Secrets'),
+      status: 'analyzed',
+      detail: tr('Patrones de formatos conocidos y asignaciones de alta entropía en todos los archivos de texto.', 'Known format patterns and high-entropy assignments in all text files.'),
+    },
+    {
+      area: tr('Dependencias', 'Dependencies'),
+      status: 'partial',
+      detail: tr(
+        'Higiene de manifiestos npm. Para vulnerabilidades conocidas y versiones desactualizadas ejecuta con --online.',
+        'npm manifest hygiene. For known vulnerabilities and outdated versions, run with online lookups.',
+      ),
+    },
+    { area: tr('Pruebas', 'Tests'), status: 'partial', detail: tr('Heurística por convención de nombres; no mide cobertura real.', 'Naming-convention heuristic; it does not measure real coverage.') },
+    { area: tr('Reglas de estilo y errores (ESLint/Semgrep)', 'Style and error rules (ESLint/Semgrep)'), status: 'not-analyzed', detail: tr('Integración prevista en una fase posterior.', 'Integration planned for a later phase.') },
   ];
   if (otherCode > 0) {
-    notes.push({ area: 'Otros lenguajes', status: 'partial', detail: `${otherCode} archivo(s) de otros lenguajes: solo tamaño, marcadores y secretos.` });
+    notes.push({
+      area: tr('Otros lenguajes', 'Other languages'),
+      status: 'partial',
+      detail: tr(`${otherCode} archivo(s) de otros lenguajes: solo tamaño, marcadores y secretos.`, `${otherCode} file(s) in other languages: only size, markers and secrets.`),
+    });
   }
   if (skipped.length > 0) {
-    notes.push({ area: 'Archivos omitidos', status: 'partial', detail: `${skipped.length} archivo(s) omitidos (binarios, minificados, demasiado grandes o ilegibles). Ver stats.skipped.` });
+    notes.push({
+      area: tr('Archivos omitidos', 'Skipped files'),
+      status: 'partial',
+      detail: tr(
+        `${skipped.length} archivo(s) omitidos (binarios, minificados, demasiado grandes o ilegibles). Ver stats.skipped.`,
+        `${skipped.length} file(s) skipped (binary, minified, too large or unreadable). See stats.skipped.`,
+      ),
+    });
   }
   return notes;
 }

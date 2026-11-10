@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SecretsStatus } from '../../src/shared/secrets.js';
-import { DEFAULT_SETTINGS, type AppSettings, type ThemeSetting } from '../../src/shared/settings.js';
+import { DEFAULT_SETTINGS, type AppSettings, type LanguageSetting, type Locale, type ThemeSetting } from '../../src/shared/settings.js';
+import { LanguageRoot } from '../../src/renderer/language.js';
+import { setLocale } from '../../src/renderer/i18n.js';
 import { Settings } from '../../src/renderer/views/Settings.js';
 import { APP_INFO, mockRadar, type RadarOverrides } from './radar.js';
 
@@ -17,19 +19,32 @@ function setup(overrides: RadarOverrides = {}) {
   let stored: AppSettings = structuredClone(DEFAULT_SETTINGS);
   const set = vi.fn(async (s: AppSettings) => (stored = structuredClone(s)));
   const setTheme = vi.fn(async (t: ThemeSetting) => t);
+  const setLanguage = vi.fn(async (l: LanguageSetting) => (l === 'en' ? 'en' : 'es') as Locale);
   mockRadar({
     ...overrides,
     settings: { get: async () => structuredClone(stored), set, ...overrides.settings },
     secrets: { status: async () => SECRETS },
-    app: { info: async () => APP_INFO, theme: async () => 'dark', setTheme, ...overrides.app },
+    app: { info: async () => APP_INFO, theme: async () => 'dark', setTheme, setLanguage, ...overrides.app },
   });
-  render(<Settings account={ACCOUNT} />);
-  return { set, setTheme, user: userEvent.setup() };
+  render(<LanguageRoot render={() => <Settings account={ACCOUNT} />} />);
+  return { set, setTheme, setLanguage, user: userEvent.setup() };
 }
 
 const historyBox = () => screen.findByRole('checkbox', { name: /Puntos críticos con el historial de Git/ });
 
+afterEach(() => setLocale('es'));
+
 describe('Configuración', () => {
+  it('el idioma se aplica al elegirlo, sin pasar por el borrador', async () => {
+    const { set, setLanguage, user } = setup();
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Idioma de la aplicación' }), 'en');
+    expect(setLanguage).toHaveBeenCalledWith('en');
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: /Hotspots with the Git history/ })).toBeChecked();
+    expect(set).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: 'Save changes' })).toBeNull();
+  });
+
   it('sin cambios no muestra la barra de guardar', async () => {
     setup();
     expect(await historyBox()).toBeChecked();

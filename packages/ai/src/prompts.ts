@@ -1,3 +1,5 @@
+import type { Locale } from '@radar/engine';
+
 /**
  * Instrucciones del sistema. Cambiar su texto obliga a cambiar la versión,
  * que forma parte de la clave de caché.
@@ -6,6 +8,20 @@ export const EXPLAIN_PROMPT_VERSION = 'explicar-v1';
 export const PLAN_PROMPT_VERSION = 'plan-v1';
 export const FIX_PROMPT_VERSION = 'corregir-v1';
 export const CHAT_PROMPT_VERSION = 'preguntar-v1';
+
+/**
+ * Instrucciones en el idioma pedido. En español, las de siempre (las
+ * respuestas ya guardadas en la caché siguen valiendo). En inglés se cambia
+ * la regla del idioma: los textos se escriben en inglés, pero las claves del
+ * JSON y los valores enumerados (evidencia, alta, inmediato…) no cambian,
+ * porque los valida el código. El texto forma parte de la clave de caché.
+ */
+export function localizedSystem(system: string, locale: Locale = 'es'): string {
+  if (locale === 'es') return system;
+  return `${system.split('Responde en español').join('Responde en inglés')}
+
+LANGUAGE: write every free-text value of your answer (summaries, causes, recommendations, claims, titles, justifications, risks, steps, notes and chat answers) in English. Keep the JSON keys and the enumerated values ("evidencia", "inferencia", "recomendacion", "alta", "media", "baja", "inmediato", "corto", "medio") exactly as specified above.`;
+}
 
 const COMMON_RULES = `Reglas obligatorias:
 1. Usa solo la información del mensaje. Los datos de la sección "Hallazgo" provienen de herramientas de análisis y son verificables. No inventes métricas, errores, dependencias, vulnerabilidades, nombres ni números de línea.

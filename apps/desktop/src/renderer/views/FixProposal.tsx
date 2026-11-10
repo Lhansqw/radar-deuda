@@ -6,9 +6,9 @@ import { DiffView } from '../components/DiffView.js';
 import { FixConsentDialog } from '../components/FixConsentDialog.js';
 import { Icon } from '../components/Icon.js';
 import { formatDateTime } from '../lib/format.js';
-import { diffStats, fixAvailability, SECRET_FIX_ADVICE } from '../lib/fix.js';
+import { diffStats, fixAvailability, secretFixAdvice } from '../lib/fix.js';
+import { tr } from '../i18n.js';
 
-const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Propuesta de corrección de la IA como diferencia revisable. La aplicación
@@ -20,8 +20,8 @@ export function FixProposal({ finding, analysisId, onOpenSettings }: { finding: 
   if (availability === 'secret') {
     return (
       <section className="detail-section">
-        <h3>Cómo corregirlo</h3>
-        <p>{SECRET_FIX_ADVICE}</p>
+        <h3>{tr('Cómo corregirlo', 'How to fix it')}</h3>
+        <p>{secretFixAdvice()}</p>
       </section>
     );
   }
@@ -87,7 +87,7 @@ function FixSection({ findingId, analysisId, onOpenSettings }: { findingId: stri
   return (
     <section className="detail-section fix" aria-labelledby={`fix-${findingId}`}>
       <h3 id={`fix-${findingId}`}>
-        <Icon name="sparkle" size={16} /> Propuesta de corrección
+        <Icon name="sparkle" size={16} /> {tr('Propuesta de corrección', 'Fix proposal')}
       </h3>
       {fix.stored === undefined ? null : proposal ? (
         <>
@@ -113,13 +113,16 @@ function ErrorText({ error }: { error: string | null }) {
 
 /** Aún no hay propuesta: qué hace y el botón para pedirla. */
 function FixRequest({ busy, error, onStart, onOpenSettings }: { busy: boolean; error: string | null; onStart: () => void; onOpenSettings: () => void }) {
-  const label = busy ? 'Proponiendo…' : error ? 'Reintentar' : 'Proponer una corrección';
+  const label = busy ? tr('Proponiendo…', 'Proposing…') : error ? tr('Reintentar', 'Retry') : tr('Proponer una corrección', 'Propose a fix');
   return (
     <div className="ai-ask">
       <p>
         {busy
-          ? 'Preparando la propuesta… Con los modelos gratuitos puede tardar hasta un minuto.'
-          : 'La IA puede proponer el cambio como una diferencia que revisas antes de aplicarla tú. Necesita ver el fragmento de código del hallazgo.'}
+          ? tr('Preparando la propuesta… Con los modelos gratuitos puede tardar hasta un minuto.', 'Preparing the proposal… With free models it can take up to a minute.')
+          : tr(
+              'La IA puede proponer el cambio como una diferencia que revisas antes de aplicarla tú. Necesita ver el fragmento de código del hallazgo.',
+              'The AI can propose the change as a diff that you review before applying it yourself. It needs to see the code snippet of the finding.',
+            )}
       </p>
       <ErrorText error={error} />
       <div className="buttons">
@@ -128,7 +131,7 @@ function FixRequest({ busy, error, onStart, onOpenSettings }: { busy: boolean; e
         </button>
         {error ? (
           <button type="button" className="btn btn-quiet" onClick={onOpenSettings}>
-            <Icon name="settings" size={16} /> Configuración
+            <Icon name="settings" size={16} /> {tr('Configuración', 'Settings')}
           </button>
         ) : null}
       </div>
@@ -142,30 +145,35 @@ function FixResult({ proposal: p, stale }: { proposal: AiFixProposal; stale: boo
   return (
     <>
       <p className="muted">
-        Orientativa: revísala antes de aplicarla. Modelo {p.model}, {formatDateTime(p.createdAt)}
-        {p.fromCache ? ', desde caché' : ''}.
+        {tr('Orientativa: revísala antes de aplicarla. Modelo', 'For guidance only: review it before applying it. Model')} {p.model}, {formatDateTime(p.createdAt)}
+        {p.fromCache ? tr(', desde caché', ', from cache') : ''}.
       </p>
       {stale ? (
         <p className="fix-warn" role="status">
-          <Icon name="alert" size={14} /> El archivo cambió después de la propuesta: puede que el parche ya no se aplique.
+          <Icon name="alert" size={14} /> {tr('El archivo cambió después de la propuesta: puede que el parche ya no se aplique.', 'The file changed after the proposal: the patch may no longer apply.')}
         </p>
       ) : null}
-      <p>{p.applicable ? p.summary : `La IA no propone cambios: ${p.summary}`}</p>
+      <p>{p.applicable ? p.summary : tr(`La IA no propone cambios: ${p.summary}`, `The AI proposes no changes: ${p.summary}`)}</p>
       {p.hunks.length > 0 ? (
         <>
           <p className="small muted">
-            {plural(stats.removed, 'línea eliminada', 'líneas eliminadas')} y {stats.added} {stats.added === 1 ? 'añadida' : 'añadidas'}
-            {stats.files > 1 ? ` en ${stats.files} archivos` : ''}.
+            {tr(
+              `${stats.removed} ${stats.removed === 1 ? 'línea eliminada' : 'líneas eliminadas'} y ${stats.added} ${stats.added === 1 ? 'añadida' : 'añadidas'}`,
+              `${stats.removed} ${stats.removed === 1 ? 'line' : 'lines'} removed and ${stats.added} added`,
+            )}
+            {stats.files > 1 ? tr(` en ${stats.files} archivos`, ` in ${stats.files} files`) : ''}.
           </p>
           <DiffView hunks={p.hunks} />
         </>
       ) : null}
-      <TitledList title="Qué revisar" items={p.risks} />
-      <TitledList title="Cómo comprobarlo" items={p.verification} />
+      <TitledList title={tr('Qué revisar', 'What to review')} items={p.risks} />
+      <TitledList title={tr('Cómo comprobarlo', 'How to check it')} items={p.verification} />
       {p.validationNotes.length > 0 ? (
         <ul className="validation">
           {p.validationNotes.map((n, i) => (
-            <li key={i}>Validación: {n}</li>
+            <li key={i}>
+              {tr('Validación:', 'Validation:')} {n}
+            </li>
           ))}
         </ul>
       ) : null}
@@ -206,12 +214,12 @@ function FixActions({
   const copy = (): void =>
     void window.radar.app
       .copyText(proposal.patch)
-      .then(() => setNotice('Parche copiado al portapapeles.'))
+      .then(() => setNotice(tr('Parche copiado al portapapeles.', 'Patch copied to the clipboard.')))
       .catch((err: unknown) => onError(errorMessage(err)));
   const save = (): void =>
     void window.radar.files
       .savePatch(analysisId, proposal.findingId)
-      .then((path) => path && setNotice(`Parche guardado en ${path}.`))
+      .then((path) => path && setNotice(tr(`Parche guardado en ${path}.`, `Patch saved to ${path}.`)))
       .catch((err: unknown) => onError(errorMessage(err)));
   return (
     <>
@@ -219,15 +227,15 @@ function FixActions({
         {hasPatch ? (
           <>
             <button type="button" className="btn" onClick={copy}>
-              Copiar el parche
+              {tr('Copiar el parche', 'Copy the patch')}
             </button>
             <button type="button" className="btn" onClick={save}>
-              Guardar el parche…
+              {tr('Guardar el parche…', 'Save the patch…')}
             </button>
           </>
         ) : null}
         <button type="button" className="btn btn-quiet" onClick={onAgain} disabled={busy} aria-busy={busy || undefined}>
-          {busy ? 'Proponiendo…' : 'Volver a proponer'}
+          {busy ? tr('Proponiendo…', 'Proposing…') : tr('Volver a proponer', 'Propose again')}
         </button>
       </div>
       {notice ? (
@@ -237,7 +245,8 @@ function FixActions({
       ) : null}
       {hasPatch ? (
         <p className="small muted">
-          La aplicación nunca modifica tus archivos. Para aplicarlo, en la carpeta del proyecto: <code>git apply nombre.patch</code>
+          {tr('La aplicación nunca modifica tus archivos. Para aplicarlo, en la carpeta del proyecto:', 'The app never changes your files. To apply it, in the project folder:')}{' '}
+          <code>{tr('git apply nombre.patch', 'git apply name.patch')}</code>
         </p>
       ) : null}
     </>

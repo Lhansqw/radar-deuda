@@ -9,6 +9,7 @@ import { mergeAiSection } from './ai-merge.js';
 import type { CredentialStore } from './credentials.js';
 import { aiKeysFrom, aiOptionsFrom, includedProblem, type IncludedAccess } from './jobs.js';
 import type { Store } from './store.js';
+import { currentLocale, tr } from './i18n.js';
 
 export interface AiServiceDeps {
   store: Store;
@@ -61,7 +62,7 @@ export class AiService {
       headers: { 'user-agent': 'radar-deuda', ...(key ? { authorization: `Bearer ${key}` } : {}) },
       ...(this.d.fetch ? { fetch: this.d.fetch } : {}),
     }).catch((err: unknown) => {
-      throw new AiServiceError(`No se pudo obtener la lista de modelos de OpenRouter: ${errorMessage(err)}`);
+      throw new AiServiceError(tr(`No se pudo obtener la lista de modelos de OpenRouter: ${errorMessage(err)}`, `Could not get the list of OpenRouter models: ${errorMessage(err)}`));
     });
     const models = list.map(toCatalogModel).sort((a, b) => (a.outputPerMTok ?? Infinity) - (b.outputPerMTok ?? Infinity) || a.id.localeCompare(b.id));
     this.catalog = { at: Date.now(), models };
@@ -70,7 +71,7 @@ export class AiService {
 
   async checkOpenRouterKey(): Promise<OpenRouterKeyCheck> {
     const key = this.d.credentials.get('openrouter');
-    if (!key) throw new AiServiceError('No hay ninguna clave de OpenRouter guardada.');
+    if (!key) throw new AiServiceError(tr('No hay ninguna clave de OpenRouter guardada.', 'No OpenRouter key is saved.'));
     const provider = new OpenRouterProvider({ apiKey: key, ...(this.d.fetch ? { fetch: this.d.fetch } : {}) });
     return provider.keyStatus();
   }
@@ -78,10 +79,10 @@ export class AiService {
   /** Consultas de IA incluida que quedan hoy a la cuenta. */
   async includedQuota(): Promise<IncludedQuota> {
     const included = this.d.includedAi?.() ?? null;
-    if (!included) throw new AiServiceError('Inicia sesión con conexión para ver tu cupo de IA incluida.');
+    if (!included) throw new AiServiceError(tr('Inicia sesión con conexión para ver tu cupo de IA incluida.', 'Sign in while online to see your included AI quota.'));
     const provider = new IncludedAiProvider({ baseUrl: included.url, sessionToken: included.token, ...(this.d.fetch ? { fetch: this.d.fetch } : {}) });
     const status = await provider.keyStatus();
-    if (!status.freeDaily) throw new AiServiceError('La función «ia» no devolvió el cupo.');
+    if (!status.freeDaily) throw new AiServiceError(tr('La función «ia» no devolvió el cupo.', 'The "ia" function did not return the quota.'));
     return status.freeDaily;
   }
 
@@ -101,15 +102,15 @@ export class AiService {
 
   private report(analysisId: number, findingId?: string): AnalysisReport {
     const report = this.d.store.getReport(analysisId);
-    if (!report) throw new AiServiceError('Ese análisis ya no existe.');
-    if (findingId !== undefined && !report.findings.some((f) => f.id === findingId)) throw new AiServiceError('Ese hallazgo no está en el análisis.');
+    if (!report) throw new AiServiceError(tr('Ese análisis ya no existe.', 'That analysis no longer exists.'));
+    if (findingId !== undefined && !report.findings.some((f) => f.id === findingId)) throw new AiServiceError(tr('Ese hallazgo no está en el análisis.', 'That finding is not in the analysis.'));
     return report;
   }
 
   /** Ajustes de la IA, si permiten hacer una consulta. */
   private aiSettings(): AppSettings['ai'] {
     const s = this.d.settings().ai;
-    if (s.provider === 'openrouter' && s.model === '') throw new AiServiceError('Elige un modelo de OpenRouter en Configuración.');
+    if (s.provider === 'openrouter' && s.model === '') throw new AiServiceError(tr('Elige un modelo de OpenRouter en Configuración.', 'Choose an OpenRouter model in Settings.'));
     const problem = includedProblem(s, this.included());
     if (problem) throw new AiServiceError(problem);
     return s;
@@ -122,7 +123,7 @@ export class AiService {
   /** Opciones y claves de una consulta con los ajustes dados. */
   private request(s: AppSettings['ai']): { options: AiOptions; keys: ApiKeys } {
     const included = this.included();
-    return { options: aiOptionsFrom(s, included), keys: aiKeysFrom(this.d.credentials, s, included) };
+    return { options: aiOptionsFrom(s, included, currentLocale()), keys: aiKeysFrom(this.d.credentials, s, included) };
   }
 
   private async doExplain(analysisId: number, findingId: string): Promise<AnalysisReport> {
@@ -139,7 +140,7 @@ export class AiService {
       cacheBase,
     );
     if (section.explanations.length === 0) {
-      throw new AiServiceError(section.errors[0]?.message ?? warnings[0] ?? 'La IA no devolvió ninguna explicación.');
+      throw new AiServiceError(section.errors[0]?.message ?? warnings[0] ?? tr('La IA no devolvió ninguna explicación.', 'The AI did not return any explanation.'));
     }
     report.ai = mergeAiSection(report.ai, section);
     this.d.store.updateReport(analysisId, report);
@@ -195,7 +196,7 @@ export class AiService {
 
   /** Pregunta sobre un análisis; guarda la pregunta y la respuesta solo si la IA responde. */
   async ask(analysisId: number, question: string): Promise<ChatMessage[]> {
-    if (this.asking.has(analysisId)) throw new AiServiceError('Espera a que termine la respuesta anterior.');
+    if (this.asking.has(analysisId)) throw new AiServiceError(tr('Espera a que termine la respuesta anterior.', 'Wait for the previous answer to finish.'));
     this.asking.add(analysisId);
     try {
       const report = this.report(analysisId);

@@ -9,6 +9,7 @@ import { useAction } from '../lib/action.js';
 import { formatEffort } from '../lib/format.js';
 import { CATEGORY_LABEL, CONFIDENCE_LABEL } from '../lib/labels.js';
 import { FixProposal } from './FixProposal.js';
+import { tr } from '../i18n.js';
 
 /** Líneas de contexto alrededor de la ubicación. */
 const CONTEXT = 4;
@@ -32,10 +33,12 @@ export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSe
         <div className="detail-tags">
           <SeverityMark severity={finding.severity} />
           <span>{CATEGORY_LABEL[finding.category]}</span>
-          <span>Confianza {CONFIDENCE_LABEL[finding.confidence]}</span>
+          <span>
+            {tr('Confianza', 'Confidence')} {CONFIDENCE_LABEL[finding.confidence]}
+          </span>
           <span className="mono">{finding.ruleId}</span>
           {ref ? (
-            <span className="mono" title="Referencia del hallazgo en este análisis (la que cita la IA al preguntar)">
+            <span className="mono" title={tr('Referencia del hallazgo en este análisis (la que cita la IA al preguntar)', 'Reference of the finding in this analysis (the one the AI cites when you ask)')}>
               {ref}
             </span>
           ) : null}
@@ -47,16 +50,18 @@ export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSe
       {codeLocations.slice(0, 3).map((loc, i) => (
         <CodeBlock key={`${loc.file}:${loc.startLine}:${i}`} location={loc} analysisId={analysisId} />
       ))}
-      {codeLocations.length > 3 ? <p className="muted">Y {codeLocations.length - 3} ubicaciones más con el mismo problema.</p> : null}
+      {codeLocations.length > 3 ? (
+        <p className="muted">{tr(`Y ${codeLocations.length - 3} ubicaciones más con el mismo problema.`, `And ${codeLocations.length - 3} more locations with the same problem.`)}</p>
+      ) : null}
 
       <section className="detail-section">
-        <h3>Por qué importa</h3>
+        <h3>{tr('Por qué importa', 'Why it matters')}</h3>
         <p>{finding.impact}</p>
       </section>
 
       {finding.evidence.length > 0 ? (
         <section className="detail-section">
-          <h3>Evidencia</h3>
+          <h3>{tr('Evidencia', 'Evidence')}</h3>
           <ul className="evidence">
             {finding.evidence.map((e, i) => (
               <EvidenceItem key={i} evidence={e} />
@@ -66,7 +71,9 @@ export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSe
       ) : null}
 
       <section className="detail-section">
-        <h3>Esfuerzo estimado: {formatEffort(finding.effort.minutes)}</h3>
+        <h3>
+          {tr('Esfuerzo estimado:', 'Estimated effort:')} {formatEffort(finding.effort.minutes)}
+        </h3>
         <p className="muted">{finding.effort.rationale}</p>
       </section>
 
@@ -94,7 +101,9 @@ function EvidenceItem({ evidence: e }: { evidence: Evidence }) {
               <i style={{ left: `${(m.threshold / Math.max(m.value, m.threshold * 2)) * 100}%` }} />
             </span>
           ) : null}
-          <span className="muted">umbral {m.threshold}</span>
+          <span className="muted">
+            {tr('umbral', 'threshold')} {m.threshold}
+          </span>
         </div>
       ) : null}
       {e.snippet ? <pre className="evidence-snippet">{e.snippet}</pre> : null}
@@ -128,13 +137,15 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
         </span>
         {location.symbol ? <span className="muted">{location.symbol}</span> : null}
         <button type="button" className="btn btn-quiet btn-small" onClick={() => void window.radar.files.reveal(analysisId, location.file).catch(() => undefined)}>
-          <Icon name="reveal" size={14} /> Mostrar en la carpeta
+          <Icon name="reveal" size={14} /> {tr('Mostrar en la carpeta', 'Show in folder')}
         </button>
       </figcaption>
       {current?.error ? <p className="code-error">{current.error}</p> : null}
       {snippet ? (
         <>
-          {snippet.changedSinceAnalysis ? <p className="code-warn">El archivo cambió después del análisis: las líneas pueden no coincidir.</p> : null}
+          {snippet.changedSinceAnalysis ? (
+            <p className="code-warn">{tr('El archivo cambió después del análisis: las líneas pueden no coincidir.', 'The file changed after the analysis: the lines may not match.')}</p>
+          ) : null}
           <pre>
             {snippet.lines.map((text, i) => {
               const n = snippet.startLine + i;
@@ -144,29 +155,34 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
                 <span key={n} className="code-line" data-hit={hit || undefined} data-hidden={hidden || undefined}>
                   <span className="ln">{n}</span>
                   {text === '' ? ' ' : text}
-                  {hidden ? <span className="code-note">valor oculto</span> : null}
+                  {hidden ? <span className="code-note">{tr('valor oculto', 'hidden value')}</span> : null}
                   {'\n'}
                 </span>
               );
             })}
           </pre>
         </>
-      ) : current ? null : <p className="code-loading">Cargando…</p>}
+      ) : current ? null : <p className="code-loading">{tr('Cargando…', 'Loading…')}</p>}
     </figure>
   );
 }
 
-const CLAIM_LABEL = { evidencia: 'Evidencia', inferencia: 'Inferencia', recomendacion: 'Recomendación' } as const;
+const claimLabel = (kind: 'evidencia' | 'inferencia' | 'recomendacion'): string =>
+  kind === 'evidencia' ? tr('Evidencia', 'Evidence') : kind === 'inferencia' ? tr('Inferencia', 'Inference') : tr('Recomendación', 'Recommendation');
+const aiConfidence = (c: 'alta' | 'media' | 'baja'): string => (c === 'alta' ? tr('alta', 'high') : c === 'media' ? tr('media', 'medium') : tr('baja', 'low'));
 
 function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<void>; onOpenSettings: () => void }) {
   const { busy, error, run } = useAction();
   const explain = (): Promise<void> => run(onExplain);
   return (
-    <section className="ai-ask" aria-label="Explicación de la IA">
+    <section className="ai-ask" aria-label={tr('Explicación de la IA', 'AI explanation')}>
       <p>
         {busy
-          ? 'Explicando… Con los modelos gratuitos puede tardar hasta un minuto.'
-          : 'La IA puede explicar este hallazgo y proponer cómo corregirlo. Se usan el proveedor y la privacidad elegidos en Configuración.'}
+          ? tr('Explicando… Con los modelos gratuitos puede tardar hasta un minuto.', 'Explaining… With free models it can take up to a minute.')
+          : tr(
+              'La IA puede explicar este hallazgo y proponer cómo corregirlo. Se usan el proveedor y la privacidad elegidos en Configuración.',
+              'The AI can explain this finding and propose how to fix it. The provider and privacy chosen in Settings are used.',
+            )}
       </p>
       {error ? (
         <p className="form-error" role="alert">
@@ -175,11 +191,11 @@ function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<voi
       ) : null}
       <div className="buttons">
         <button type="button" className="btn" onClick={() => void explain()} disabled={busy} aria-busy={busy || undefined}>
-          <Icon name="sparkle" size={16} /> {busy ? 'Explicando…' : error ? 'Reintentar' : 'Explicar con IA'}
+          <Icon name="sparkle" size={16} /> {busy ? tr('Explicando…', 'Explaining…') : error ? tr('Reintentar', 'Retry') : tr('Explicar con IA', 'Explain with AI')}
         </button>
         {error ? (
           <button type="button" className="btn btn-quiet" onClick={onOpenSettings}>
-            <Icon name="settings" size={16} /> Configuración
+            <Icon name="settings" size={16} /> {tr('Configuración', 'Settings')}
           </button>
         ) : null}
       </div>
@@ -191,22 +207,25 @@ function AiBlock({ explanation: e }: { explanation: AiExplanation }) {
   return (
     <section className="detail-section ai">
       <h3>
-        <Icon name="sparkle" size={16} /> Explicación de la IA
+        <Icon name="sparkle" size={16} /> {tr('Explicación de la IA', 'AI explanation')}
       </h3>
-      <p className="muted">Orientativa: la evidencia verificable es la de arriba. Modelo {e.model}{e.fromCache ? ', desde caché' : ''}.</p>
+      <p className="muted">
+        {tr('Orientativa: la evidencia verificable es la de arriba. Modelo', 'For guidance only: the verifiable evidence is the one above. Model')} {e.model}
+        {e.fromCache ? tr(', desde caché', ', from cache') : ''}.
+      </p>
       <dl className="ai-fields">
-        <dt>Qué ocurre</dt>
+        <dt>{tr('Qué ocurre', 'What happens')}</dt>
         <dd>{e.summary}</dd>
-        <dt>Causa probable (inferencia)</dt>
+        <dt>{tr('Causa probable (inferencia)', 'Probable cause (inference)')}</dt>
         <dd>{e.rootCause}</dd>
-        <dt>Recomendación</dt>
+        <dt>{tr('Recomendación', 'Recommendation')}</dt>
         <dd>{e.recommendation}</dd>
       </dl>
       {e.claims.length > 0 ? (
         <ul className="claims">
           {e.claims.map((c, i) => (
             <li key={i} data-kind={c.kind}>
-              <span className="claim-kind">{CLAIM_LABEL[c.kind]}</span>
+              <span className="claim-kind">{claimLabel(c.kind)}</span>
               <span>
                 {c.text}
                 {c.lines ? <span className="mono muted"> ({c.lines.file}:{c.lines.startLine}–{c.lines.endLine})</span> : null}
@@ -216,13 +235,15 @@ function AiBlock({ explanation: e }: { explanation: AiExplanation }) {
         </ul>
       ) : null}
       <p className="muted">
-        Confianza {e.confidence}
-        {e.insufficientInformation ? '. El modelo indica que la información no basta para concluir.' : '.'}
+        {tr('Confianza', 'Confidence')} {aiConfidence(e.confidence)}
+        {e.insufficientInformation ? tr('. El modelo indica que la información no basta para concluir.', '. The model says the information is not enough to conclude.') : '.'}
       </p>
       {e.validationNotes.length > 0 ? (
         <ul className="validation">
           {e.validationNotes.map((n, i) => (
-            <li key={i}>Validación: {n}</li>
+            <li key={i}>
+              {tr('Validación:', 'Validation:')} {n}
+            </li>
           ))}
         </ul>
       ) : null}

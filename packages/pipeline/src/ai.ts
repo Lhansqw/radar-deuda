@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { repoReader, type AiFixProposal, type AiSection, type AnalysisReport, type ReportComparison } from '@radar/engine';
+import { repoReader, translator, type AiFixProposal, type AiSection, type AnalysisReport, type Locale, type ReportComparison, type Translate } from '@radar/engine';
 import {
   ANTHROPIC_MODELS,
   AnthropicProvider,
@@ -46,6 +46,8 @@ export interface AiOptions {
   fallbackModels?: string[];
   /** Explicar exactamente estos hallazgos (sin plan) en lugar de seleccionarlos. */
   findingIds?: string[];
+  /** Idioma de las respuestas y de los mensajes (por defecto, español). */
+  locale?: Locale;
 }
 
 /** Claves de API. Se pasan explícitamente: este paquete no lee variables de entorno ni archivos. */
@@ -116,13 +118,21 @@ async function chooseModel(o: AiOptions, provider: LlmProvider, signal: AbortSig
 }
 
 const EFFORT: Record<string, string> = { minimal: 'mínimo', low: 'bajo', medium: 'medio', high: 'alto', xhigh: 'muy alto', max: 'máximo', desconocido: 'el del modelo (no se puede ajustar)' };
+const EFFORT_EN: Record<string, string> = { minimal: 'minimal', low: 'low', medium: 'medium', high: 'high', xhigh: 'very high', max: 'maximum', desconocido: "the model's own (cannot be adjusted)" };
 
 /**
  * Comprueba en el catálogo que los modelos existen (un id mal escrito daría un
  * error por cada consulta) y explica qué se hará con su razonamiento. Si el
  * catálogo no responde, se sigue: las consultas informarán del problema.
  */
-async function describeOpenRouterModels(provider: OpenRouterProvider, models: string[], reasoning: ReasoningPreference, hooks: PipelineHooks, signal: AbortSignal): Promise<void> {
+async function describeOpenRouterModels(
+  provider: OpenRouterProvider,
+  models: string[],
+  reasoning: ReasoningPreference,
+  hooks: PipelineHooks,
+  signal: AbortSignal,
+  tr: Translate,
+): Promise<void> {
   let catalog;
   try {
     catalog = await provider.models(signal);
@@ -133,23 +143,46 @@ async function describeOpenRouterModels(provider: OpenRouterProvider, models: st
   const byId = new Map(catalog.map((m) => [m.id, m]));
   const paid = models.filter((id) => byId.get(id)?.free === false);
   if (paid.length > 0 && models.some((id) => byId.get(id)?.free)) {
-    hooks.warn(`Combinas modelos gratuitos y de pago (${paid.join(', ')}): si responde uno de pago, se cobrará su precio.`);
+    hooks.warn(tr(`Combinas modelos gratuitos y de pago (${paid.join(', ')}): si responde uno de pago, se cobrará su precio.`, `You are mixing free and paid models (${paid.join(', ')}): if a paid one answers, its price will be charged.`));
   }
   for (const id of models) {
     const m = byId.get(id);
-    if (!m) {
-      const base = id.replace(/:[a-z]+$/i, '');
-      const similar = catalog.filter((c) => c.id.startsWith(`${base.split('/')[0]}/`) && c.id.includes(base.split('/')[1]?.split(/[-.]/)[0] ?? '')).slice(0, 3);
-      throw new Error(
-        `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${similar.map((c) => c.id).join(', ')}?` : ''} Elige uno de la lista en Configuración (en la CLI: npm run models).`,
-      );
-    }
-    const plan = planReasoning(m, reasoning);
-    const parts = [`Modelo ${m.id}${m.free ? ' (gratuito)' : ''}`];
-    if (m.reasoning) parts.push(plan.effort === 'none' ? 'razona, pero se desactiva su razonamiento' : `razona: esfuerzo ${EFFORT[plan.effort] ?? plan.effort}${m.reasoning.mandatory ? ' (no se puede desactivar)' : ''}, con ${plan.headroom} tokens de margen`);
-    if (!m.structuredOutputs) parts.push('no admite salida estructurada: puede necesitar más reintentos');
-    hooks.info(`${parts.join(' · ')}.`);
+    if (!m) throw unknownModel(id, catalog, tr);
+    hooks.info(describeModel(m, reasoning, tr));
   }
+}
+
+type CatalogEntry = Awaited<ReturnType<OpenRouterProvider['models']>>[number];
+
+/** Error de un modelo que no está en el catálogo, con hasta tres parecidos. */
+function unknownModel(id: string, catalog: readonly CatalogEntry[], tr: Translate): Error {
+  const [vendor, name = ''] = id.replace(/:[a-z]+$/i, '').split('/');
+  const family = name.split(/[-.]/)[0] ?? '';
+  const similar = catalog.filter((c) => c.id.startsWith(`${vendor}/`) && c.id.includes(family)).slice(0, 3);
+  const hint = similar.map((c) => c.id).join(', ');
+  return new Error(
+    tr(
+      `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${hint}?` : ''} Elige uno de la lista en Configuración (en la CLI: npm run models).`,
+      `The model "${id}" does not exist on OpenRouter.${similar.length > 0 ? ` Did you mean ${hint}?` : ''} Choose one from the list in Settings (in the CLI: npm run models).`,
+    ),
+  );
+}
+
+/** «Modelo x (gratuito) · razona: esfuerzo bajo… · …»: qué se hará con un modelo del catálogo. */
+function describeModel(m: CatalogEntry, reasoning: ReasoningPreference, tr: Translate): string {
+  const parts = [tr(`Modelo ${m.id}${m.free ? ' (gratuito)' : ''}`, `Model ${m.id}${m.free ? ' (free)' : ''}`)];
+  if (m.reasoning) parts.push(reasoningText(m, planReasoning(m, reasoning), tr));
+  if (!m.structuredOutputs) parts.push(tr('no admite salida estructurada: puede necesitar más reintentos', 'does not support structured output: it may need more retries'));
+  return `${parts.join(' · ')}.`;
+}
+
+function reasoningText(m: CatalogEntry, plan: ReturnType<typeof planReasoning>, tr: Translate): string {
+  if (plan.effort === 'none') return tr('razona, pero se desactiva su razonamiento', 'reasons, but its reasoning is turned off');
+  const mandatory = m.reasoning?.mandatory === true;
+  return tr(
+    `razona: esfuerzo ${EFFORT[plan.effort] ?? plan.effort}${mandatory ? ' (no se puede desactivar)' : ''}, con ${plan.headroom} tokens de margen`,
+    `reasons: ${EFFORT_EN[plan.effort] ?? plan.effort} effort${mandatory ? ' (cannot be turned off)' : ''}, with ${plan.headroom} tokens of headroom`,
+  );
 }
 
 export interface AiStepResult {
@@ -187,6 +220,7 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
     limit: o.limit,
     plan: o.findingIds ? false : o.plan,
     ...(o.findingIds ? { findingIds: o.findingIds } : {}),
+    ...(o.locale ? { locale: o.locale } : {}),
     signal,
     onProgress: (done, total) => hooks.progress?.({ phase: 'ai', done, total }),
   });
@@ -196,27 +230,45 @@ export async function runAiStep(report: AnalysisReport, o: AiOptions, keys: ApiK
 /** Explica al usuario qué se va a enviar, a quién y con qué modelos, antes de enviar nada. */
 async function announce(o: AiOptions, provider: LlmProvider, run: { privacy: PrivacyMode; model: string; planModel: string }, hooks: PipelineHooks, signal: AbortSignal): Promise<void> {
   const { privacy, model, planModel } = run;
+  const tr = translator(o.locale);
   if (o.provider === 'incluida') {
-    hooks.info('IA incluida: el modelo de la aplicación, a través de su proyecto de Supabase (sin clave propia); su proveedor recibe lo que se envía según la privacidad elegida.');
+    hooks.info(
+      tr(
+        'IA incluida: el modelo de la aplicación, a través de su proyecto de Supabase (sin clave propia); su proveedor recibe lo que se envía según la privacidad elegida.',
+        "Included AI: the app's model, through its Supabase project (no key of your own); its provider receives what is sent according to the chosen privacy.",
+      ),
+    );
   }
   if (o.provider === 'openrouter') {
     hooks.info(
       o.allowDataCollection
-        ? 'OpenRouter: se permiten proveedores que pueden guardar o entrenar con los datos.'
-        : `OpenRouter: solo proveedores que no guardan ni entrenan con los datos${o.zeroDataRetention ? ', con retención cero' : ''}.`,
+        ? tr('OpenRouter: se permiten proveedores que pueden guardar o entrenar con los datos.', 'OpenRouter: providers that may store or train on the data are allowed.')
+        : tr(
+            `OpenRouter: solo proveedores que no guardan ni entrenan con los datos${o.zeroDataRetention ? ', con retención cero' : ''}.`,
+            `OpenRouter: only providers that do not store or train on the data${o.zeroDataRetention ? ', with zero retention' : ''}.`,
+          ),
     );
   }
   if (provider instanceof OpenRouterProvider) {
-    await describeOpenRouterModels(provider, [...new Set([model, planModel, ...(o.fallbackModels ?? [])])], o.reasoning ?? 'auto', hooks, signal);
-    if (o.fallbackModels) hooks.info(`Respaldo: si ${model} falla, se probará ${o.fallbackModels.join(', luego ')}.`);
+    await describeOpenRouterModels(provider, [...new Set([model, planModel, ...(o.fallbackModels ?? [])])], o.reasoning ?? 'auto', hooks, signal, tr);
+    if (o.fallbackModels) {
+      hooks.info(tr(`Respaldo: si ${model} falla, se probará ${o.fallbackModels.join(', luego ')}.`, `Fallback: if ${model} fails, ${o.fallbackModels.join(', then ')} will be tried.`));
+    }
   }
+  const budget = o.budgetUsd.toFixed(2);
   if (provider.locality === 'cloud') {
     hooks.info(
       privacy === 'fragmentos'
-        ? `IA en la nube (${provider.label}): se enviarán metadatos y fragmentos de código redactados. Presupuesto máximo ${o.budgetUsd.toFixed(2)} USD.`
-        : `IA en la nube (${provider.label}): solo se envían metadatos de los hallazgos, sin código. Presupuesto máximo ${o.budgetUsd.toFixed(2)} USD.`,
+        ? tr(
+            `IA en la nube (${provider.label}): se enviarán metadatos y fragmentos de código redactados. Presupuesto máximo ${budget} USD.`,
+            `Cloud AI (${provider.label}): metadata and redacted code snippets will be sent. Maximum budget ${budget} USD.`,
+          )
+        : tr(
+            `IA en la nube (${provider.label}): solo se envían metadatos de los hallazgos, sin código. Presupuesto máximo ${budget} USD.`,
+            `Cloud AI (${provider.label}): only finding metadata is sent, no code. Maximum budget ${budget} USD.`,
+          ),
     );
-  } else hooks.info(`IA local (${provider.label}, modelo ${model}): nada sale del equipo.`);
+  } else hooks.info(tr(`IA local (${provider.label}, modelo ${model}): nada sale del equipo.`, `Local AI (${provider.label}, model ${model}): nothing leaves the computer.`));
 }
 
 /** Modelo para las tareas que más razonan (plan y propuestas de código). */
@@ -287,6 +339,7 @@ export async function proposeFixStep(report: AnalysisReport, findingId: string, 
     cacheDir: aiCacheDir(s.cacheBase),
     budget: { maxRequests: 3, maxCostUsd: o.budgetUsd },
     signal: s.signal,
+    ...(o.locale ? { locale: o.locale } : {}),
   });
 }
 
@@ -308,5 +361,6 @@ export async function askStep(report: AnalysisReport, history: readonly ChatTurn
     signal: s.signal,
     projectSummary: await projectSummary(report, repoReader(report.root)),
     ...(s.comparison ? { comparison: s.comparison } : {}),
+    ...(o.locale ? { locale: o.locale } : {}),
   });
 }
