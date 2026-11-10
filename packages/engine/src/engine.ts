@@ -384,10 +384,20 @@ function summarize(findings: readonly Finding[]): AnalysisReport['summary'] {
 
 function buildCoverage(files: readonly FileMeta[], skipped: readonly SkippedFile[]): CoverageNote[] {
   const jsts = files.filter((f) => f.language === 'typescript' || f.language === 'javascript').length;
+  const python = files.filter((f) => f.language === 'python').length;
   const otherCode = files.filter((f) => f.isCode && f.language === 'other').length;
+  const measured = [jsts > 0 ? `${jsts} archivo(s) JS/TS con la API del compilador de TypeScript` : null, python > 0 ? `${python} archivo(s) Python con un analizador propio (sin ejecutar el código)` : null].filter((p) => p !== null);
   const notes: CoverageNote[] = [
-    { area: 'Complejidad y duplicación', status: jsts > 0 ? 'analyzed' : 'not-analyzed', detail: `${jsts} archivo(s) JS/TS analizados con la API del compilador de TypeScript.` },
-    { area: 'Arquitectura', status: jsts > 0 ? 'partial' : 'not-analyzed', detail: 'Ciclos y acoplamiento según importaciones relativas. No se resuelven alias de tsconfig (paths) ni paquetes del monorepo.' },
+    {
+      area: 'Complejidad y duplicación',
+      status: measured.length > 0 ? 'analyzed' : 'not-analyzed',
+      detail: measured.length > 0 ? `Analizados: ${measured.join(' y ')}.` : 'No hay archivos JS/TS ni Python.',
+    },
+    {
+      area: 'Arquitectura',
+      status: measured.length > 0 ? 'partial' : 'not-analyzed',
+      detail: 'Ciclos y acoplamiento según las importaciones internas. En JS/TS, las relativas (no se resuelven alias de tsconfig ni paquetes del monorepo); en Python, relativas y absolutas que corresponden a archivos del repositorio.',
+    },
     { area: 'Secretos', status: 'analyzed', detail: 'Patrones de formatos conocidos y asignaciones de alta entropía en todos los archivos de texto.' },
     { area: 'Dependencias', status: 'partial', detail: 'Higiene de manifiestos npm. Para vulnerabilidades conocidas y versiones desactualizadas ejecuta con --online.' },
     { area: 'Pruebas', status: 'partial', detail: 'Heurística por convención de nombres; no mide cobertura real.' },

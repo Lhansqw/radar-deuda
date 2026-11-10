@@ -93,6 +93,26 @@ caché: cambiarlos invalida los resultados guardados.
   necesarios; se aporta como evidencia de apoyo.
 - Las funciones anidadas se miden por separado y no suman a la función que las contiene.
 
+### Python
+
+Mismas métricas, umbrales y estimaciones, con un analizador propio que lee el código sin
+ejecutarlo ni importarlo (`python-lexer.ts`, `python-syntax.ts`): tokeniza teniendo en
+cuenta la sangría, los paréntesis y los strings (también triples y f-strings) y reconstruye
+el árbol de sentencias.
+
+- **Cognitiva**: +1 + anidamiento por `if`, `for`, `while`, `except`, `match` y
+  expresión condicional (`a if c else b`); +1 por `elif`, `else`, cada secuencia de
+  `and`/`or` iguales y cada `for`/`if` de una comprensión. Como en JS/TS, el cuerpo de
+  `try` cuenta un nivel más de anidamiento; `with` no anida.
+- **Ciclomática**: 1 + `if`, `elif`, bucles, `except`, cada `case` (salvo `case _`),
+  cada `and`/`or` y cada `if`/`for` de una expresión o comprensión.
+- **Parámetros**: sin `self`/`cls` de los métodos ni los separadores `/` y `*`.
+- Las lambdas son expresiones y cuentan dentro de su función.
+- **Ciclos**: importaciones relativas y absolutas que corresponden a archivos del
+  repositorio (se prueba como raíz cada carpeta desde la del repositorio hasta la del
+  archivo, lo que cubre `src/`). No crean ciclo las de `if TYPE_CHECKING:` ni las de
+  dentro de una función, que son la forma habitual de romperlo.
+
 ## Duplicación
 
 Clones de tipo 1 (idénticos salvo espacios y comentarios). Huellas por *winnowing*

@@ -123,7 +123,7 @@ export function stronglyConnected(graph: ReadonlyMap<string, readonly string[]>)
 }
 
 /** Grafo de importaciones internas resueltas. */
-interface ImportGraph {
+export interface ImportGraph {
   /** Aristas de ejecución (sin importaciones de solo tipos), ordenadas. */
   graph: Map<string, string[]>;
   /** Línea de la primera importación de cada arista `origen>destino`. */
@@ -132,17 +132,25 @@ interface ImportGraph {
   fanOut: Map<string, number>;
 }
 
-function buildGraph(artifacts: ReadonlyMap<string, ImportsArtifact>): ImportGraph {
-  const known = new Set(artifacts.keys());
+/** Una importación ya resuelta a un archivo del repositorio. */
+export interface ResolvedImport {
+  target: string;
+  line: number;
+  /** No crea dependencia al cargar el módulo (solo tipos o, en Python, importación dentro de una función). */
+  typeOnly: boolean;
+}
+
+/** Grafo a partir de las importaciones resueltas de cada archivo (lo usan JS/TS y Python). */
+export function importGraph(resolved: Iterable<[string, Iterable<ResolvedImport>]>): ImportGraph {
   const graph = new Map<string, string[]>();
   const edgeLine = new Map<string, number>();
   const fanOut = new Map<string, number>();
-  for (const [file, art] of artifacts) {
+  for (const [file, refs] of resolved) {
     const targets = new Set<string>();
     const all = new Set<string>();
-    for (const ref of art.imports) {
-      const target = resolveImport(file, ref.spec, known);
-      if (!target || target === file) continue;
+    for (const ref of refs) {
+      const target = ref.target;
+      if (target === file) continue;
       all.add(target);
       if (ref.typeOnly) continue; // las importaciones de tipos no crean ciclos en tiempo de ejecución
       targets.add(target);
@@ -154,7 +162,20 @@ function buildGraph(artifacts: ReadonlyMap<string, ImportsArtifact>): ImportGrap
   return { graph, edgeLine, fanOut };
 }
 
-function fanOutFinding(file: string, fanOut: number, threshold: number): Finding {
+function buildGraph(artifacts: ReadonlyMap<string, ImportsArtifact>): ImportGraph {
+  const known = new Set(artifacts.keys());
+  return importGraph(
+    [...artifacts].map(([file, art]) => [
+      file,
+      art.imports.flatMap((ref): ResolvedImport[] => {
+        const target = resolveImport(file, ref.spec, known);
+        return target ? [{ target, line: ref.line, typeOnly: ref.typeOnly }] : [];
+      }),
+    ]),
+  );
+}
+
+function fanOutFinding(file: string, fanOut: number, threshold: number, tool: string): Finding {
   return {
     id: findingId('architecture/high-fan-out', file, 'fan-out'),
     ruleId: 'architecture/high-fan-out',
@@ -164,7 +185,7 @@ function fanOutFinding(file: string, fanOut: number, threshold: number): Finding
     title: `Módulo muy acoplado (${fanOut} dependencias internas)`,
     message: `El archivo importa ${fanOut} módulos internos distintos (umbral ${threshold}). Suele indicar baja cohesión o un orquestador con demasiadas responsabilidades.`,
     locations: [{ file, startLine: 1, endLine: 1 }],
-    evidence: [{ kind: 'metric', tool: TOOL, description: 'Acoplamiento eferente (importaciones relativas resueltas)', metric: { name: 'fanOut', value: fanOut, threshold } }],
+    evidence: [{ kind: 'metric', tool, description: 'Acoplamiento eferente (importaciones internas resueltas)', metric: { name: 'fanOut', value: fanOut, threshold } }],
     impact: 'Cualquier cambio en sus dependencias puede romperlo; es difícil de probar de forma aislada.',
     effort: { minutes: Math.min(480, 30 + 5 * (fanOut - threshold)), rationale: '30 min base + 5 min por dependencia sobre el umbral (máx. 8 h).' },
   };
@@ -184,7 +205,7 @@ function cycleEdges(members: readonly string[], { graph, edgeLine }: ImportGraph
 }
 
 /** `members`, ordenados: los módulos de un componente fuertemente conexo. */
-function cycleFinding(members: readonly string[], g: ImportGraph): Finding {
+function cycleFinding(members: readonly string[], g: ImportGraph, tool: string): Finding {
   return {
     id: findingId('architecture/cycle', members[0] as string, members.join('|')),
     ruleId: 'architecture/cycle',
@@ -194,7 +215,7 @@ function cycleFinding(members: readonly string[], g: ImportGraph): Finding {
     title: `Dependencia circular entre ${members.length} módulos`,
     message: `Estos módulos se importan entre sí formando un ciclo: ${members.join(', ')}.`,
     locations: cycleEdges(members, g),
-    evidence: [{ kind: 'fact', tool: TOOL, description: 'Componente fuertemente conexo del grafo de importaciones (sin contar importaciones de solo tipos)', metric: { name: 'cycleSize', value: members.length, threshold: 1 } }],
+    evidence: [{ kind: 'fact', tool, description: 'Componente fuertemente conexo del grafo de importaciones (sin contar importaciones de solo tipos)', metric: { name: 'cycleSize', value: members.length, threshold: 1 } }],
     impact: 'Los ciclos impiden entender y probar los módulos por separado y pueden causar errores de inicialización (valores undefined al importar).',
     effort: { minutes: Math.min(960, 30 * members.length), rationale: '30 min por módulo del ciclo para extraer la parte compartida o invertir la dependencia (máx. 16 h).' },
   };
@@ -212,12 +233,15 @@ export const architectureAnalyzer: FileAnalyzer<ImportsArtifact> = {
     return { findings: [], artifact: { imports: extractImports(getSourceFile(input)) } };
   },
   finalize(artifacts, config) {
-    const g = buildGraph(artifacts);
-    const threshold = config.thresholds.fanOut;
-    const coupled = [...g.fanOut].filter(([, n]) => n > threshold).map(([file, n]) => fanOutFinding(file, n, threshold));
-    const cycles = stronglyConnected(g.graph)
-      .filter((comp) => comp.length >= 2)
-      .map((comp) => cycleFinding([...comp].sort(), g));
-    return [...coupled, ...cycles];
+    return graphFindings(buildGraph(artifacts), config.thresholds.fanOut, TOOL);
   },
 };
+
+/** Módulos muy acoplados y ciclos de un grafo de importaciones. */
+export function graphFindings(g: ImportGraph, fanOutThreshold: number, tool: string): Finding[] {
+  const coupled = [...g.fanOut].filter(([, n]) => n > fanOutThreshold).map(([file, n]) => fanOutFinding(file, n, fanOutThreshold, tool));
+  const cycles = stronglyConnected(g.graph)
+    .filter((comp) => comp.length >= 2)
+    .map((comp) => cycleFinding([...comp].sort(), g, tool));
+  return [...coupled, ...cycles];
+}
