@@ -7,9 +7,14 @@
  * tiza como color de acción. La personalidad se concentra en el radar del
  * panel; todo lo demás es sobrio. Contrastes comprobados (WCAG):
  * tinta 13,3:1, tinta-2 7,6:1, apagado ≥ 4,5:1 sobre el plano.
+ *
+ * El tema claro («plano sobre papel») redefine las mismas variables más abajo:
+ * papel frío de delineante con tinta azul marino como color de acción. El tema
+ * lo elige el proceso principal (nativeTheme), que es quien decide
+ * prefers-color-scheme.
  */
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
 
   --pizarra: #131b26;
   --plano: #192331;
@@ -21,6 +26,7 @@
   --tinta-2: #a9b5c5;
   --apagado: #8a96a9;
   --tiza: #e9eff7;
+  --tiza-hover: #ffffff;
   --enlace: #8cc2ff;
   --seleccion: #23344b;
 
@@ -32,6 +38,11 @@
   --sev-info: #6f7b8d;
   --bien: #2fb344;
   --error-texto: #ff9b95;
+  --bien-texto: #7ed98d;
+
+  --velo: rgb(8 12 18 / 0.66);
+  --sombra-dialogo: 0 24px 48px rgb(0 0 0 / 0.45);
+  --sombra-flotante: 0 12px 28px rgb(0 0 0 / 0.4);
 
   --font-ui: 'Instrument Sans Variable', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
   --font-code: 'JetBrains Mono Variable', 'Cascadia Code', Consolas, monospace;
@@ -47,6 +58,42 @@
 
   --r: 4px;
   --sidebar: 15.75rem;
+}
+
+/*
+ * Tema claro. Contrastes comprobados (WCAG) sobre el papel (--pizarra) y el
+ * plano: tinta 14:1, tinta-2 7,7:1, apagado 5:1, enlace 5,4:1 y todas las
+ * severidades ≥ 4,5:1, porque también se usan como color de texto.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --pizarra: #e9eef4;
+    --plano: #f5f8fb;
+    --elevado: #ffffff;
+    --linea: #d2dae4;
+    --linea-fuerte: #aebbcb;
+
+    --tinta: #142030;
+    --tinta-2: #3b4a5e;
+    --apagado: #586577;
+    --tiza: #1b2c42;
+    --tiza-hover: #0e1a2a;
+    --enlace: #1d5fae;
+    --seleccion: #d9e5f3;
+
+    --sev-critical: #c42b2b;
+    --sev-high: #ad4716;
+    --sev-medium: #8a5c00;
+    --sev-low: #4d6c93;
+    --sev-info: #5f6a7a;
+    --bien: #187a2f;
+    --error-texto: #b3261e;
+    --bien-texto: #17702a;
+
+    --velo: rgb(20 32 48 / 0.35);
+    --sombra-dialogo: 0 24px 48px rgb(20 32 48 / 0.18);
+    --sombra-flotante: 0 12px 28px rgb(20 32 48 / 0.14);
+  }
 }
 
 *,
@@ -364,7 +411,7 @@ code,
 }
 
 .btn-primary:hover {
-  background: #ffffff;
+  background: var(--tiza-hover);
 }
 
 .btn-quiet {
@@ -769,7 +816,7 @@ code,
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(8 12 18 / 0.66);
+  background: var(--velo);
 }
 
 .dialog {
@@ -780,7 +827,7 @@ code,
   border: 1px solid var(--linea-fuerte);
   border-radius: 6px;
   background: var(--plano);
-  box-shadow: 0 24px 48px rgb(0 0 0 / 0.45);
+  box-shadow: var(--sombra-dialogo);
 }
 
 .dialog h2 {
@@ -1602,7 +1649,7 @@ code,
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r);
   background: var(--pizarra);
-  box-shadow: 0 12px 28px rgb(0 0 0 / 0.4);
+  box-shadow: var(--sombra-flotante);
   font-size: var(--t-s);
   transform: translate(-50%, calc(-100% - 14px));
   pointer-events: none;
@@ -2405,7 +2452,7 @@ code,
 }
 
 .diff-line[data-kind='added'] .diff-sign {
-  color: #7ed98d;
+  color: var(--bien-texto);
 }
 
 .diff-line[data-kind='removed'] {
