@@ -15,6 +15,7 @@ import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
 import type { AppDeps } from './handlers.js';
 import { trustedCipher } from './credentials.js';
+import { currentLocale, initLanguage, languageSetting, setLanguage, tr } from './i18n.js';
 import { registerIpc } from './ipc.js';
 import { menuTemplate } from './menu.js';
 import { devServerFromEnv } from './policy.js';
@@ -28,6 +29,9 @@ import { openWorkspace, SessionRouter } from './workspace.js';
 
 /** Conexión con Supabase incrustada al compilar (scripts/config.ts); null si no se definió. */
 declare const __RADAR_NUBE__: BuiltCloudConfig | null;
+/** Nombre en inglés de cada parte de la caché (en español lo da @radar/pipeline). */
+const CACHE_PART_EN = { motor: 'Per-file analysis', ia: 'AI answers', historial: 'Git history', dependencias: 'Vulnerabilities and versions' } as const;
+
 const builtCloud: BuiltCloudConfig | null = typeof __RADAR_NUBE__ === 'undefined' ? null : __RADAR_NUBE__;
 
 /** URL del servidor de Vite en desarrollo (npm run dev); null en la aplicación compilada o empaquetada. */
@@ -79,7 +83,7 @@ function createWindow(): BrowserWindow {
     minWidth: 980,
     minHeight: 640,
     show: false,
-    title: 'Radar de Deuda Técnica',
+    title: tr('Radar de Deuda Técnica', 'Technical Debt Radar'),
     backgroundColor: '#131b26',
     autoHideMenuBar: true,
     webPreferences: {
@@ -111,6 +115,7 @@ function start(): void {
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 
   const dataDir = app.getPath('userData');
+  initLanguage(dataDir, app.getLocale());
   // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
   const cipher = trustedCipher(safeStorage);
   const spawn = ({ memoryLimitMb }: { memoryLimitMb: number }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb);
@@ -126,9 +131,12 @@ function start(): void {
       dataDir: router?.userDir ?? dataDir,
       cacheDir: defaultCacheDir(),
       reposDir: defaultReposDir(),
+      language: languageSetting(),
+      locale: currentLocale(),
     }),
+    setLanguage,
     chooseFolder: async () => {
-      const options = { title: 'Elige la carpeta del proyecto', properties: ['openDirectory' as const] };
+      const options = { title: tr('Elige la carpeta del proyecto', 'Choose the project folder'), properties: ['openDirectory' as const] };
       const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
       return r.canceled ? null : (r.filePaths[0] ?? null);
     },
@@ -138,7 +146,7 @@ function start(): void {
     copyText: (text) => clipboard.writeText(text),
     storage: async () => {
       const [cache, clones] = await Promise.all([cacheUsage(defaultCacheDir()), folderSize(defaultReposDir())]);
-      return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
+      return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ name, label, files, bytes }) => ({ label: tr(label, CACHE_PART_EN[name]), files, bytes })) }, clones };
     },
     clearCache: () => clearCache(defaultCacheDir()),
     checkUpdate: () => checkForUpdate(app.getVersion()),
@@ -148,7 +156,7 @@ function start(): void {
     },
     // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
     savePatch: async (name, content) => {
-      const options = { title: 'Guardar el parche', defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Parche', extensions: ['patch', 'diff'] }] };
+      const options = { title: tr('Guardar el parche', 'Save the patch'), defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: tr('Parche', 'Patch'), extensions: ['patch', 'diff'] }] };
       const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
       if (r.canceled || !r.filePath) return null;
       await writeFile(r.filePath, content, 'utf8');

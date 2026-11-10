@@ -32,21 +32,27 @@ export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+/** Texto en el idioma de quien llama (proceso principal o interfaz). */
+type Translate = (es: string, en: string) => string;
+const spanish: Translate = (es) => es;
+
 /** Problema del correo para mostrarlo junto al campo, o null si es válido. */
-export function emailProblem(email: string): string | null {
+export function emailProblem(email: string, tr: Translate = spanish): string | null {
   const e = normalizeEmail(email);
-  if (e === '') return 'Escribe tu correo.';
-  if (e.length > MAX_EMAIL || !EMAIL.test(e)) return 'Ese correo no parece válido.';
+  if (e === '') return tr('Escribe tu correo.', 'Enter your email.');
+  if (e.length > MAX_EMAIL || !EMAIL.test(e)) return tr('Ese correo no parece válido.', 'That email does not look valid.');
   return null;
 }
 
 /** Problema de una contraseña nueva, o null si cumple la longitud. */
-export function newPasswordProblem(password: string): string | null {
-  if (password.length < MIN_PASSWORD) return `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.`;
-  if (new TextEncoder().encode(password).length > MAX_PASSWORD) return `La contraseña no puede tener más de ${MAX_PASSWORD} caracteres.`;
+export function newPasswordProblem(password: string, tr: Translate = spanish): string | null {
+  if (password.length < MIN_PASSWORD) return tr(`La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.`, `The password must have at least ${MIN_PASSWORD} characters.`);
+  if (new TextEncoder().encode(password).length > MAX_PASSWORD) {
+    return tr(`La contraseña no puede tener más de ${MAX_PASSWORD} caracteres.`, `The password cannot have more than ${MAX_PASSWORD} characters.`);
+  }
   return null;
 }
 
-export function codeProblem(code: string): string | null {
-  return CODE.test(code.trim()) ? null : 'El código son los dígitos que llegaron a tu correo.';
+export function codeProblem(code: string, tr: Translate = spanish): string | null {
+  return CODE.test(code.trim()) ? null : tr('El código son los dígitos que llegaron a tu correo.', 'The code is the digits sent to your email.');
 }

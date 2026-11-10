@@ -3,6 +3,7 @@ import type { ApiKeys } from '@radar/pipeline';
 import { errorMessage } from '../shared/errors.js';
 import { SECRET_NAMES, type SecretName, type SecretsStatus } from '../shared/secrets.js';
 import type { Store } from './store.js';
+import { tr } from './i18n.js';
 
 /**
  * Cifrado del sistema operativo (en Electron, safeStorage: DPAPI en Windows,
@@ -36,7 +37,7 @@ export function trustedCipher(cipher: SystemCipher, platform: NodeJS.Platform = 
   return {
     isEncryptionAvailable: () => cipher.isEncryptionAvailable() && !weak(),
     encryptString: (plain) => {
-      if (weak()) throw new Error('El cifrado del sistema no está disponible.');
+      if (weak()) throw new Error(tr('El cifrado del sistema no está disponible.', 'System encryption is not available.'));
       return cipher.encryptString(plain);
     },
     decryptString: (encrypted) => cipher.decryptString(encrypted),
@@ -91,7 +92,7 @@ export class CredentialStore {
     validate(name, v);
     if (!this.encryptionAvailable) {
       throw new CredentialError(
-        `Este equipo no ofrece un almacén cifrado para guardar la credencial. Puedes definirla en la variable de entorno ${ENV_VARS[name]} antes de abrir la aplicación.`,
+        tr(`Este equipo no ofrece un almacén cifrado para guardar la credencial. Puedes definirla en la variable de entorno ${ENV_VARS[name]} antes de abrir la aplicación.`, `This computer has no encrypted store to save the credential. You can set it in the ${ENV_VARS[name]} environment variable before opening the app.`),
       );
     }
     this.store.setSecret(name, this.cipher.encryptString(v));
@@ -140,7 +141,7 @@ export class CredentialStore {
 function validate(name: SecretName, value: string): void {
   if (name === 'github') {
     if (!GITHUB_TOKEN.test(value)) {
-      throw new CredentialError(`El token de GitHub no tiene el formato esperado (tiene ${value.length} caracteres; debería empezar por github_pat_ o ghp_). Cópialo de nuevo.`);
+      throw new CredentialError(tr(`El token de GitHub no tiene el formato esperado (tiene ${value.length} caracteres; debería empezar por github_pat_ o ghp_). Cópialo de nuevo.`, `The GitHub token does not have the expected format (it has ${value.length} characters; it should start with github_pat_ or ghp_). Copy it again.`));
     }
     return;
   }

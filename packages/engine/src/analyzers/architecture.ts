@@ -4,6 +4,7 @@ import type { FileAnalyzer, Finding, Location } from '../types.js';
 import { findingId } from '../util.js';
 import { getSourceFile, isJsLike } from './shared.js';
 import { loadTypeScript, tsApi } from './ts-runtime.js';
+import { translator, type Translate } from '../i18n.js';
 
 /**
  * Grafo de importaciones internas: ciclos entre módulos (Tarjan) y módulos con
@@ -154,19 +155,22 @@ function buildGraph(artifacts: ReadonlyMap<string, ImportsArtifact>): ImportGrap
   return { graph, edgeLine, fanOut };
 }
 
-function fanOutFinding(file: string, fanOut: number, threshold: number): Finding {
+function fanOutFinding(file: string, fanOut: number, threshold: number, tr: Translate): Finding {
   return {
     id: findingId('architecture/high-fan-out', file, 'fan-out'),
     ruleId: 'architecture/high-fan-out',
     category: 'maintainability',
     severity: fanOut >= threshold * 2 ? 'high' : 'medium',
     confidence: 'medium',
-    title: `Módulo muy acoplado (${fanOut} dependencias internas)`,
-    message: `El archivo importa ${fanOut} módulos internos distintos (umbral ${threshold}). Suele indicar baja cohesión o un orquestador con demasiadas responsabilidades.`,
+    title: tr(`Módulo muy acoplado (${fanOut} dependencias internas)`, `Highly coupled module (${fanOut} internal dependencies)`),
+    message: tr(
+      `El archivo importa ${fanOut} módulos internos distintos (umbral ${threshold}). Suele indicar baja cohesión o un orquestador con demasiadas responsabilidades.`,
+      `The file imports ${fanOut} different internal modules (threshold ${threshold}). It usually points to low cohesion or an orchestrator with too many responsibilities.`,
+    ),
     locations: [{ file, startLine: 1, endLine: 1 }],
-    evidence: [{ kind: 'metric', tool: TOOL, description: 'Acoplamiento eferente (importaciones relativas resueltas)', metric: { name: 'fanOut', value: fanOut, threshold } }],
-    impact: 'Cualquier cambio en sus dependencias puede romperlo; es difícil de probar de forma aislada.',
-    effort: { minutes: Math.min(480, 30 + 5 * (fanOut - threshold)), rationale: '30 min base + 5 min por dependencia sobre el umbral (máx. 8 h).' },
+    evidence: [{ kind: 'metric', tool: TOOL, description: tr('Acoplamiento eferente (importaciones relativas resueltas)', 'Efferent coupling (resolved relative imports)'), metric: { name: 'fanOut', value: fanOut, threshold } }],
+    impact: tr('Cualquier cambio en sus dependencias puede romperlo; es difícil de probar de forma aislada.', 'Any change in its dependencies can break it; it is hard to test in isolation.'),
+    effort: { minutes: Math.min(480, 30 + 5 * (fanOut - threshold)), rationale: tr('30 min base + 5 min por dependencia sobre el umbral (máx. 8 h).', '30 min base + 5 min per dependency over the threshold (max. 8 h).') },
   };
 }
 
@@ -184,19 +188,25 @@ function cycleEdges(members: readonly string[], { graph, edgeLine }: ImportGraph
 }
 
 /** `members`, ordenados: los módulos de un componente fuertemente conexo. */
-function cycleFinding(members: readonly string[], g: ImportGraph): Finding {
+function cycleFinding(members: readonly string[], g: ImportGraph, tr: Translate): Finding {
   return {
     id: findingId('architecture/cycle', members[0] as string, members.join('|')),
     ruleId: 'architecture/cycle',
     category: 'maintainability',
     severity: members.length >= 4 ? 'high' : 'medium',
     confidence: 'high',
-    title: `Dependencia circular entre ${members.length} módulos`,
-    message: `Estos módulos se importan entre sí formando un ciclo: ${members.join(', ')}.`,
+    title: tr(`Dependencia circular entre ${members.length} módulos`, `Circular dependency between ${members.length} modules`),
+    message: tr(`Estos módulos se importan entre sí formando un ciclo: ${members.join(', ')}.`, `These modules import each other forming a cycle: ${members.join(', ')}.`),
     locations: cycleEdges(members, g),
-    evidence: [{ kind: 'fact', tool: TOOL, description: 'Componente fuertemente conexo del grafo de importaciones (sin contar importaciones de solo tipos)', metric: { name: 'cycleSize', value: members.length, threshold: 1 } }],
-    impact: 'Los ciclos impiden entender y probar los módulos por separado y pueden causar errores de inicialización (valores undefined al importar).',
-    effort: { minutes: Math.min(960, 30 * members.length), rationale: '30 min por módulo del ciclo para extraer la parte compartida o invertir la dependencia (máx. 16 h).' },
+    evidence: [{ kind: 'fact', tool: TOOL, description: tr('Componente fuertemente conexo del grafo de importaciones (sin contar importaciones de solo tipos)', 'Strongly connected component of the import graph (type-only imports excluded)'), metric: { name: 'cycleSize', value: members.length, threshold: 1 } }],
+    impact: tr(
+      'Los ciclos impiden entender y probar los módulos por separado y pueden causar errores de inicialización (valores undefined al importar).',
+      'Cycles make it impossible to understand and test the modules separately and can cause initialization errors (undefined values on import).',
+    ),
+    effort: {
+      minutes: Math.min(960, 30 * members.length),
+      rationale: tr('30 min por módulo del ciclo para extraer la parte compartida o invertir la dependencia (máx. 16 h).', '30 min per module in the cycle to extract the shared part or invert the dependency (max. 16 h).'),
+    },
   };
 }
 
@@ -214,10 +224,11 @@ export const architectureAnalyzer: FileAnalyzer<ImportsArtifact> = {
   finalize(artifacts, config) {
     const g = buildGraph(artifacts);
     const threshold = config.thresholds.fanOut;
-    const coupled = [...g.fanOut].filter(([, n]) => n > threshold).map(([file, n]) => fanOutFinding(file, n, threshold));
+    const tr = translator(config.locale);
+    const coupled = [...g.fanOut].filter(([, n]) => n > threshold).map(([file, n]) => fanOutFinding(file, n, threshold, tr));
     const cycles = stronglyConnected(g.graph)
       .filter((comp) => comp.length >= 2)
-      .map((comp) => cycleFinding([...comp].sort(), g));
+      .map((comp) => cycleFinding([...comp].sort(), g, tr));
     return [...coupled, ...cycles];
   },
 };

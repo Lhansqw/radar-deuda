@@ -1,8 +1,13 @@
 import type { DiffHunk, Finding } from '@radar/engine';
+import { tr } from '../i18n.js';
 
 /** Consejo fijo para los secretos (no se envía su código a la IA). Mismo texto que @radar/ai. */
-export const SECRET_FIX_ADVICE =
-  'Para un posible secreto no se envía código a la IA. La corrección es siempre la misma: retirarlo del código, revocarlo (rotarlo) y leerlo de una variable de entorno o de un gestor de secretos.';
+export function secretFixAdvice(): string {
+  return tr(
+    'Para un posible secreto no se envía código a la IA. La corrección es siempre la misma: retirarlo del código, revocarlo (rotarlo) y leerlo de una variable de entorno o de un gestor de secretos.',
+    'No code is sent to the AI for a possible secret. The fix is always the same: remove it from the code, revoke (rotate) it and read it from an environment variable or a secrets manager.',
+  );
+}
 
 /**
  * Si se puede pedir una propuesta de corrección para el hallazgo. Mismas

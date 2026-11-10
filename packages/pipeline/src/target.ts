@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { errorMessage } from '@radar/engine';
+import { errorMessage, translator, type Locale } from '@radar/engine';
 import { cloneOrUpdate, GitHubClient, HttpError, parseGitHubRepo, type CloneOptions, type CloneResult, type GitHubRepoRef } from '@radar/sources';
 import type { PipelineHooks } from './types.js';
 
@@ -17,6 +17,8 @@ export interface SourceOptions {
   githubToken?: string;
   /** Carpeta de los clones (por defecto, la de la aplicación en la caché del sistema). */
   reposDir?: string;
+  /** Idioma de los hallazgos y de los mensajes (por defecto, español). */
+  locale?: Locale;
 }
 
 export interface ResolvedTarget {
@@ -43,10 +45,15 @@ const DEFAULT_DEPS: TargetDeps = {
 
 /** Carpeta local o, si no existe, repositorio de GitHub clonado. */
 export async function resolveTarget(o: SourceOptions, hooks: PipelineHooks, signal: AbortSignal, deps: TargetDeps = DEFAULT_DEPS): Promise<ResolvedTarget> {
+  const tr = translator(o.locale);
   const local = path.resolve(o.target);
   if (existsSync(local)) return { dir: local, github: null };
   const ref = parseGitHubRepo(o.target);
-  if (!ref) throw new Error(`No existe la carpeta "${o.target}" ni es una referencia válida a GitHub (owner/repo o URL).`);
+  if (!ref) {
+    throw new Error(
+      tr(`No existe la carpeta "${o.target}" ni es una referencia válida a GitHub (owner/repo o URL).`, `The folder "${o.target}" does not exist and it is not a valid GitHub reference (owner/repo or URL).`),
+    );
+  }
 
   const token = o.githubToken;
   const gh = deps.client(token, signal);
@@ -58,9 +65,11 @@ export async function resolveTarget(o: SourceOptions, hooks: PipelineHooks, sign
     // 401 (token inválido) y 404 (no existe o sin acceso) son definitivos. Los metadatos son opcionales:
     // ante un límite de peticiones, un error del servidor o falta de red, se intenta clonar igualmente.
     if (err instanceof Error && err.cause instanceof HttpError && (err.cause.status === 401 || err.cause.status === 404)) throw err;
-    hooks.warn(`No se pudieron obtener los metadatos de GitHub (${errorMessage(err)}). Se intenta clonar igualmente.`);
+    hooks.warn(tr(`No se pudieron obtener los metadatos de GitHub (${errorMessage(err)}). Se intenta clonar igualmente.`, `Could not get the GitHub metadata (${errorMessage(err)}). Trying to clone anyway.`));
   }
-  hooks.info(`Clonando ${ref.owner}/${ref.repo}${meta ? ` (${Math.round(meta.sizeKb / 1024)} MB, rama ${o.branch ?? meta.defaultBranch})` : ''}…`);
+  const size = meta ? `${Math.round(meta.sizeKb / 1024)} MB` : '';
+  const branchName = meta ? (o.branch ?? meta.defaultBranch) : '';
+  hooks.info(tr(`Clonando ${ref.owner}/${ref.repo}${meta ? ` (${size}, rama ${branchName})` : ''}…`, `Cloning ${ref.owner}/${ref.repo}${meta ? ` (${size}, branch ${branchName})` : ''}…`));
   hooks.progress?.({ phase: 'clone', repo: `${ref.owner}/${ref.repo}` });
   const branch = o.branch ?? meta?.defaultBranch;
   const clone = await deps.clone(ref, {
@@ -71,6 +80,6 @@ export async function resolveTarget(o: SourceOptions, hooks: PipelineHooks, sign
     ...(o.reposDir ? { baseDir: o.reposDir } : {}),
     signal,
   });
-  hooks.info(`${clone.updated ? 'Actualizado' : 'Clonado'} en ${clone.dir}`);
+  hooks.info(tr(`${clone.updated ? 'Actualizado' : 'Clonado'} en ${clone.dir}`, `${clone.updated ? 'Updated' : 'Cloned'} in ${clone.dir}`));
   return { dir: clone.dir, github: ref };
 }

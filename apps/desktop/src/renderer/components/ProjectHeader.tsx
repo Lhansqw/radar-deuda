@@ -3,6 +3,7 @@ import type { JobState } from '../../shared/jobs.js';
 import type { Project } from '../../shared/model.js';
 import { formatRelative } from '../lib/format.js';
 import { Icon } from './Icon.js';
+import { tr } from '../i18n.js';
 
 interface Props {
   project: Project;
@@ -21,42 +22,42 @@ export function ProjectHeader({ project, job, onAnalyze, onCancel, onRemove }: P
       <div>
         <h1>{project.name}</h1>
         <div className="project-meta">
-          <span className="mono" title={project.kind === 'github' ? 'Repositorio de GitHub' : 'Carpeta local'}>
-            {project.kind === 'github' ? `github.com/${project.location}${project.branch ? ` (rama ${project.branch})` : ''}` : project.location}
+          <span className="mono" title={project.kind === 'github' ? tr('Repositorio de GitHub', 'GitHub repository') : tr('Carpeta local', 'Local folder')}>
+            {project.kind === 'github' ? `github.com/${project.location}${project.branch ? ` (${tr('rama', 'branch')} ${project.branch})` : ''}` : project.location}
           </span>
           {last ? (
             <span>
-              Analizado {formatRelative(last.finishedAt)}
-              {last.head ? ` en el commit ${last.head.slice(0, 7)}` : ''}
+              {tr('Analizado', 'Analyzed')} {formatRelative(last.finishedAt)}
+              {last.head ? tr(` en el commit ${last.head.slice(0, 7)}`, ` at commit ${last.head.slice(0, 7)}`) : ''}
             </span>
           ) : (
-            <span>Aún sin analizar</span>
+            <span>{tr('Aún sin analizar', 'Not analyzed yet')}</span>
           )}
         </div>
       </div>
       <div className="header-actions">
         {confirming ? (
           <>
-            <span className="form-hint">¿Quitar de la lista? Se borra su historial; los archivos no se tocan.</span>
+            <span className="form-hint">{tr('¿Quitar de la lista? Se borra su historial; los archivos no se tocan.', 'Remove from the list? Its history is deleted; the files are not touched.')}</span>
             <button type="button" className="btn btn-small btn-danger" onClick={onRemove}>
-              Quitar
+              {tr('Quitar', 'Remove')}
             </button>
             <button type="button" className="btn btn-small btn-quiet" onClick={() => setConfirming(false)}>
-              Cancelar
+              {tr('Cancelar', 'Cancel')}
             </button>
           </>
         ) : (
           <>
             <button type="button" className="btn btn-quiet btn-small" onClick={() => setConfirming(true)} disabled={running}>
-              <Icon name="trash" size={16} /> Quitar
+              <Icon name="trash" size={16} /> {tr('Quitar', 'Remove')}
             </button>
             {running ? (
               <button type="button" className="btn" onClick={() => onCancel(job.jobId)}>
-                <Icon name="stop" size={16} /> Cancelar análisis
+                <Icon name="stop" size={16} /> {tr('Cancelar análisis', 'Cancel analysis')}
               </button>
             ) : (
               <button type="button" className="btn btn-primary" onClick={onAnalyze}>
-                <Icon name="play" size={16} /> Analizar
+                <Icon name="play" size={16} /> {tr('Analizar', 'Analyze')}
               </button>
             )}
           </>

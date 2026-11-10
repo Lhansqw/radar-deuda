@@ -1,4 +1,5 @@
 import type { CatalogModel } from '../../shared/model.js';
+import { currentLocale, tr } from '../i18n.js';
 import { fold } from './format.js';
 
 /** Filtros de la lista de modelos de OpenRouter. */
@@ -24,11 +25,11 @@ export function filterCatalog(catalog: readonly CatalogModel[], f: CatalogFilter
   );
 }
 
-const usd = (n: number): string => n.toLocaleString('es', { maximumFractionDigits: 2 });
+const usd = (n: number): string => n.toLocaleString(currentLocale(), { maximumFractionDigits: 2 });
 
 /** «Gratis», «entrada / salida» en USD por millón de tokens o «—» si no se publica. */
 export function modelPrice(m: CatalogModel): string {
-  if (m.free) return 'Gratis';
+  if (m.free) return tr('Gratis', 'Free');
   if (m.inputPerMTok === null || m.outputPerMTok === null) return '—';
   return `${usd(m.inputPerMTok)} / ${usd(m.outputPerMTok)}`;
 }
@@ -40,8 +41,8 @@ export function modelContext(m: CatalogModel): string {
 
 /** Por qué no se puede añadir como respaldo, o null si se puede. */
 export function fallbackBlocked(id: string, model: string, fallback: readonly string[]): string | null {
-  if (id === model) return 'Es el modelo elegido';
-  if (fallback.includes(id)) return 'Ya es un respaldo';
-  if (fallback.length >= MAX_FALLBACKS) return `Como mucho ${MAX_FALLBACKS} respaldos`;
+  if (id === model) return tr('Es el modelo elegido', 'It is the chosen model');
+  if (fallback.includes(id)) return tr('Ya es un respaldo', 'It is already a fallback');
+  if (fallback.length >= MAX_FALLBACKS) return tr(`Como mucho ${MAX_FALLBACKS} respaldos`, `At most ${MAX_FALLBACKS} fallbacks`);
   return null;
 }

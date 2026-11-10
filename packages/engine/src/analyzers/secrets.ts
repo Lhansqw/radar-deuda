@@ -1,5 +1,6 @@
 import type { Confidence, FileAnalyzer, Finding, Severity } from '../types.js';
 import { findingId } from '../util.js';
+import { translator } from '../i18n.js';
 
 /**
  * Detección de secretos incrustados. Además de producir hallazgos, `redactSecrets`
@@ -12,23 +13,24 @@ const TOOL = `${ID}@${VERSION}`;
 interface SecretRule {
   id: string;
   label: string;
+  labelEn: string;
   pattern: RegExp;
   severity: Severity;
 }
 
 const KNOWN_FORMATS: SecretRule[] = [
-  { id: 'private-key', label: 'Clave privada', pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/, severity: 'critical' },
-  { id: 'aws-access-key', label: 'Clave de acceso de AWS', pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, severity: 'critical' },
-  { id: 'github-token', label: 'Token de GitHub', pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{60,255})\b/, severity: 'critical' },
-  { id: 'anthropic-key', label: 'Clave de API de Anthropic', pattern: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/, severity: 'critical' },
-  { id: 'openai-key', label: 'Clave de API de OpenAI', pattern: /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}\b/, severity: 'critical' },
-  { id: 'google-api-key', label: 'Clave de API de Google', pattern: /\bAIza[0-9A-Za-z_-]{35}\b/, severity: 'high' },
-  { id: 'slack-token', label: 'Token de Slack', pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/, severity: 'high' },
-  { id: 'stripe-live-key', label: 'Clave secreta de Stripe', pattern: /\b(?:sk|rk)_live_[A-Za-z0-9]{20,}\b/, severity: 'critical' },
+  { id: 'private-key', label: 'Clave privada', labelEn: 'Private key', pattern: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/, severity: 'critical' },
+  { id: 'aws-access-key', label: 'Clave de acceso de AWS', labelEn: 'AWS access key', pattern: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/, severity: 'critical' },
+  { id: 'github-token', label: 'Token de GitHub', labelEn: 'GitHub token', pattern: /\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{60,255})\b/, severity: 'critical' },
+  { id: 'anthropic-key', label: 'Clave de API de Anthropic', labelEn: 'Anthropic API key', pattern: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/, severity: 'critical' },
+  { id: 'openai-key', label: 'Clave de API de OpenAI', labelEn: 'OpenAI API key', pattern: /\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}\b/, severity: 'critical' },
+  { id: 'google-api-key', label: 'Clave de API de Google', labelEn: 'Google API key', pattern: /\bAIza[0-9A-Za-z_-]{35}\b/, severity: 'high' },
+  { id: 'slack-token', label: 'Token de Slack', labelEn: 'Slack token', pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/, severity: 'high' },
+  { id: 'stripe-live-key', label: 'Clave secreta de Stripe', labelEn: 'Stripe secret key', pattern: /\b(?:sk|rk)_live_[A-Za-z0-9]{20,}\b/, severity: 'critical' },
   // La publicable (sb_publishable_…) está hecha para ir en el código del cliente; la secreta salta las reglas de la base de datos.
-  { id: 'groq-key', label: 'Clave de API de Groq', pattern: /\bgsk_[A-Za-z0-9]{40,}\b/, severity: 'critical' },
-  { id: 'supabase-secret-key', label: 'Clave secreta de Supabase', pattern: /\bsb_secret_[A-Za-z0-9_-]{20,}/, severity: 'critical' },
-  { id: 'connection-string', label: 'Cadena de conexión con contraseña', pattern: /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp):\/\/[^\s:/@'"]+:[^\s@'"]{4,}@[^\s'"]+/i, severity: 'high' },
+  { id: 'groq-key', label: 'Clave de API de Groq', labelEn: 'Groq API key', pattern: /\bgsk_[A-Za-z0-9]{40,}\b/, severity: 'critical' },
+  { id: 'supabase-secret-key', label: 'Clave secreta de Supabase', labelEn: 'Supabase secret key', pattern: /\bsb_secret_[A-Za-z0-9_-]{20,}/, severity: 'critical' },
+  { id: 'connection-string', label: 'Cadena de conexión con contraseña', labelEn: 'Connection string with password', pattern: /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp):\/\/[^\s:/@'"]+:[^\s@'"]{4,}@[^\s'"]+/i, severity: 'high' },
 ];
 
 /** `password = "..."`, `"apiKey": "..."`, `SECRET_TOKEN=...` con valor de alta entropía. */
@@ -83,6 +85,8 @@ const TEST_FILE_NAME = /\.(?:test|spec|e2e)\.[cm]?[jt]sx?$/i;
 export interface SecretMatch {
   ruleId: string;
   label: string;
+  /** El mismo texto en inglés. */
+  labelEn: string;
   line: number;
   severity: Severity;
   confidence: Confidence;
@@ -150,7 +154,7 @@ function knownMatch(rule: SecretRule, text: string, line: string, n: number, tra
     severity = downgrade(severity);
     confidence = confidence === 'high' ? 'medium' : 'low';
   }
-  return { ruleId: rule.id, label: rule.label, line: n, severity, confidence, redacted: redactIn(line, text) };
+  return { ruleId: rule.id, label: rule.label, labelEn: rule.labelEn, line: n, severity, confidence, redacted: redactIn(line, text) };
 }
 
 /** La contraseña de una URL de conexión viene de una variable, es de ejemplo o parece real. */
@@ -174,6 +178,7 @@ function genericMatch(line: string, n: number, traits: FileTraits): SecretMatch 
   return {
     ruleId: 'generic-assignment',
     label: `Posible secreto asignado a "${g[1] ?? ''}"`,
+    labelEn: `Possible secret assigned to "${g[1] ?? ''}"`,
     line: n,
     severity: traits.lowConfidence ? 'low' : 'high',
     confidence: traits.lowConfidence ? 'low' : entropy >= 3.8 ? 'medium' : 'low',
@@ -193,19 +198,29 @@ export const secretsAnalyzer: FileAnalyzer = {
   version: VERSION,
   description: 'Secretos incrustados (formatos conocidos y asignaciones de alta entropía). La evidencia siempre se redacta.',
   supports: () => true,
-  analyze(input) {
+  analyze(input, config) {
+    const tr = translator(config.locale);
     const findings: Finding[] = scanSecrets(input.lines, input.meta.relPath).map((m) => ({
       id: findingId(`security/secret/${m.ruleId}`, input.meta.relPath, m.redacted),
       ruleId: `security/secret/${m.ruleId}`,
       category: 'security',
       severity: m.severity,
       confidence: m.confidence,
-      title: `${m.label} en el código`,
-      message: `Se detectó un posible secreto (${m.label.toLowerCase()}) en la línea ${m.line}. Si es real, debe rotarse: ya puede estar en el historial de Git.`,
+      title: tr(`${m.label} en el código`, `${m.labelEn} in the code`),
+      message: tr(
+        `Se detectó un posible secreto (${m.label.toLowerCase()}) en la línea ${m.line}. Si es real, debe rotarse: ya puede estar en el historial de Git.`,
+        `A possible secret (${m.labelEn.toLowerCase()}) was detected on line ${m.line}. If it is real, it must be rotated: it may already be in the Git history.`,
+      ),
       locations: [{ file: input.meta.relPath, startLine: m.line, endLine: m.line }],
-      evidence: [{ kind: 'match', tool: TOOL, description: `Patrón ${m.ruleId}`, snippet: m.redacted }],
-      impact: 'Un secreto en el repositorio puede ser usado por cualquiera con acceso al código o a su historial.',
-      effort: { minutes: 30, rationale: 'Rotar la credencial, moverla a variables de entorno o a un gestor de secretos y limpiar el historial si procede (estimación fija).' },
+      evidence: [{ kind: 'match', tool: TOOL, description: tr(`Patrón ${m.ruleId}`, `Pattern ${m.ruleId}`), snippet: m.redacted }],
+      impact: tr('Un secreto en el repositorio puede ser usado por cualquiera con acceso al código o a su historial.', 'A secret in the repository can be used by anyone with access to the code or its history.'),
+      effort: {
+        minutes: 30,
+        rationale: tr(
+          'Rotar la credencial, moverla a variables de entorno o a un gestor de secretos y limpiar el historial si procede (estimación fija).',
+          'Rotate the credential, move it to environment variables or a secrets manager and clean the history if needed (fixed estimate).',
+        ),
+      },
     }));
     return { findings };
   },

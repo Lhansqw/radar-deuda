@@ -1,5 +1,6 @@
 import type { FileAnalyzer, Finding, Location } from '../types.js';
 import { findingId } from '../util.js';
+import { translator } from '../i18n.js';
 
 const ID = 'markers';
 const VERSION = '1.0.0';
@@ -30,7 +31,8 @@ export const markersAnalyzer: FileAnalyzer = {
   version: VERSION,
   description: 'Marcadores de deuda reconocida por el equipo (TODO, FIXME, HACK, XXX).',
   supports: (meta) => meta.isCode,
-  analyze(input) {
+  analyze(input, config) {
+    const tr = translator(config.locale);
     const markers = scanMarkers(input.lines);
     if (markers.length === 0) return { findings: [] };
     const serious = markers.filter((m) => m.tag !== 'TODO');
@@ -43,14 +45,17 @@ export const markersAnalyzer: FileAnalyzer = {
       category: 'maintainability',
       severity: serious.length > 0 ? 'low' : 'info',
       confidence: 'medium',
-      title: `Deuda marcada explícitamente (${summary})`,
-      message: `El archivo contiene ${markers.length} marcador(es) de trabajo pendiente: ${summary}.`,
+      title: tr(`Deuda marcada explícitamente (${summary})`, `Explicitly marked debt (${summary})`),
+      message: tr(`El archivo contiene ${markers.length} marcador(es) de trabajo pendiente: ${summary}.`, `The file contains ${markers.length} pending-work marker(s): ${summary}.`),
       locations,
-      evidence: markers.slice(0, 10).map((m) => ({ kind: 'match' as const, tool: TOOL, description: `${m.tag} en línea ${m.line}`, snippet: m.text })),
-      impact: 'Los marcadores indican deuda conocida pero no planificada; FIXME y HACK suelen señalar soluciones provisionales.',
+      evidence: markers.slice(0, 10).map((m) => ({ kind: 'match' as const, tool: TOOL, description: tr(`${m.tag} en línea ${m.line}`, `${m.tag} on line ${m.line}`), snippet: m.text })),
+      impact: tr('Los marcadores indican deuda conocida pero no planificada; FIXME y HACK suelen señalar soluciones provisionales.', 'Markers point to known but unplanned debt; FIXME and HACK usually flag temporary workarounds.'),
       effort: {
         minutes: serious.length * 30 + (markers.length - serious.length) * 10,
-        rationale: 'Estimación por defecto (30 min por FIXME/HACK/XXX, 10 min por TODO): el marcador no describe el alcance real.',
+        rationale: tr(
+          'Estimación por defecto (30 min por FIXME/HACK/XXX, 10 min por TODO): el marcador no describe el alcance real.',
+          'Default estimate (30 min per FIXME/HACK/XXX, 10 min per TODO): the marker does not describe the real scope.',
+        ),
       },
     };
     return { findings: [finding] };

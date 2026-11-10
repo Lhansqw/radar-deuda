@@ -7,6 +7,7 @@ import { formatEffort, formatNumber } from '../lib/format.js';
 import { CATEGORIES, CATEGORY_LABEL, SEVERITIES, SEVERITY_LABEL } from '../lib/labels.js';
 import { visibleRange } from '../lib/virtual.js';
 import { FindingDetail } from './FindingDetail.js';
+import { tr } from '../i18n.js';
 
 const ROW = 58;
 
@@ -39,8 +40,8 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
 
   return (
     <div className="findings">
-      <div className="filters" role="toolbar" aria-label="Filtros de hallazgos">
-        <div className="sev-toggles" role="group" aria-label="Severidad">
+      <div className="filters" role="toolbar" aria-label={tr('Filtros de hallazgos', 'Finding filters')}>
+        <div className="sev-toggles" role="group" aria-label={tr('Severidad', 'Severity')}>
           {SEVERITIES.map((s) => (
             <button key={s} type="button" className="chip" aria-pressed={filter.severities.has(s)} onClick={() => toggleSeverity(s)} disabled={counts[s] === 0}>
               <SeverityGlyph severity={s} />
@@ -49,8 +50,8 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
             </button>
           ))}
         </div>
-        <select className="select" aria-label="Categoría" value={[...filter.categories][0] ?? ''} onChange={(e) => onFilter({ ...filter, categories: e.target.value ? new Set([e.target.value as Category]) : new Set() })}>
-          <option value="">Todas las categorías</option>
+        <select className="select" aria-label={tr('Categoría', 'Category')} value={[...filter.categories][0] ?? ''} onChange={(e) => onFilter({ ...filter, categories: e.target.value ? new Set([e.target.value as Category]) : new Set() })}>
+          <option value="">{tr('Todas las categorías', 'All categories')}</option>
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>
               {CATEGORY_LABEL[c]}
@@ -59,22 +60,22 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
         </select>
         <label className="search">
           <Icon name="search" size={16} />
-          <span className="visually-hidden">Buscar</span>
-          <input className="input" type="search" placeholder="Buscar por título, archivo o función" value={filter.text} onChange={(e) => onFilter({ ...filter, text: e.target.value })} />
+          <span className="visually-hidden">{tr('Buscar', 'Search')}</span>
+          <input className="input" type="search" placeholder={tr('Buscar por título, archivo o función', 'Search by title, file or function')} value={filter.text} onChange={(e) => onFilter({ ...filter, text: e.target.value })} />
         </label>
-        <select className="select" aria-label="Orden" value={sort} onChange={(e) => setSort(e.target.value as FindingSort)}>
-          <option value="severity">Por severidad</option>
-          <option value="effort">Por esfuerzo</option>
-          <option value="file">Por archivo</option>
+        <select className="select" aria-label={tr('Orden', 'Sort')} value={sort} onChange={(e) => setSort(e.target.value as FindingSort)}>
+          <option value="severity">{tr('Por severidad', 'By severity')}</option>
+          <option value="effort">{tr('Por esfuerzo', 'By effort')}</option>
+          <option value="file">{tr('Por archivo', 'By file')}</option>
         </select>
         {newIds ? (
-          <button type="button" className="chip" aria-pressed={filter.onlyNew} onClick={() => onFilter({ ...filter, onlyNew: !filter.onlyNew })} disabled={newIds.size === 0 && !filter.onlyNew} title="Deuda que no estaba en el análisis anterior">
-            Solo nuevos
+          <button type="button" className="chip" aria-pressed={filter.onlyNew} onClick={() => onFilter({ ...filter, onlyNew: !filter.onlyNew })} disabled={newIds.size === 0 && !filter.onlyNew} title={tr('Deuda que no estaba en el análisis anterior', 'Debt that was not in the previous analysis')}>
+            {tr('Solo nuevos', 'Only new')}
             <span className="chip-count">{newIds.size}</span>
           </button>
         ) : null}
         {filter.path !== null ? (
-          <button type="button" className="chip" aria-pressed="true" onClick={() => onFilter({ ...filter, path: null })} title="Quitar el filtro de carpeta">
+          <button type="button" className="chip" aria-pressed="true" onClick={() => onFilter({ ...filter, path: null })} title={tr('Quitar el filtro de carpeta', 'Remove the folder filter')}>
             <Icon name="folder" size={14} />
             <span className="mono">{filter.path}</span>
             <Icon name="close" size={12} />
@@ -84,8 +85,8 @@ export function Findings({ report, analysisId, filter, onFilter, selectedId, onS
 
       <div className="findings-split">
         <FindingList findings={list} total={report.findings.length} selectedId={selected?.id ?? null} onSelect={onSelect} newIds={newIds} />
-        <section className="detail-pane" aria-label="Detalle del hallazgo">
-          {selected ? <FindingDetail key={selected.id} finding={selected} report={report} analysisId={analysisId} onExplain={(id) => onExplain(analysisId, id)} onOpenSettings={onOpenSettings} /> : <p className="pane-empty">Ningún hallazgo coincide con los filtros.</p>}
+        <section className="detail-pane" aria-label={tr('Detalle del hallazgo', 'Finding detail')}>
+          {selected ? <FindingDetail key={selected.id} finding={selected} report={report} analysisId={analysisId} onExplain={(id) => onExplain(analysisId, id)} onOpenSettings={onOpenSettings} /> : <p className="pane-empty">{tr('Ningún hallazgo coincide con los filtros.', 'No finding matches the filters.')}</p>}
         </section>
       </div>
     </div>
@@ -138,14 +139,16 @@ function FindingList({
   return (
     <div className="finding-list-wrap">
       <p className="list-count">
-        {findings.length === total ? `${formatNumber(total)} hallazgos` : `${formatNumber(findings.length)} de ${formatNumber(total)} hallazgos`}
+        {findings.length === total
+          ? tr(`${formatNumber(total)} hallazgos`, `${formatNumber(total)} findings`)
+          : tr(`${formatNumber(findings.length)} de ${formatNumber(total)} hallazgos`, `${formatNumber(findings.length)} of ${formatNumber(total)} findings`)}
       </p>
       <div
         className="finding-list"
         ref={box}
         onScroll={(e) => setScroll(e.currentTarget.scrollTop)}
         role="listbox"
-        aria-label="Hallazgos"
+        aria-label={tr('Hallazgos', 'Findings')}
         aria-activedescendant={selectedId ? `h-${selectedId}` : undefined}
         tabIndex={0}
         onKeyDown={onKey}
@@ -158,13 +161,13 @@ function FindingList({
                 <div key={f.id} id={`h-${f.id}`} role="option" aria-selected={f.id === selectedId} className="finding-row" style={{ height: ROW }} onClick={() => onSelect(f.id)}>
                   <SeverityGlyph severity={f.severity} />
                   <span className="row-title">
-                    {newIds?.has(f.id) ? <span className="tag-new">Nuevo</span> : null}
+                    {newIds?.has(f.id) ? <span className="tag-new">{tr('Nuevo', 'New')}</span> : null}
                     {f.title}
                   </span>
                   <span className="row-effort">{formatEffort(f.effort.minutes)}</span>
                   <span className="row-loc mono">
-                    {loc && loc.file !== '.' ? `${loc.file}:${loc.startLine}` : 'Proyecto'}
-                    {f.locations.length > 1 ? ` y ${f.locations.length - 1} más` : ''}
+                    {loc && loc.file !== '.' ? `${loc.file}:${loc.startLine}` : tr('Proyecto', 'Project')}
+                    {f.locations.length > 1 ? tr(` y ${f.locations.length - 1} más`, ` and ${f.locations.length - 1} more`) : ''}
                   </span>
                 </div>
               );

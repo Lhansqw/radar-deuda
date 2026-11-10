@@ -5,6 +5,7 @@ import type { CloudLedger } from './cloud-ledger.js';
 import { decodeCloudReport, encodeCloudReport } from './cloud-report.js';
 import { CloudError, type CloudProject, type CloudRepo } from './cloud-repo.js';
 import { HISTORY_LIMIT } from './store-rows.js';
+import { tr } from './i18n.js';
 
 export interface CloudSyncDeps {
   ledger: CloudLedger;
@@ -90,7 +91,7 @@ export class CloudSync {
   /** Borra todo lo del usuario en la nube y lo deja pendiente aquí (por si se vuelve a activar). */
   async deleteCloudCopy(): Promise<SyncState> {
     const repo = await this.d.repo();
-    if (!repo) throw new CloudError('Inicia sesión para borrar la copia en la nube.', false);
+    if (!repo) throw new CloudError(tr('Inicia sesión para borrar la copia en la nube.', 'Sign in to delete the cloud copy.'), false);
     await repo.deleteEverything();
     this.d.ledger.unlinkAll();
     return this.set({ pending: this.d.ledger.pendingCount(), lastSyncAt: null, message: null });

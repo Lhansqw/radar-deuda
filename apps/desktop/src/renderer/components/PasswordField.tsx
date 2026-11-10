@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { Icon } from './Icon.js';
+import { tr } from '../i18n.js';
 
 /** Campo de contraseña con botón para mostrarla mientras se escribe. */
 export function PasswordField({
@@ -35,7 +36,7 @@ export function PasswordField({
           required
           {...(hint ? { 'aria-describedby': `${id}-ayuda` } : {})}
         />
-        <button type="button" className="btn btn-quiet btn-small" onClick={() => setVisible((v) => !v)} aria-label={visible ? 'Ocultar la contraseña' : 'Mostrar la contraseña'} aria-pressed={visible}>
+        <button type="button" className="btn btn-quiet btn-small" onClick={() => setVisible((v) => !v)} aria-label={visible ? tr('Ocultar la contraseña', 'Hide the password') : tr('Mostrar la contraseña', 'Show the password')} aria-pressed={visible}>
           <Icon name={visible ? 'eyeOff' : 'eye'} size={16} />
         </button>
       </div>

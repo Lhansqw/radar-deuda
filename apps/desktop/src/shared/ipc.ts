@@ -9,7 +9,7 @@ import type { AccountState, SignUpResult } from './account.js';
 import type { JobState } from './jobs.js';
 import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal, UpdateInfo } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
-import type { AppSettings } from './settings.js';
+import type { AppSettings, LanguageSetting, Locale } from './settings.js';
 import type { SyncState } from './sync.js';
 
 export interface AppInfo {
@@ -20,6 +20,9 @@ export interface AppInfo {
   cacheDir: string;
   /** Clones de los repositorios de GitHub. */
   reposDir: string;
+  /** Idioma elegido («auto»: el del sistema) y el que se usa. */
+  language: LanguageSetting;
+  locale: Locale;
 }
 
 export interface IpcContract {
@@ -38,6 +41,8 @@ export interface IpcContract {
   'account:signOut': { args: []; result: AccountState };
   'app:info': { args: []; result: AppInfo };
   'app:openExternal': { args: [url: string]; result: boolean };
+  /** Cambia el idioma (preferencia del equipo, también sin sesión). Devuelve el idioma que se usa. */
+  'app:setLanguage': { args: [language: LanguageSetting]; result: Locale };
   /** Copia texto al portapapeles del sistema. */
   'app:copyText': { args: [text: string]; result: null };
   /** Espacio que ocupan la caché y los clones. */
@@ -122,12 +127,13 @@ export const ACCOUNT_CHANNELS = [
 export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
 
 /** Canales que responden sin sesión iniciada. */
-export const PUBLIC_CHANNELS: readonly Channel[] = [...ACCOUNT_CHANNELS, 'app:info', 'app:openExternal'];
+export const PUBLIC_CHANNELS: readonly Channel[] = [...ACCOUNT_CHANNELS, 'app:info', 'app:openExternal', 'app:setLanguage'];
 
 export const CHANNELS = [
   ...ACCOUNT_CHANNELS,
   'app:info',
   'app:openExternal',
+  'app:setLanguage',
   'app:copyText',
   'app:storage',
   'app:clearCache',
