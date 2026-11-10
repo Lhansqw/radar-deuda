@@ -147,33 +147,42 @@ async function describeOpenRouterModels(
   }
   for (const id of models) {
     const m = byId.get(id);
-    if (!m) {
-      const base = id.replace(/:[a-z]+$/i, '');
-      const similar = catalog.filter((c) => c.id.startsWith(`${base.split('/')[0]}/`) && c.id.includes(base.split('/')[1]?.split(/[-.]/)[0] ?? '')).slice(0, 3);
-      const hint = similar.map((c) => c.id).join(', ');
-      throw new Error(
-        tr(
-          `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${hint}?` : ''} Elige uno de la lista en Configuración (en la CLI: npm run models).`,
-          `The model "${id}" does not exist on OpenRouter.${similar.length > 0 ? ` Did you mean ${hint}?` : ''} Choose one from the list in Settings (in the CLI: npm run models).`,
-        ),
-      );
-    }
-    const plan = planReasoning(m, reasoning);
-    const parts = [tr(`Modelo ${m.id}${m.free ? ' (gratuito)' : ''}`, `Model ${m.id}${m.free ? ' (free)' : ''}`)];
-    if (m.reasoning) {
-      const mandatory = m.reasoning.mandatory;
-      parts.push(
-        plan.effort === 'none'
-          ? tr('razona, pero se desactiva su razonamiento', 'reasons, but its reasoning is turned off')
-          : tr(
-              `razona: esfuerzo ${EFFORT[plan.effort] ?? plan.effort}${mandatory ? ' (no se puede desactivar)' : ''}, con ${plan.headroom} tokens de margen`,
-              `reasons: ${EFFORT_EN[plan.effort] ?? plan.effort} effort${mandatory ? ' (cannot be turned off)' : ''}, with ${plan.headroom} tokens of headroom`,
-            ),
-      );
-    }
-    if (!m.structuredOutputs) parts.push(tr('no admite salida estructurada: puede necesitar más reintentos', 'does not support structured output: it may need more retries'));
-    hooks.info(`${parts.join(' · ')}.`);
+    if (!m) throw unknownModel(id, catalog, tr);
+    hooks.info(describeModel(m, reasoning, tr));
   }
+}
+
+type CatalogEntry = Awaited<ReturnType<OpenRouterProvider['models']>>[number];
+
+/** Error de un modelo que no está en el catálogo, con hasta tres parecidos. */
+function unknownModel(id: string, catalog: readonly CatalogEntry[], tr: Translate): Error {
+  const [vendor, name = ''] = id.replace(/:[a-z]+$/i, '').split('/');
+  const family = name.split(/[-.]/)[0] ?? '';
+  const similar = catalog.filter((c) => c.id.startsWith(`${vendor}/`) && c.id.includes(family)).slice(0, 3);
+  const hint = similar.map((c) => c.id).join(', ');
+  return new Error(
+    tr(
+      `El modelo "${id}" no existe en OpenRouter.${similar.length > 0 ? ` ¿Quisiste decir ${hint}?` : ''} Elige uno de la lista en Configuración (en la CLI: npm run models).`,
+      `The model "${id}" does not exist on OpenRouter.${similar.length > 0 ? ` Did you mean ${hint}?` : ''} Choose one from the list in Settings (in the CLI: npm run models).`,
+    ),
+  );
+}
+
+/** «Modelo x (gratuito) · razona: esfuerzo bajo… · …»: qué se hará con un modelo del catálogo. */
+function describeModel(m: CatalogEntry, reasoning: ReasoningPreference, tr: Translate): string {
+  const parts = [tr(`Modelo ${m.id}${m.free ? ' (gratuito)' : ''}`, `Model ${m.id}${m.free ? ' (free)' : ''}`)];
+  if (m.reasoning) parts.push(reasoningText(m, planReasoning(m, reasoning), tr));
+  if (!m.structuredOutputs) parts.push(tr('no admite salida estructurada: puede necesitar más reintentos', 'does not support structured output: it may need more retries'));
+  return `${parts.join(' · ')}.`;
+}
+
+function reasoningText(m: CatalogEntry, plan: ReturnType<typeof planReasoning>, tr: Translate): string {
+  if (plan.effort === 'none') return tr('razona, pero se desactiva su razonamiento', 'reasons, but its reasoning is turned off');
+  const mandatory = m.reasoning?.mandatory === true;
+  return tr(
+    `razona: esfuerzo ${EFFORT[plan.effort] ?? plan.effort}${mandatory ? ' (no se puede desactivar)' : ''}, con ${plan.headroom} tokens de margen`,
+    `reasons: ${EFFORT_EN[plan.effort] ?? plan.effort} effort${mandatory ? ' (cannot be turned off)' : ''}, with ${plan.headroom} tokens of headroom`,
+  );
 }
 
 export interface AiStepResult {
