@@ -142,7 +142,7 @@ corrección (que fallan con la versión anterior).
   (`esbuild` y `fsevents`).
 - En ejecución, la aplicación solo usa `react`, `react-dom` (`scheduler`), `ignore`,
   `semver`, `typescript` (el compilador, para el análisis) y las dos fuentes tipográficas.
-- Electron 44.9.3 (fijado), la última versión de la rama 44, que sigue con soporte.
+- Electron 45.2.3 (fijado).
 
 ### Integración continua
 
