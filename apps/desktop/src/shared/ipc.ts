@@ -49,6 +49,11 @@ export interface IpcContract {
   /** Tema de la interfaz en este equipo (main/appearance.ts). */
   'app:theme': { args: []; result: ThemeSetting };
   'app:setTheme': { args: [theme: ThemeSetting]; result: ThemeSetting };
+  /** Diagnóstico para un informe de error: versiones, sistema y errores recientes, sin rutas, código ni claves (main/error-log.ts). */
+  'app:diagnostics': { args: []; result: string };
+  'app:clearErrors': { args: []; result: null };
+  /** Un error de la interfaz, para el registro local. */
+  'app:reportError': { args: [message: string, stack: string | null]; result: null };
   'projects:list': { args: []; result: Project[] };
   /** Abre el selector de carpetas del sistema; null si se cancela. */
   'projects:addFolder': { args: []; result: Project | null };
@@ -125,7 +130,7 @@ export const ACCOUNT_CHANNELS = [
 export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
 
 /** Canales que responden sin sesión iniciada. */
-export const PUBLIC_CHANNELS: readonly Channel[] = [...ACCOUNT_CHANNELS, 'app:info', 'app:openExternal', 'app:theme', 'app:setTheme'];
+export const PUBLIC_CHANNELS: readonly Channel[] = [...ACCOUNT_CHANNELS, 'app:info', 'app:openExternal', 'app:theme', 'app:setTheme', 'app:diagnostics', 'app:clearErrors', 'app:reportError'];
 
 export const CHANNELS = [
   ...ACCOUNT_CHANNELS,
@@ -137,6 +142,9 @@ export const CHANNELS = [
   'app:checkUpdate',
   'app:theme',
   'app:setTheme',
+  'app:diagnostics',
+  'app:clearErrors',
+  'app:reportError',
   'projects:list',
   'projects:addFolder',
   'projects:addGithub',

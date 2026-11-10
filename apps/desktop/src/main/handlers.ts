@@ -34,6 +34,10 @@ export interface HandlerDeps {
   theme: () => ThemeSetting;
   /** Guarda el tema y lo aplica en el momento. */
   setTheme: (theme: ThemeSetting) => ThemeSetting;
+  /** Registro local de errores (error-log.ts). */
+  diagnostics: () => string;
+  clearErrors: () => void;
+  reportError: (message: string, stack: string | null) => void;
   /** Borra el clon de un repositorio de GitHub (owner/repo) que creó la aplicación. */
   removeClone: (repo: string) => Promise<void>;
   /** Diálogo para guardar un parche; devuelve la ruta elegida o null si se cancela. */
@@ -66,6 +70,21 @@ function report(d: HandlerDeps, analysisId: number): AnalysisReport {
   return r;
 }
 
+/** Diagnóstico y registro de errores: también sin sesión (account-handlers.ts). */
+export function errorHandlers(d: Pick<HandlerDeps, 'diagnostics' | 'clearErrors' | 'reportError'>): Pick<Handlers, 'app:diagnostics' | 'app:clearErrors' | 'app:reportError'> {
+  return {
+    'app:diagnostics': () => d.diagnostics(),
+    'app:clearErrors': () => {
+      d.clearErrors();
+      return null;
+    },
+    'app:reportError': (message, stack) => {
+      d.reportError(message, stack);
+      return null;
+    },
+  };
+}
+
 export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
   return {
     'app:info': () => d.info(),
@@ -79,6 +98,7 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
     'app:checkUpdate': () => d.checkUpdate(),
     'app:theme': () => d.theme(),
     'app:setTheme': (theme) => d.setTheme(theme),
+    ...errorHandlers(d),
 
     'projects:list': () => d.store.listProjects(),
     'projects:addFolder': async () => {

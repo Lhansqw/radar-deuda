@@ -37,6 +37,9 @@ const app: AppDeps = {
   checkUpdate: async () => ({ current: '0.1.0', latest: null, url: null, newer: false }),
   theme: () => 'dark',
   setTheme: (theme) => theme,
+  diagnostics: () => 'diagnóstico',
+  clearErrors: () => undefined,
+  reportError: () => undefined,
   removeClone: async () => undefined,
 };
 
@@ -88,12 +91,12 @@ function setup() {
   const notified: AccountState[] = [];
   const router = new SessionRouter({ account: createAccountHandlers(account), app, open: ws.open, notify: (s) => notified.push(s) });
   cleanup.push(() => router.dispose());
-  const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, router.handlers(), null);
+  const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, router.handlers());
   return { router, call, notified, opened: ws.opened };
 }
 
 describe('SessionRouter', () => {
-  it('sin sesión solo responden la cuenta, app:info, el tema y abrir enlaces', async () => {
+  it('sin sesión solo responden la cuenta, app:info, el tema, el diagnóstico y abrir enlaces', async () => {
     const { call } = setup();
     expect(await call('projects:list')).toEqual({ ok: false, error: 'Inicia sesión para continuar.' });
     expect(await call('settings:get')).toEqual({ ok: false, error: 'Inicia sesión para continuar.' });
@@ -103,6 +106,8 @@ describe('SessionRouter', () => {
     expect(await call('app:openExternal', 'https://supabase.com/')).toEqual({ ok: true, value: true });
     expect(await call('app:theme')).toEqual({ ok: true, value: 'dark' });
     expect(await call('app:setTheme', 'light')).toEqual({ ok: true, value: 'light' });
+    expect(await call('app:diagnostics')).toEqual({ ok: true, value: 'diagnóstico' });
+    expect(await call('app:reportError', 'Fallo en la pantalla de acceso', null)).toEqual({ ok: true, value: null });
   });
 
   it('con sesión, cada usuario ve sus datos; al cambiar de usuario se cierra lo del anterior', async () => {
