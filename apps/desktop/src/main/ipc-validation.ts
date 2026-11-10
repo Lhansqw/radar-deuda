@@ -62,6 +62,13 @@ export const VALIDATORS: Validators = {
   'app:checkUpdate': (a) => (count(a, 0), []),
   'app:theme': (a) => (count(a, 0), []),
   'app:setTheme': (a) => (count(a, 1), [theme(a[0])]),
+  'app:diagnostics': (a) => (count(a, 0), []),
+  'app:clearErrors': (a) => (count(a, 0), []),
+  'app:reportError': (a) => {
+    count(a, 2);
+    if (a[1] !== null && (typeof a[1] !== 'string' || a[1].length > 20_000)) throw new IpcValidationError('Pila no válida.');
+    return [text(a[0], 'Error no válido.', 5000), a[1]];
+  },
   'projects:list': (a) => (count(a, 0), []),
   'projects:addFolder': (a) => (count(a, 0), []),
   'projects:addGithub': (a) => {

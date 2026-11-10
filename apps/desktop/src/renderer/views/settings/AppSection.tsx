@@ -4,9 +4,10 @@ import type { AppInfo } from '../../../shared/ipc.js';
 import type { StorageInfo } from '../../../shared/model.js';
 import type { ThemeSetting, UpdateSettings } from '../../../shared/settings.js';
 import { formatBytes } from '../../lib/format.js';
+import { Diagnostics } from './Diagnostics.js';
 import { CheckField, SettingsSection } from './SettingsSection.js';
 
-/** Versiones, tema, actualizaciones, dónde guarda los datos y espacio en disco. */
+/** Versiones, tema, actualizaciones, dónde guarda los datos, espacio en disco y diagnóstico. */
 export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; updates: UpdateSettings; onUpdatesChange: (patch: Partial<UpdateSettings>) => void }) {
   return (
     <SettingsSection id="s-acerca" title="Aplicación">
@@ -27,6 +28,7 @@ export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; 
       <Appearance />
       <Updates updates={updates} onChange={onUpdatesChange} />
       <Storage />
+      <Diagnostics />
     </SettingsSection>
   );
 }

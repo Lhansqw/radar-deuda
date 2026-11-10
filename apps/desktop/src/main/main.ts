@@ -1,29 +1,25 @@
 import { mkdtempSync, rmSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { defaultCacheDir } from '@radar/engine';
-import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
-import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
-import { app, BrowserWindow, clipboard, dialog, Menu, nativeTheme, safeStorage, shell } from 'electron';
+import { pruneCache } from '@radar/pipeline';
+import { app, BrowserWindow, Menu, safeStorage } from 'electron';
 import { errorMessage } from '../shared/errors.js';
 import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { createAccountHandlers } from './account-handlers.js';
-import { APPEARANCE_FILE, readTheme, windowBackground, writeTheme } from './appearance.js';
 import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
-import type { AppDeps } from './handlers.js';
 import { trustedCipher, type Cipher } from './credentials.js';
 import { registerIpc } from './ipc.js';
 import { menuTemplate } from './menu.js';
 import { devServerFromEnv } from './policy.js';
 import { registerAppScheme, serveRenderer } from './protocol.js';
-import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
+import { enableSandboxEverywhere, hardenApp } from './security.js';
 import { EncryptedSessionStorage } from './session-storage.js';
 import { checkRenderer, checkWorker, SMOKE_FLAG } from './smoke.js';
-import { checkForUpdate } from './updates.js';
+import { currentWindowBackground, prefixed, setupAppearance, systemDeps, watchErrors } from './system.js';
 import { spawnAnalysisWorker } from './worker-process.js';
 import { openWorkspace, SessionRouter } from './workspace.js';
 
@@ -92,7 +88,7 @@ function createWindow(): BrowserWindow {
     minHeight: 640,
     show: false,
     title: 'Radar de Deuda Técnica',
-    backgroundColor: windowBackground(nativeTheme.shouldUseDarkColors),
+    backgroundColor: currentWindowBackground(),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(distDir, 'preload.cjs'),
@@ -115,19 +111,15 @@ function createWindow(): BrowserWindow {
 }
 
 function start(): void {
-  // El tema elegido (oscuro por defecto) rige la interfaz (prefers-color-scheme), la barra de título y los
-  // controles nativos. Se aplica antes de crear la ventana para que no destelle el tema por defecto.
-  const appearanceFile = path.join(app.getPath('userData'), APPEARANCE_FILE);
-  nativeTheme.themeSource = readTheme(appearanceFile);
-  nativeTheme.on('updated', () => {
-    for (const w of BrowserWindow.getAllWindows()) w.setBackgroundColor(windowBackground(nativeTheme.shouldUseDarkColors));
-  });
+  const dataDir = app.getPath('userData');
+  // El tema elegido rige la interfaz (prefers-color-scheme), la barra de título y los controles nativos.
+  const appearanceFile = setupAppearance(dataDir);
+  const errors = watchErrors(dataDir);
   const template = menuTemplate(process.platform, app.isPackaged);
   if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   hardenApp(devServerUrl);
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 
-  const dataDir = app.getPath('userData');
   // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
   // La prueba de arranque no usa el llavero: comprueba el paquete, no el cifrado del sistema. En macOS, el elemento
   // «<nombre> Safe Storage» que creó otra copia de la aplicación (otra firma) hace que el sistema pida permiso con un
@@ -139,48 +131,10 @@ function start(): void {
   };
   let win: BrowserWindow | null = null;
   let router: SessionRouter | null = null;
+  /** Cada análisis fallido se registra una vez, aunque su estado se emita varias. */
+  const failedJobs = new Set<string>();
 
-  const appDeps: AppDeps = {
-    info: () => ({
-      versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
-      dataDir: router?.userDir ?? dataDir,
-      cacheDir: defaultCacheDir(),
-      reposDir: defaultReposDir(),
-    }),
-    chooseFolder: async () => {
-      const options = { title: 'Elige la carpeta del proyecto', properties: ['openDirectory' as const] };
-      const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-      return r.canceled ? null : (r.filePaths[0] ?? null);
-    },
-    openExternal,
-    // Solo se muestra en el explorador: abrir el archivo con su programa asociado podría ejecutarlo (.js, .bat…).
-    reveal: (abs) => shell.showItemInFolder(abs),
-    copyText: (text) => clipboard.writeText(text),
-    storage: async () => {
-      const [cache, clones] = await Promise.all([cacheUsage(defaultCacheDir()), folderSize(defaultReposDir())]);
-      return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
-    },
-    clearCache: () => clearCache(defaultCacheDir()),
-    checkUpdate: () => checkForUpdate(app.getVersion()),
-    theme: () => nativeTheme.themeSource,
-    setTheme: (theme) => {
-      writeTheme(appearanceFile, theme);
-      nativeTheme.themeSource = theme;
-      return theme;
-    },
-    removeClone: async (repo) => {
-      const ref = parseGitHubRepo(repo);
-      if (ref) await removeClone(ref, defaultReposDir());
-    },
-    // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
-    savePatch: async (name, content) => {
-      const options = { title: 'Guardar el parche', defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Parche', extensions: ['patch', 'diff'] }] };
-      const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
-      if (r.canceled || !r.filePath) return null;
-      await writeFile(r.filePath, content, 'utf8');
-      return r.filePath;
-    },
-  };
+  const appDeps = systemDeps({ dataDir, userDir: () => router?.userDir ?? null, window: () => win, errors, appearanceFile });
 
   // Cuentas (fase 13): sin sesión no se abre ninguna base de datos; con sesión, la del usuario.
   const account = new AccountService({
@@ -196,7 +150,13 @@ function start(): void {
         dataDir,
         cipher,
         spawn,
-        emit: (state) => broadcast(JOB_EVENT_CHANNEL, state),
+        emit: (state) => {
+          if (state.status === 'failed' && !failedJobs.has(state.jobId)) {
+            failedJobs.add(state.jobId);
+            errors.record('análisis', state.error ?? 'El análisis falló.');
+          }
+          broadcast(JOB_EVENT_CHANNEL, state);
+        },
         cloud: async () => {
           const db = await account.database();
           return db ? new SupabaseRepo(db) : null;
@@ -212,7 +172,7 @@ function start(): void {
     sessions.dispose();
     account.dispose();
   });
-  registerIpc(() => sessions.handlers(), devServerUrl);
+  registerIpc(() => sessions.handlers(), devServerUrl, (channel, err) => errors.record('ipc', prefixed(`${channel}: `, err)));
 
   win = createWindow();
   if (smoke) {

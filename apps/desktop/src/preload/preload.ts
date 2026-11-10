@@ -44,6 +44,9 @@ const api: RadarApi = {
     checkUpdate: () => invoke('app:checkUpdate'),
     theme: () => invoke('app:theme'),
     setTheme: (theme) => invoke('app:setTheme', theme),
+    diagnostics: () => invoke('app:diagnostics'),
+    clearErrors: () => invoke('app:clearErrors'),
+    reportError: (message, stack) => invoke('app:reportError', message, stack),
   },
   projects: {
     list: () => invoke('projects:list'),
