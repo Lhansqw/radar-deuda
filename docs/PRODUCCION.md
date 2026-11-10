@@ -6,7 +6,7 @@ detalle.
 
 ## 1. Correo de las cuentas (obligatorio)
 
-El registro exige confirmar el correo con un código. El servidor de correo que trae
+El registro exige confirmar el correo con el enlace que se envía. El servidor de correo que trae
 Supabase **solo envía a los miembros del equipo del proyecto** y como mucho 2 mensajes por
 hora: sin un servidor propio, nadie más puede registrarse.
 
@@ -16,9 +16,15 @@ hora: sin un servidor propio, nadie más puede registrarse.
    servidor, puerto, usuario y contraseña que te da el servicio, y un remitente de tu dominio.
 3. En **Authentication → Rate Limits**, sube el límite de correos por hora (con SMTP propio
    ya no es 2).
-4. Prueba: regístrate con un correo que no sea del equipo del proyecto y confirma el código.
+4. En **Authentication → URL Configuration**, cambia la **Site URL** (por defecto
+   `http://localhost:3000`) por una página tuya, por ejemplo la del proyecto en GitHub: es
+   donde acaba el navegador después de pulsar el enlace. Con `localhost` la persona ve un
+   error, aunque su cuenta sí quede confirmada.
+5. Prueba: regístrate con un correo que no sea del equipo del proyecto, pulsa el enlace y
+   vuelve a la aplicación («Ya lo confirmé: entrar»).
 
-Plantillas de los correos: [CUENTAS.md](CUENTAS.md), paso 3.
+Plantillas de los correos, en español e inglés (la aplicación tiene los dos idiomas, y
+Supabase envía la misma plantilla a todo el mundo): [CUENTAS.md](CUENTAS.md), paso 3.
 
 ## 2. Contraseñas
 
