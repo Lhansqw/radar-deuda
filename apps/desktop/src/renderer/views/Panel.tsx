@@ -28,11 +28,6 @@ const horizon = (h: 'inmediato' | 'corto' | 'medio'): string => (h === 'inmediat
 export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest, comparison, onShowNew, onOpenHistory }: Props) {
   const s = report.score;
   const latest = analyses[0]?.id === analysisId;
-  const byId = useMemo(() => new Map(report.findings.map((f) => [f.id, f])), [report.findings]);
-  const priorities = useMemo(() => sortFindings(report.findings.filter((f) => f.severity !== 'info'), 'severity').slice(0, 6), [report.findings]);
-  const hotspots = (report.hotspots ?? []).slice(0, 6);
-  const plan = report.ai?.plan;
-  const limits = report.coverage.filter((c) => c.status !== 'analyzed');
 
   return (
     <div className="panel">
@@ -105,95 +100,119 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
       </section>
 
       <div className="panel-columns">
-        <section className="panel-section">
-          <h2>{plan ? tr('Plan de reducción propuesto por la IA', 'Reduction plan proposed by the AI') : tr('Por dónde empezar', 'Where to start')}</h2>
-          {plan ? (
-            <ol className="plan">
-              {plan.steps.map((step) => (
-                <li key={step.order}>
-                  <p>
-                    <span className="horizon">{horizon(step.horizon)}</span> <strong>{step.title}</strong>
-                  </p>
-                  <p className="muted">{step.rationale}</p>
-                  <ul className="plan-findings">
-                    {step.findingIds
-                      .map((id) => byId.get(id))
-                      .filter((f): f is Finding => f !== undefined)
-                      .slice(0, 4)
-                      .map((f) => (
-                        <li key={f.id}>
-                          <PriorityRow finding={f} onOpen={onOpenFinding} />
-                        </li>
-                      ))}
-                  </ul>
-                </li>
-              ))}
-            </ol>
-          ) : priorities.length > 0 ? (
-            <ul className="priorities">
-              {priorities.map((f) => (
-                <li key={f.id}>
-                  <PriorityRow finding={f} onOpen={onOpenFinding} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">{tr('No hay hallazgos que priorizar.', 'There are no findings to prioritize.')}</p>
-          )}
-        </section>
-
-        <section className="panel-section">
-          <h2>{tr('Puntos críticos', 'Hotspots')}</h2>
-          {hotspots.length > 0 ? (
-            <>
-              <p className="muted small">{tr('Archivos que cambian a menudo y además acumulan deuda: donde reducirla rinde más.', 'Files that change often and also pile up debt: where reducing it pays off most.')}</p>
-              <ul className="hotspots">
-                {hotspots.map((h) => (
-                  <li key={h.file}>
-                    <span className="mono">{h.file}</span>
-                    <span className="hotspot-bar" aria-hidden="true">
-                      <span style={{ width: `${h.score}%` }} />
-                    </span>
-                    <span className="muted">
-                      {tr(`${h.commits} cambios, ${formatEffort(h.debtMinutes)} de deuda`, `${h.commits} changes, ${formatEffort(h.debtMinutes)} of debt`)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {onOpenFiles ? (
-                <button type="button" className="btn btn-quiet btn-small" onClick={onOpenFiles}>
-                  {tr('Ver la deuda por carpeta', 'See the debt by folder')}
-                </button>
-              ) : null}
-            </>
-          ) : (
-            <p className="muted">
-              {report.vcs
-                ? tr('No hay archivos con cambios frecuentes y deuda en el periodo analizado.', 'There are no files with frequent changes and debt in the analyzed period.')
-                : tr('Sin historial de Git: los puntos críticos necesitan que el proyecto sea un repositorio Git.', 'No Git history: hotspots need the project to be a Git repository.')}
-            </p>
-          )}
-        </section>
+        <WhereToStart report={report} onOpenFinding={onOpenFinding} />
+        <Hotspots report={report} onOpenFiles={onOpenFiles} />
       </div>
 
-      {limits.length > 0 || report.errors.length > 0 ? (
-        <section className="panel-section">
-          <h2>{tr('Límites de este análisis', 'Limits of this analysis')}</h2>
-          <ul className="limits">
-            {limits.map((c) => (
-              <li key={c.area}>
-                <strong>{c.area}.</strong> {c.detail}
-              </li>
-            ))}
-            {report.errors.map((e, i) => (
-              <li key={`e${i}`}>
-                <strong>{e.analyzer}.</strong> {e.message}
+      <Limits report={report} />
+    </div>
+  );
+}
+
+/** El plan de la IA o, si no lo hay, los hallazgos más urgentes. */
+function WhereToStart({ report, onOpenFinding }: { report: AnalysisReport; onOpenFinding: (id: string) => void }) {
+  const byId = useMemo(() => new Map(report.findings.map((f) => [f.id, f])), [report.findings]);
+  const priorities = useMemo(() => sortFindings(report.findings.filter((f) => f.severity !== 'info'), 'severity').slice(0, 6), [report.findings]);
+  const plan = report.ai?.plan;
+  return (
+    <section className="panel-section">
+      <h2>{plan ? tr('Plan de reducción propuesto por la IA', 'Reduction plan proposed by the AI') : tr('Por dónde empezar', 'Where to start')}</h2>
+      {plan ? (
+        <ol className="plan">
+          {plan.steps.map((step) => (
+            <li key={step.order}>
+              <p>
+                <span className="horizon">{horizon(step.horizon)}</span> <strong>{step.title}</strong>
+              </p>
+              <p className="muted">{step.rationale}</p>
+              <ul className="plan-findings">
+                {step.findingIds
+                  .map((id) => byId.get(id))
+                  .filter((f): f is Finding => f !== undefined)
+                  .slice(0, 4)
+                  .map((f) => (
+                    <li key={f.id}>
+                      <PriorityRow finding={f} onOpen={onOpenFinding} />
+                    </li>
+                  ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      ) : priorities.length > 0 ? (
+        <ul className="priorities">
+          {priorities.map((f) => (
+            <li key={f.id}>
+              <PriorityRow finding={f} onOpen={onOpenFinding} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">{tr('No hay hallazgos que priorizar.', 'There are no findings to prioritize.')}</p>
+      )}
+    </section>
+  );
+}
+
+/** Archivos que cambian a menudo y acumulan deuda. */
+function Hotspots({ report, onOpenFiles }: { report: AnalysisReport; onOpenFiles?: (() => void) | undefined }) {
+  const hotspots = (report.hotspots ?? []).slice(0, 6);
+  return (
+    <section className="panel-section">
+      <h2>{tr('Puntos críticos', 'Hotspots')}</h2>
+      {hotspots.length > 0 ? (
+        <>
+          <p className="muted small">{tr('Archivos que cambian a menudo y además acumulan deuda: donde reducirla rinde más.', 'Files that change often and also pile up debt: where reducing it pays off most.')}</p>
+          <ul className="hotspots">
+            {hotspots.map((h) => (
+              <li key={h.file}>
+                <span className="mono">{h.file}</span>
+                <span className="hotspot-bar" aria-hidden="true">
+                  <span style={{ width: `${h.score}%` }} />
+                </span>
+                <span className="muted">
+                  {tr(`${h.commits} cambios, ${formatEffort(h.debtMinutes)} de deuda`, `${h.commits} changes, ${formatEffort(h.debtMinutes)} of debt`)}
+                </span>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-    </div>
+          {onOpenFiles ? (
+            <button type="button" className="btn btn-quiet btn-small" onClick={onOpenFiles}>
+              {tr('Ver la deuda por carpeta', 'See the debt by folder')}
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <p className="muted">
+          {report.vcs
+            ? tr('No hay archivos con cambios frecuentes y deuda en el periodo analizado.', 'There are no files with frequent changes and debt in the analyzed period.')
+            : tr('Sin historial de Git: los puntos críticos necesitan que el proyecto sea un repositorio Git.', 'No Git history: hotspots need the project to be a Git repository.')}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Lo que el análisis no cubrió y los errores de los analizadores. */
+function Limits({ report }: { report: AnalysisReport }) {
+  const limits = report.coverage.filter((c) => c.status !== 'analyzed');
+  if (limits.length === 0 && report.errors.length === 0) return null;
+  return (
+    <section className="panel-section">
+      <h2>{tr('Límites de este análisis', 'Limits of this analysis')}</h2>
+      <ul className="limits">
+        {limits.map((c) => (
+          <li key={c.area}>
+            <strong>{c.area}.</strong> {c.detail}
+          </li>
+        ))}
+        {report.errors.map((e, i) => (
+          <li key={`e${i}`}>
+            <strong>{e.analyzer}.</strong> {e.message}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
