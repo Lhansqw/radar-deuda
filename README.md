@@ -26,6 +26,7 @@ para explicar, priorizar y proponer correcciones a los hallazgos.
 | 13b | Copia de proyectos e historial en PostgreSQL (Supabase), sin código y con seguridad por filas probada en la integración continua | ✅ |
 | 14 | IA incluida: gpt-oss-120b (Groq) sin que el usuario configure ninguna clave, a través de una función de Supabase con cupo diario por cuenta | ✅ |
 | 15 | Linux (AppImage y .deb) y macOS (.dmg para Apple Silicon e Intel), comprobados en la integración continua | ✅ |
+| 16 | Python: complejidad, duplicación, ciclos entre módulos y pruebas, sin ejecutar el código | ✅ |
 
 **El radar sobre sí mismo:** 99/100 (A), sin hallazgos altos ni críticos. La integración
 continua falla si aparece alguno (`npm run analyze -- . --fail-on high`).
@@ -59,14 +60,15 @@ radar-deuda/
 │  ├─ ai/                IA independiente del proveedor: explica y prioriza sin inventar
 │  ├─ pipeline/          Análisis completo (origen, motor, Git, dependencias, IA); lo usan la CLI y la app
 │  └─ cli/               Comando radar-deuda: opciones de la terminal e impresión del informe
-├─ examples/demo-repo/   Repositorio con deuda técnica intencionada
+├─ examples/demo-repo/   Repositorio con deuda técnica intencionada (TypeScript)
+├─ examples/demo-python/ El mismo tipo de deuda en Python
 ├─ docs/                 Arquitectura, decisiones, entorno, metodología, rendimiento
 ├─ tsconfig.base.json    TypeScript estricto compartido
 ├─ eslint.config.js
 └─ vitest.config.ts
 ```
 
-La aplicación de escritorio está en `apps/desktop` (Electron 44 + React 19); ver
+La aplicación de escritorio está en `apps/desktop` (Electron 45 + React 19); ver
 [docs/ESCRITORIO.md](docs/ESCRITORIO.md). Pide iniciar sesión: la conexión con el
 proyecto de Supabase viene incluida (`apps/desktop/nube.json`), así que funciona en
 cualquier equipo sin configurar nada ([docs/CUENTAS.md](docs/CUENTAS.md)).
@@ -119,6 +121,10 @@ La caché se guarda en `%LOCALAPPDATA%\radar-deuda\cache` (y los clones de GitHu
 la CLI y la aplicación de escritorio la comparten. El motor solo **lee** archivos: no ejecuta código, no instala dependencias y no
 hace peticiones de red. Solo `--online` y los repositorios de GitHub usan la red, y nunca
 se envía código.
+
+Lenguajes: JS/TS y Python tienen análisis completo (complejidad, duplicación y ciclos); del
+resto se miden tamaño, marcadores y secretos. `examples/demo-python` es el repositorio de
+ejemplo en Python (`npm run analyze -- examplesdemo-python`).
 
 `examples/demo-repo` contiene deuda técnica intencionada (función compleja, duplicación,
 ciclo, secreto, dependencias problemáticas) para comprobar que cada analizador funciona.

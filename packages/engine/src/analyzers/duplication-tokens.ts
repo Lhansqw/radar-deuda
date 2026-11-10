@@ -1,12 +1,15 @@
 import type ts from 'typescript';
 import { computeLineStarts, lineAt } from '../util.js';
+import { isPythonPath, tokenizePython, type PyToken } from './python-lexer.js';
 import { languageVariantFor } from './shared.js';
 import { lazy, tsApi } from './ts-runtime.js';
 
 /**
  * Tokens y huellas para la detección de duplicados: k-gramas de tokens del
  * escáner de TypeScript (sin espacios ni comentarios) con hash rodante, y
- * *winnowing* para quedarse con pocas huellas por archivo.
+ * *winnowing* para quedarse con pocas huellas por archivo. En Python, los
+ * tokens son los de python-lexer.ts (con saltos de línea y sangría, que
+ * forman parte de la sintaxis).
  */
 
 export const K = 25;
@@ -94,24 +97,35 @@ export function forEachToken(scanner: ts.Scanner, cb: (kind: ts.SyntaxKind, text
   }
 }
 
-export function fingerprintSource(text: string, relPath: string): DuplicationArtifact {
-  const ts = tsApi();
-  const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, languageVariantFor(relPath), text);
-  const lineStarts = computeLineStarts(text);
-  const lineOf = (pos: number): number => lineAt(lineStarts, pos);
+const pythonTokenHash = (t: PyToken): number => fnv1a(`py:${t.type}:${t.value}`);
 
+export function fingerprintSource(text: string, relPath: string): DuplicationArtifact {
   const hashes1: number[] = [];
   const hashes2: number[] = [];
   const startLines: number[] = [];
   const endLines: number[] = [];
 
-  forEachToken(scanner, (kind, tokenText, start, end) => {
-    const th = fnv1a(`${kind}:${tokenText}`);
-    hashes1.push(th % P1);
-    hashes2.push(th % P2);
-    startLines.push(lineOf(start));
-    endLines.push(lineOf(Math.max(end - 1, start)));
-  });
+  if (isPythonPath(relPath)) {
+    for (const t of tokenizePython(text).stream) {
+      const th = pythonTokenHash(t);
+      hashes1.push(th % P1);
+      hashes2.push(th % P2);
+      startLines.push(t.line);
+      endLines.push(t.endLine);
+    }
+  } else {
+    const ts = tsApi();
+    const scanner = ts.createScanner(ts.ScriptTarget.Latest, true, languageVariantFor(relPath), text);
+    const lineStarts = computeLineStarts(text);
+    const lineOf = (pos: number): number => lineAt(lineStarts, pos);
+    forEachToken(scanner, (kind, tokenText, start, end) => {
+      const th = fnv1a(`${kind}:${tokenText}`);
+      hashes1.push(th % P1);
+      hashes2.push(th % P2);
+      startLines.push(lineOf(start));
+      endLines.push(lineOf(Math.max(end - 1, start)));
+    });
+  }
 
   const n = hashes1.length;
   if (n < K) return { tokens: n, fps: [] };
@@ -174,7 +188,23 @@ const noTrailing = lazy((ts) => new Set<ts.SyntaxKind>([
   ts.SyntaxKind.CommaToken, ts.SyntaxKind.DotToken,
 ]));
 
+/** Python: una región no empieza en un separador ni en un salto de línea o cambio de sangría. */
+const PY_NO_LEADING = new Set([',', ')', ']', '}', ';']);
+const PY_NO_TRAILING = new Set(['(', '[', '{', ',', '.']);
+
+function pythonTokenSequence(text: string): TokenSeq {
+  const stream = tokenizePython(text).stream;
+  return {
+    ids: Uint32Array.from(stream, pythonTokenHash),
+    startLines: Uint32Array.from(stream, (t) => t.line),
+    endLines: Uint32Array.from(stream, (t) => t.endLine),
+    leading: Uint8Array.from(stream, (t) => (t.type === 'newline' || t.type === 'indent' || t.type === 'dedent' || (t.type === 'op' && PY_NO_LEADING.has(t.value)) ? 1 : 0)),
+    trailing: Uint8Array.from(stream, (t) => (t.type === 'indent' || (t.type === 'op' && PY_NO_TRAILING.has(t.value)) ? 1 : 0)),
+  };
+}
+
 export function tokenSequence(text: string, relPath: string): TokenSeq {
+  if (isPythonPath(relPath)) return pythonTokenSequence(text);
   const ts = tsApi();
   const NO_LEADING = noLeading();
   const NO_TRAILING = noTrailing();

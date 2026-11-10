@@ -28,7 +28,16 @@ export interface RadarApi {
     info: Fn<'app:info'>;
     openExternal: Fn<'app:openExternal'>;
     setLanguage: Fn<'app:setLanguage'>;
-    copyText: Fn<'app:copyText'>; storage: Fn<'app:storage'>; clearCache: Fn<'app:clearCache'>; checkUpdate: Fn<'app:checkUpdate'> };
+    copyText: Fn<'app:copyText'>;
+    storage: Fn<'app:storage'>;
+    clearCache: Fn<'app:clearCache'>;
+    checkUpdate: Fn<'app:checkUpdate'>;
+    theme: Fn<'app:theme'>;
+    setTheme: Fn<'app:setTheme'>;
+    diagnostics: Fn<'app:diagnostics'>;
+    clearErrors: Fn<'app:clearErrors'>;
+    reportError: Fn<'app:reportError'>;
+  };
   projects: { list: Fn<'projects:list'>; addFolder: Fn<'projects:addFolder'>; addGithub: Fn<'projects:addGithub'>; remove: Fn<'projects:remove'> };
   analyses: { list: Fn<'analyses:list'>; report: Fn<'analyses:report'>; compare: Fn<'analyses:compare'> };
   settings: { get: Fn<'settings:get'>; set: Fn<'settings:set'> };

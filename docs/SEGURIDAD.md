@@ -64,6 +64,12 @@ validación de cada argumento, credenciales cifradas con el sistema (DPAPI) que 
 nunca recibe, lectura de fragmentos solo de archivos citados por el análisis, parches
 generados por el proceso principal y respuestas de la IA mostradas como texto.
 
+El registro de errores (`main/error-log.ts`) es local: la aplicación no envía errores a
+ningún servicio. Antes de guardar cada error se sustituyen las rutas del equipo (`<ruta>`;
+las de la propia aplicación quedan como `<app>`), los correos y los parámetros de las URL, y
+se ocultan las claves con formato conocido. Los errores que envía la interfaz se validan
+(longitud) y tienen un límite por minuto. El usuario ve el diagnóstico antes de copiarlo.
+
 ### Cuentas (fase 13)
 
 Detalle en [CUENTAS.md](CUENTAS.md#5-seguridad). Las cuentas viven en Supabase Auth; el
@@ -142,7 +148,7 @@ corrección (que fallan con la versión anterior).
   (`esbuild` y `fsevents`).
 - En ejecución, la aplicación solo usa `react`, `react-dom` (`scheduler`), `ignore`,
   `semver`, `typescript` (el compilador, para el análisis) y las dos fuentes tipográficas.
-- Electron 44.9.3 (fijado), la última versión de la rama 44, que sigue con soporte.
+- Electron 45.2.3 (fijado).
 
 ### Integración continua
 

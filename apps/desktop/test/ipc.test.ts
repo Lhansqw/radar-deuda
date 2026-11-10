@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAccountHandlers, signedInHandlers, type AccountApi } from '../src/main/account-handlers.js';
 import { CredentialStore } from '../src/main/credentials.js';
 import { createHandlers, type HandlerDeps } from '../src/main/handlers.js';
@@ -68,12 +68,17 @@ function setup(over: Partial<HandlerDeps> = {}) {
     storage: async () => ({ cache: { files: 0, bytes: 0, parts: [] }, clones: { files: 0, bytes: 0 } }),
     clearCache: async () => ({ files: 0, bytes: 0 }),
     checkUpdate: async () => ({ current: '0.1.0', latest: null, url: null, newer: false }),
+    theme: () => 'dark',
+    setTheme: (theme) => theme,
+    diagnostics: () => 'diagnóstico',
+    clearErrors: () => undefined,
+    reportError: () => undefined,
     removeClone: async () => undefined,
     sync: fakeSync,
     ...over,
   });
   const handlers = signedInHandlers(workspace, createAccountHandlers(fakeAccount));
-  const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, handlers, null);
+  const call = (channel: (typeof CHANNELS)[number], ...args: unknown[]) => dispatch(channel, APP_ENTRY, args, handlers);
   return { store, handlers, call };
 }
 
@@ -85,9 +90,19 @@ describe('contrato IPC', () => {
   it('rechaza mensajes que no vienen de la interfaz de la aplicación', async () => {
     const { handlers } = setup();
     for (const sender of [undefined, 'https://evil.example/', 'file:///C:/x.html', 'app://otro/index.html']) {
-      expect(await dispatch('projects:list', sender, [], handlers, null)).toEqual({ ok: false, error: 'Remitente no autorizado.' });
+      expect(await dispatch('projects:list', sender, [], handlers)).toEqual({ ok: false, error: 'Remitente no autorizado.' });
     }
-    expect(await dispatch('projects:list', 'http://127.0.0.1:5173/', [], handlers, 'http://127.0.0.1:5173/')).toEqual({ ok: true, value: [] });
+    expect(await dispatch('projects:list', 'http://127.0.0.1:5173/', [], handlers, { devServerUrl: 'http://127.0.0.1:5173/' })).toEqual({ ok: true, value: [] });
+  });
+
+  it('solo los errores inesperados van al registro de errores', async () => {
+    const { handlers } = setup({ checkUpdate: async () => Promise.reject(new Error('fallo de red inesperado')) });
+    const onUnexpected = vi.fn();
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    expect(await dispatch('app:checkUpdate', APP_ENTRY, [], handlers, { onUnexpected })).toEqual({ ok: false, error: 'fallo de red inesperado' });
+    expect(await dispatch('projects:list', APP_ENTRY, ['extra'], handlers, { onUnexpected })).toMatchObject({ ok: false });
+    quiet.mockRestore();
+    expect(onUnexpected.mock.calls.map(([channel]) => channel)).toEqual(['app:checkUpdate']);
   });
 
   it('valida número y tipo de argumentos antes de llamar al manejador', async () => {
@@ -99,6 +114,11 @@ describe('contrato IPC', () => {
     expect(await call('secrets:set', 'aws', 'x')).toEqual({ ok: false, error: 'Credencial desconocida.' });
     expect(await call('secrets:set', 'openrouter', 'x'.repeat(1001))).toEqual({ ok: false, error: 'Credencial no válida.' });
     expect(await call('app:openExternal', 42)).toEqual({ ok: false, error: 'Enlace no válido.' });
+    expect(await call('app:setTheme', 'azul')).toEqual({ ok: false, error: 'Tema no válido.' });
+    expect(await call('app:setTheme', 'system')).toEqual({ ok: true, value: 'system' });
+    expect(await call('app:reportError', '', null)).toEqual({ ok: false, error: 'Error no válido.' });
+    expect(await call('app:reportError', 'Fallo', 42)).toEqual({ ok: false, error: 'Pila no válida.' });
+    expect(await call('app:reportError', 'Fallo', 'at x')).toEqual({ ok: true, value: null });
   });
 
   it('valida los argumentos de la cuenta sin repetirlos en el error', async () => {

@@ -8,7 +8,8 @@
  * Deja capturas en apps/desktop/e2e/capturas.
  *
  * Variables opcionales: RADAR_E2E_ELECTRON (ejecutable de Electron, si no es
- * el de node_modules) y RADAR_E2E_KEEP=1 (no borrar la carpeta temporal).
+ * el de node_modules), RADAR_E2E_KEEP=1 (no borrar la carpeta temporal) y
+ * RADAR_E2E_THEME=light (abrir con ese tema; las capturas van a capturas/light).
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -22,7 +23,8 @@ import { _electron as electron, type ElectronApplication, type Page } from 'play
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const rootDir = path.resolve(appDir, '..', '..');
-const shotsDir = path.join(appDir, 'e2e', 'capturas');
+const theme = process.env['RADAR_E2E_THEME'];
+const shotsDir = path.join(appDir, 'e2e', 'capturas', ...(theme ? [theme] : []));
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'radar-e2e-'));
 const repo = path.join(tmp, 'tienda');
 const FAKE_KEY = `sk-or-v1-${'a1'.repeat(32)}`;
@@ -31,6 +33,8 @@ const SUPABASE_URL = 'https://prueba.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_prueba_0123456789';
 const EMAIL = 'ana@ejemplo.com';
 const PASSWORD = 'una-contraseña-larga';
+/** Mensaje del error que se provoca en la interfaz para probar el diagnóstico. */
+const INTENTIONAL_ERROR = 'Fallo de prueba al leer';
 const SECRET_IN_DEMO = 'Xk9#mP2vL8qR4nT7';
 
 function git(...args: string[]): void {
@@ -272,10 +276,17 @@ async function main(): Promise<void> {
   rmSync(shotsDir, { recursive: true, force: true });
   mkdirSync(shotsDir, { recursive: true });
   createRepo();
+  if (theme) {
+    // El tema se guarda en el equipo (main/appearance.ts): se deja elegido antes de abrir.
+    mkdirSync(path.join(tmp, 'datos'), { recursive: true });
+    writeFileSync(path.join(tmp, 'datos', 'apariencia.json'), JSON.stringify({ theme }));
+  }
   const executablePath = process.env['RADAR_E2E_ELECTRON'] ?? (createRequire(import.meta.url)('electron') as string);
   const app = await electron.launch({
     executablePath,
     args: [appDir],
+    // Playwright simula prefers-color-scheme: light por defecto; aquí manda el tema de la aplicación (nativeTheme).
+    colorScheme: null,
     env: {
       ...process.env,
       RADAR_DATA_DIR: path.join(tmp, 'datos'),
@@ -285,12 +296,16 @@ async function main(): Promise<void> {
     },
   });
   const problems: string[] = [];
+  // El error que la prueba del diagnóstico provoca a propósito no cuenta como problema.
+  const problem = (text: string): void => {
+    if (!text.includes(INTENTIONAL_ERROR)) problems.push(text);
+  };
   try {
     const page = await app.firstWindow();
     page.on('console', (m) => {
-      if (m.type() === 'error' || m.type() === 'warning') problems.push(m.text());
+      if (m.type() === 'error' || m.type() === 'warning') problem(m.text());
     });
-    page.on('pageerror', (e) => problems.push(String(e)));
+    page.on('pageerror', (e) => problem(String(e)));
     await page.setViewportSize({ width: 1440, height: 900 });
     await simulate(app);
 
@@ -379,6 +394,32 @@ async function main(): Promise<void> {
     await page.getByRole('button', { name: 'Configuración' }).click();
     assert.match((await page.locator('#cupo-ia').filter({ hasText: /Te quedan/ }).textContent()) ?? '', /Te quedan 29 de 30 consultas hoy/);
     log('explicación con la IA incluida, sin ninguna clave; el cupo del día se ve en Configuración');
+
+    // Tema: se aplica al elegirlo, sin «Guardar», y la interfaz lo recibe por prefers-color-scheme.
+    const LIGHT = "matchMedia('(prefers-color-scheme: light)').matches";
+    const startedLight = theme === 'light';
+    assert.equal(await page.evaluate(LIGHT), startedLight, 'La ventana se abre con el tema guardado');
+    await page.getByRole('radio', { name: startedLight ? 'Oscuro' : 'Claro' }).check();
+    await page.waitForFunction(`${LIGHT} === ${!startedLight}`);
+    await shot(page, 'tema-cambiado');
+    await page.getByRole('radio', { name: startedLight ? 'Claro' : 'Oscuro' }).check();
+    await page.waitForFunction(`${LIGHT} === ${startedLight}`);
+    const saved = JSON.parse(readFileSync(path.join(tmp, 'datos', 'apariencia.json'), 'utf8')) as { theme: string };
+    assert.equal(saved.theme, startedLight ? 'light' : 'dark', 'El tema se guarda en el equipo');
+    log('tema claro y oscuro: se aplica al momento y se guarda en el equipo');
+
+    // Diagnóstico: un error sin capturar de la interfaz llega al registro local, limpio, y se copia desde Configuración.
+    const leaked = path.join(tmp, 'tienda', 'secreto.ts');
+    await page.evaluate(({ msg, file }) => setTimeout(() => Promise.reject(new Error(`${msg} ${file}`))), { msg: INTENTIONAL_ERROR, file: leaked });
+    await waitFor(async () => ((await page.evaluate('window.radar.app.diagnostics()')) as string).includes('Fallo de prueba') || null, 5000, 'El error de la interfaz no llegó al registro');
+    await page.getByRole('button', { name: 'Copiar diagnóstico' }).click();
+    await page.getByRole('status').filter({ hasText: 'Diagnóstico copiado' }).waitFor();
+    await shot(page, 'diagnostico');
+    const diagnostics = await app.evaluate(({ clipboard }) => clipboard.readText());
+    assert.match(diagnostics, /^Radar de Deuda Técnica \d+\.\d+\.\d+/);
+    assert.match(diagnostics, /\[interfaz\] Fallo de prueba al leer <ruta>/);
+    for (const secret of [tmp, path.basename(tmp), 'secreto.ts', EMAIL]) assert.ok(!diagnostics.includes(secret), `El diagnóstico incluye «${secret}»`);
+    log('diagnóstico: el error de la interfaz se registra sin rutas ni correo y se copia');
 
     // Con OpenRouter y sin modelo, pedir la explicación lleva a Configuración.
     await page.getByLabel('Proveedor', { exact: true }).selectOption('openrouter');

@@ -48,6 +48,8 @@ describe('CloudSync', () => {
     const a = await device(server);
     const p = a.store.addProject({ name: 'tienda', kind: 'github', location: 'ana/tienda', branch: 'main' });
     a.store.saveAnalysis(p.id, withTodo(70), timing);
+    // saveAnalysis fecha el fin con el reloj: dos guardados en el mismo milisegundo empatarían y el orden sería azaroso.
+    await new Promise((resolve) => setTimeout(resolve, 5));
     a.store.saveAnalysis(p.id, withTodo(80), { ...timing, startedAt: '2026-10-27T12:00:00.000Z' });
 
     const sent = await a.sync.now();

@@ -388,19 +388,24 @@ function summarize(findings: readonly Finding[]): AnalysisReport['summary'] {
 
 function buildCoverage(files: readonly FileMeta[], skipped: readonly SkippedFile[], tr: Translate): CoverageNote[] {
   const jsts = files.filter((f) => f.language === 'typescript' || f.language === 'javascript').length;
+  const python = files.filter((f) => f.language === 'python').length;
   const otherCode = files.filter((f) => f.isCode && f.language === 'other').length;
+  const measured = [
+    jsts > 0 ? tr(`${jsts} archivo(s) JS/TS con la API del compilador de TypeScript`, `${jsts} JS/TS file(s) with the TypeScript compiler API`) : null,
+    python > 0 ? tr(`${python} archivo(s) Python con un analizador propio (sin ejecutar el código)`, `${python} Python file(s) with a built-in analyzer (without running the code)`) : null,
+  ].filter((p) => p !== null);
   const notes: CoverageNote[] = [
     {
       area: tr('Complejidad y duplicación', 'Complexity and duplication'),
-      status: jsts > 0 ? 'analyzed' : 'not-analyzed',
-      detail: tr(`${jsts} archivo(s) JS/TS analizados con la API del compilador de TypeScript.`, `${jsts} JS/TS file(s) analyzed with the TypeScript compiler API.`),
+      status: measured.length > 0 ? 'analyzed' : 'not-analyzed',
+      detail: measured.length > 0 ? tr(`Analizados: ${measured.join(' y ')}.`, `Analyzed: ${measured.join(' and ')}.`) : tr('No hay archivos JS/TS ni Python.', 'There are no JS/TS or Python files.'),
     },
     {
       area: tr('Arquitectura', 'Architecture'),
-      status: jsts > 0 ? 'partial' : 'not-analyzed',
+      status: measured.length > 0 ? 'partial' : 'not-analyzed',
       detail: tr(
-        'Ciclos y acoplamiento según importaciones relativas. No se resuelven alias de tsconfig (paths) ni paquetes del monorepo.',
-        'Cycles and coupling based on relative imports. tsconfig aliases (paths) and monorepo packages are not resolved.',
+        'Ciclos y acoplamiento según las importaciones internas. En JS/TS, las relativas (no se resuelven alias de tsconfig ni paquetes del monorepo); en Python, relativas y absolutas que corresponden a archivos del repositorio.',
+        'Cycles and coupling based on internal imports. In JS/TS, relative ones (tsconfig aliases and monorepo packages are not resolved); in Python, relative and absolute ones that match files in the repository.',
       ),
     },
     {

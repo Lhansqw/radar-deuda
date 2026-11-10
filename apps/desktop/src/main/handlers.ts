@@ -3,7 +3,7 @@ import path from 'node:path';
 import { compareReports, type AnalysisReport } from '@radar/engine';
 import type { AccountChannel, AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
 import type { StorageInfo, UpdateInfo } from '../shared/model.js';
-import { normalizeSettings, type AppSettings, type LanguageSetting, type Locale } from '../shared/settings.js';
+import { normalizeSettings, type AppSettings, type LanguageSetting, type Locale, type ThemeSetting } from '../shared/settings.js';
 import type { AiService } from './ai-service.js';
 import type { CloudSync } from './cloud-sync.js';
 import type { CredentialStore } from './credentials.js';
@@ -33,6 +33,14 @@ export interface HandlerDeps {
   clearCache: () => Promise<{ files: number; bytes: number }>;
   /** Última versión publicada (updates.ts). */
   checkUpdate: () => Promise<UpdateInfo>;
+  /** Tema de la interfaz en este equipo (appearance.ts). */
+  theme: () => ThemeSetting;
+  /** Guarda el tema y lo aplica en el momento. */
+  setTheme: (theme: ThemeSetting) => ThemeSetting;
+  /** Registro local de errores (error-log.ts). */
+  diagnostics: () => string;
+  clearErrors: () => void;
+  reportError: (message: string, stack: string | null) => void;
   /** Borra el clon de un repositorio de GitHub (owner/repo) que creó la aplicación. */
   removeClone: (repo: string) => Promise<void>;
   /** Diálogo para guardar un parche; devuelve la ruta elegida o null si se cancela. */
@@ -65,6 +73,21 @@ function report(d: HandlerDeps, analysisId: number): AnalysisReport {
   return r;
 }
 
+/** Diagnóstico y registro de errores: también sin sesión (account-handlers.ts). */
+export function errorHandlers(d: Pick<HandlerDeps, 'diagnostics' | 'clearErrors' | 'reportError'>): Pick<Handlers, 'app:diagnostics' | 'app:clearErrors' | 'app:reportError'> {
+  return {
+    'app:diagnostics': () => d.diagnostics(),
+    'app:clearErrors': () => {
+      d.clearErrors();
+      return null;
+    },
+    'app:reportError': (message, stack) => {
+      d.reportError(message, stack);
+      return null;
+    },
+  };
+}
+
 export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
   return {
     'app:info': () => d.info(),
@@ -77,6 +100,9 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
     'app:storage': () => d.storage(),
     'app:clearCache': () => d.clearCache(),
     'app:checkUpdate': () => d.checkUpdate(),
+    'app:theme': () => d.theme(),
+    'app:setTheme': (theme) => d.setTheme(theme),
+    ...errorHandlers(d),
 
     'projects:list': () => d.store.listProjects(),
     'projects:addFolder': async () => {

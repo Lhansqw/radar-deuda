@@ -35,6 +35,17 @@ describe('CLI', () => {
     expect(report.findings.length).toBeGreaterThan(5);
   });
 
+  it('analiza el repositorio de ejemplo de Python: complejidad, ciclo, duplicación y pruebas', async () => {
+    out = await mkdtemp(path.join(os.tmpdir(), 'radar-cli-'));
+    const json = path.join(out, 'informe.json');
+    const r = cli(path.join(DEMO, '..', 'demo-python'), '--no-cache', '--quiet', '--json', json);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toMatch(/Función difícil de mantener: procesar_pedido/);
+    const report = JSON.parse(await readFile(json, 'utf8')) as AnalysisReport;
+    expect(report.findings.map((f) => f.ruleId).sort()).toEqual(['architecture/cycle', 'complexity/function', 'duplication/clone', 'maintainability/markers', 'maintainability/markers', 'testing/no-tests']);
+    expect(report.findings.find((f) => f.ruleId === 'architecture/cycle')?.message).toContain('tienda/clientes.py, tienda/pedidos.py');
+  });
+
   it('--fail-on devuelve 1 si hay hallazgos de esa severidad o mayor', () => {
     expect(cli(DEMO, '--no-cache', '--quiet', '--fail-on', 'high').code).toBe(1);
     expect(cli(DEMO, '--no-cache', '--quiet', '--fail-on', 'critical').code).toBe(0);

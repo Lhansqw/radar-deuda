@@ -14,5 +14,5 @@
       "@radar/engine/refs": ["../../packages/engine/src/refs.ts"]
     }
   },
-  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts"]
+  "include": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx", "src/shared/**/*.ts", "test/renderer/**/*.ts", "test/renderer/**/*.tsx"]
 }

@@ -8,9 +8,10 @@ import { toPosix } from './util.js';
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const JS_EXT = new Set(['.js', '.jsx', '.mjs', '.cjs']);
+const PY_EXT = new Set(['.py', '.pyw']);
 /** Código de otros lenguajes: se mide tamaño, marcadores y secretos (sin AST por ahora). */
 const OTHER_CODE_EXT = new Set([
-  '.py', '.java', '.kt', '.kts', '.go', '.rb', '.php', '.cs', '.rs', '.swift', '.scala',
+  '.java', '.kt', '.kts', '.go', '.rb', '.php', '.cs', '.rs', '.swift', '.scala',
   '.c', '.h', '.cc', '.cpp', '.hpp', '.m', '.dart', '.lua', '.sh', '.ps1', '.vue', '.svelte',
 ]);
 /** Archivos de texto relevantes para secretos/configuración (no cuentan como código). */
@@ -33,6 +34,7 @@ export function classify(relPath: string): Classification {
   const ext = path.posix.extname(base);
   if (TS_EXT.has(ext)) return { language: 'typescript', isCode: true, include: true };
   if (JS_EXT.has(ext)) return { language: 'javascript', isCode: true, include: true };
+  if (PY_EXT.has(ext)) return { language: 'python', isCode: true, include: true };
   if (OTHER_CODE_EXT.has(ext)) return { language: 'other', isCode: true, include: true };
   if (TEXT_EXT.has(ext) || TEXT_NAMES.has(base) || base.startsWith('.env.')) {
     return { language: 'other', isCode: false, include: true };
