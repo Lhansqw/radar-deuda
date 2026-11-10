@@ -13,13 +13,31 @@ npm run bench          # rendimiento con repositorios sintéticos (-- --large pa
 
 | Parte | Archivos de prueba | Pruebas | Qué cubren |
 |---|---|---|---|
-| `packages/engine` | 19 | 175 | Cada analizador, caché, configuración, puntuación, comparación entre informes, referencias, `.radarignore`, carga perezosa del compilador |
-| `packages/sources` | 8 | 97 (+3 en vivo) | Git endurecido, historial y puntos críticos, GitHub (URL, API, clonado), OSV, versiones de npm, CVSS, redirecciones con servidores HTTP reales |
-| `packages/ai` | 12 | 120 (+2 en vivo) | Proveedores con `fetch` simulado, privacidad, redacción de secretos, validación contra inyecciones, propuestas y parches, preguntas, presupuesto |
-| `packages/pipeline` | 3 | 18 | Análisis completo, origen de GitHub (con GitHub simulado), caché del historial, pasos de IA, mantenimiento de la caché |
-| `packages/cli` | 5 | 27 | Opciones, códigos de salida, comparación, IA, caché |
-| `apps/desktop` | 18 | 159 | IPC (remitente y argumentos), cuentas y sesión (con Supabase simulado), datos por cuenta, copia en la nube (dos equipos y otra cuenta contra la API simulada), credenciales, ajustes, base de datos y migraciones, trabajos, fragmentos, seguridad, lógica de la interfaz |
-| **Total** | **65** | **596** (+5 en vivo) | |
+| `packages/engine` | 20 | 196 | Cada analizador (también los de Python), caché, configuración, puntuación, comparación entre informes, referencias, `.radarignore`, carga perezosa del compilador |
+| `packages/sources` | 8 | 98 (+3 en vivo) | Git endurecido, historial y puntos críticos, GitHub (URL, API, clonado), OSV, versiones de npm, CVSS, redirecciones con servidores HTTP reales |
+| `packages/ai` | 13 | 125 (+2 en vivo) | Proveedores con `fetch` simulado, privacidad, redacción de secretos, validación contra inyecciones, propuestas y parches, preguntas, presupuesto |
+| `packages/pipeline` | 3 | 19 | Análisis completo, origen de GitHub (con GitHub simulado), caché del historial, pasos de IA, mantenimiento de la caché |
+| `packages/cli` | 5 | 28 | Opciones, códigos de salida, comparación, IA, caché |
+| `apps/desktop` | 25 | 209 | IPC (remitente y argumentos), cuentas y sesión (con Supabase simulado), datos por cuenta, copia en la nube (dos equipos y otra cuenta contra la API simulada), credenciales, ajustes, tema, base de datos y migraciones, trabajos, fragmentos, seguridad, lógica de la interfaz y sus vistas (abajo) |
+| **Total** | **74** | **675** (+5 en vivo) | |
+
+### Pruebas de la interfaz
+
+`apps/desktop/test/renderer/*.test.tsx` montan las vistas de React en un DOM simulado
+(happy-dom) con Testing Library y las usan como una persona: clics, teclado y lo que se lee
+en pantalla. Solo se sustituye `window.radar` (la API del preload) por un doble
+(`test/renderer/radar.ts`): lo que una prueba no simula se queda «cargando», así que cada
+una declara exactamente qué datos ve la vista y comprueba qué llamadas hace.
+
+| Vista | Qué se comprueba |
+|---|---|
+| Configuración | Borrador, descartar, guardar todo a la vez, error al guardar (se conserva el borrador), tema aplicado al momento y su error |
+| Hallazgos | Orden por severidad, filtros de severidad y categoría, búsqueda sin tildes, orden por esfuerzo, sin coincidencias, teclado y clic, «Solo nuevos» |
+| Propuesta de corrección | Permiso antes de enviar código (y cancelarlo), sin permiso cuando la privacidad lo permite, errores con reintento, propuesta guardada y desactualizada, copiar y guardar el parche, secretos y hallazgos sin código |
+
+Para comprobar que detectan fallos reales se metieron tres errores a propósito (descartar
+que no descarta, un filtro de severidad que no quita, pedir la propuesta sin permiso): las
+pruebas fallaron con los tres.
 
 Además, `npm run test:db` aplica la migración de `supabase/migrations` en un PostgreSQL real y
 comprueba sus políticas de seguridad por filas y sus permisos como los vería la aplicación
@@ -51,7 +69,11 @@ Medida con V8 sobre el código fuente (sin los puntos de entrada que solo arranc
 |---|---|---|---|---|
 | Paquetes (motor, fuentes, IA, pipeline, CLI) | 97,0 % | 95,9 % | 83,1 % | 95 / 92 / 78 |
 | Aplicación: proceso principal, compartido y proceso de análisis | 85,8 % | 73,0 % | 82,9 % | 80 / 70 |
-| Aplicación: vistas y componentes de React | — | — | — | Cubiertos por la prueba de extremo a extremo |
+| Aplicación: vistas y componentes de React | 40,4 % | 30,1 % | 30,1 % | 35 / 25 / 25 |
+
+En la interfaz, Configuración, Hallazgos y Propuesta de corrección tienen pruebas propias
+(85–91 % de líneas); el resto de vistas (panel, preguntas, acceso, historial…) se cubre con la
+prueba de extremo a extremo.
 
 Los mínimos están algo por debajo de lo medido: una bajada notable hace fallar la
 integración continua.
