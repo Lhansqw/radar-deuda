@@ -54,6 +54,7 @@ npm viene con Node y basta. Se puede migrar a pnpm sin tocar el código.
 | Necesidad | Elegido | Alternativas evaluadas |
 |---|---|---|
 | AST de JS/TS | TypeScript Compiler API | Babel (sin tipos), SWC (sin API de recorrido estable en JS), tree-sitter (multilenguaje, se reevaluará para otros lenguajes) |
+| Análisis de Python | Tokenizador y árbol de sentencias propios (python-lexer.ts, python-syntax.ts) | tree-sitter (WASM): exacto, pero añade binarios y su carga asíncrona al paquete firmado y al proceso de análisis; para medir complejidad, importaciones y clones basta con los tokens y la sangría |
 | Duplicación | Implementación propia: tokens + *winnowing* | jscpd: correcto, pero no expone huellas por archivo, así que no permite análisis incremental; ejecutarlo como proceso externo complica la caché |
 | Complejidad | Cognitiva (SonarSource) + ciclomática (McCabe) propias | eslint `complexity`: solo ciclomática, requiere configurar ESLint por repositorio |
 | Reglas y errores potenciales | ESLint y Semgrep como analizadores enchufables (posterior) | — |

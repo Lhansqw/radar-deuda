@@ -15,7 +15,7 @@ export type Category =
   | 'testing'
   | 'maintainability';
 
-export type Language = 'typescript' | 'javascript' | 'other';
+export type Language = 'typescript' | 'javascript' | 'python' | 'other';
 
 export const SEVERITY_ORDER: Readonly<Record<Severity, number>> = {
   critical: 4,

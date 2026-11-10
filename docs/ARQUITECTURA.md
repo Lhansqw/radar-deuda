@@ -8,13 +8,14 @@ motor de análisis determinista y la IA es una capa encima**, no al revés.
 | Capacidad | Viabilidad | Cómo se consigue |
 |---|---|---|
 | Complejidad, tamaño, anidamiento (JS/TS) | Alta | TypeScript Compiler API: AST exacto, sin ejecutar código |
+| Complejidad, duplicación y ciclos (Python) | Alta | Tokenizador y árbol de sentencias propios, sin ejecutar ni importar el código |
 | Duplicación de código | Alta | Tokens del escáner de TypeScript + *winnowing* (huellas cacheables) |
 | Ciclos y acoplamiento entre módulos | Alta | Grafo de importaciones + componentes fuertemente conexos (Tarjan) |
 | Secretos incrustados | Alta | Formatos conocidos + entropía, con evidencia redactada |
 | Higiene de dependencias | Alta | Lectura de manifiestos (sin red) |
 | Dependencias desactualizadas y vulnerabilidades | Media | Requiere red: registro npm y base OSV (fase 6) |
 | Errores potenciales y malas prácticas | Media | ESLint / Semgrep como analizadores enchufables (fase posterior) |
-| Otros lenguajes | Media | Tamaño, marcadores y secretos ya; AST por lenguaje es trabajo incremental |
+| Otros lenguajes | Media | Tamaño, marcadores y secretos ya; cada lenguaje nuevo es un analizador más (como Python) |
 | Cobertura real de pruebas | Baja | Exige ejecutar pruebas de terceros: **no se hace**. Se usa una heurística declarada |
 | Explicación y priorización con IA | Alta | Sobre hallazgos estructurados, no sobre el repositorio entero |
 | Correcciones generadas por IA | Media | Útiles como propuesta revisable; nunca se aplican sin confirmación |
@@ -147,7 +148,7 @@ Resumen; el detalle se implementa en la fase 7.
 
 **Fuera del MVP** (fases posteriores)
 
-- AST para lenguajes distintos de JS/TS.
+- Análisis estructural de lenguajes distintos de JS/TS y Python.
 - Integración de ESLint/Semgrep como analizadores.
 - Aplicación automática de correcciones (solo se mostrarán como *diff*).
 - Embeddings y recuperación semántica (solo si la búsqueda por símbolos no basta).

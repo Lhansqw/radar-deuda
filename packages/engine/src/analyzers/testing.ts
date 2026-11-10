@@ -7,19 +7,22 @@ import { findingId } from '../util.js';
  * algo que nunca hacemos automáticamente con código de terceros).
  */
 const ID = 'testing';
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const TOOL = `${ID}@${VERSION}`;
 
 const CONFIG_FILE = /(^|\/)[^/]*\.config\.[cm]?[jt]s$|(^|\/)\.[^/]+rc\.[cm]?[jt]s$/;
+/** Python: archivos de paquete, de instalación y de configuración de pytest, que no son código a probar. */
+const PYTHON_NOT_SOURCE = /(^|\/)(__init__|__main__|setup|conftest|manage)\.py$/;
+const TESTED_LANGUAGES = new Set(['typescript', 'javascript', 'python']);
 
 export const testingAnalyzer: ProjectAnalyzer = {
   id: ID,
   version: VERSION,
   description: 'Proporción entre archivos de prueba y de código fuente.',
   async analyzeProject(ctx) {
-    const code = ctx.files.filter((f) => f.isCode && (f.language === 'typescript' || f.language === 'javascript'));
+    const code = ctx.files.filter((f) => f.isCode && TESTED_LANGUAGES.has(f.language));
     const tests = code.filter((f) => f.isTest);
-    const sources = code.filter((f) => !f.isTest && !CONFIG_FILE.test(f.relPath) && !f.relPath.endsWith('.d.ts'));
+    const sources = code.filter((f) => !f.isTest && !CONFIG_FILE.test(f.relPath) && !PYTHON_NOT_SOURCE.test(f.relPath) && !f.relPath.endsWith('.d.ts'));
     if (sources.length < 5) return [];
 
     const ratio = tests.length / sources.length;
@@ -32,7 +35,7 @@ export const testingAnalyzer: ProjectAnalyzer = {
         severity: 'high',
         confidence: 'medium',
         title: 'No se detectaron pruebas automatizadas',
-        message: `Hay ${sources.length} archivos de código JS/TS y ningún archivo de prueba según las convenciones habituales (*.test.*, *.spec.*, __tests__/, test/).`,
+        message: `Hay ${sources.length} archivos de código (JS/TS y Python) y ningún archivo de prueba según las convenciones habituales (*.test.*, *.spec.*, __tests__/, test/, test_*.py, *_test.py).`,
         locations: [{ file: '.', startLine: 1, endLine: 1 }],
         evidence: [{ kind: 'fact', tool: TOOL, description: 'Conteo por convención de nombres', metric: { name: 'testFiles', value: 0, threshold: 1 } }],
         impact: 'Sin pruebas, cada refactorización para reducir deuda técnica conlleva riesgo de regresiones no detectadas.',

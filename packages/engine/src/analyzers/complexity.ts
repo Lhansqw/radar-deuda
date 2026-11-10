@@ -199,32 +199,33 @@ function maxSeverity(list: Severity[]): Severity {
   return list.reduce<Severity>((acc, s) => (SEVERITY_ORDER[s] > SEVERITY_ORDER[acc] ? s : acc), 'info');
 }
 
-export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresholds, ordinal: number): Finding | null {
+/** `tool`: herramienta que midió la función (`complexity@…` en JS/TS, `complexity-python@…` en Python). */
+export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresholds, ordinal: number, tool: string = TOOL): Finding | null {
   const evidence: Evidence[] = [];
   const severities: Severity[] = [];
   let minutes = 0;
   const parts: string[] = [];
 
   if (m.cognitive > t.cognitive) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Complejidad cognitiva (SonarSource)', metric: { name: 'cognitive', value: m.cognitive, threshold: t.cognitive } });
+    evidence.push({ kind: 'metric', tool, description: 'Complejidad cognitiva (SonarSource)', metric: { name: 'cognitive', value: m.cognitive, threshold: t.cognitive } });
     severities.push(severityByRatio(m.cognitive, t.cognitive));
     minutes += 4 * (m.cognitive - t.cognitive);
     parts.push(`complejidad cognitiva ${m.cognitive} (umbral ${t.cognitive})`);
   }
   if (m.lines > t.functionLines) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Líneas propias de la función (sin funciones anidadas)', metric: { name: 'lines', value: m.lines, threshold: t.functionLines, unit: 'líneas' } });
+    evidence.push({ kind: 'metric', tool, description: 'Líneas propias de la función (sin funciones anidadas)', metric: { name: 'lines', value: m.lines, threshold: t.functionLines, unit: 'líneas' } });
     severities.push(severityByRatio(m.lines, t.functionLines, 'high'));
     minutes += 0.5 * (m.lines - t.functionLines);
     parts.push(`${m.lines} líneas propias (umbral ${t.functionLines})`);
   }
   if (m.maxNesting > t.nesting) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Profundidad máxima de anidamiento', metric: { name: 'nesting', value: m.maxNesting, threshold: t.nesting, unit: 'niveles' } });
+    evidence.push({ kind: 'metric', tool, description: 'Profundidad máxima de anidamiento', metric: { name: 'nesting', value: m.maxNesting, threshold: t.nesting, unit: 'niveles' } });
     severities.push(m.maxNesting >= t.nesting + 3 ? 'high' : 'medium');
     minutes += 10 * (m.maxNesting - t.nesting);
     parts.push(`anidamiento de ${m.maxNesting} niveles (umbral ${t.nesting})`);
   }
   if (m.parameters > t.parameters) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Número de parámetros', metric: { name: 'parameters', value: m.parameters, threshold: t.parameters } });
+    evidence.push({ kind: 'metric', tool, description: 'Número de parámetros', metric: { name: 'parameters', value: m.parameters, threshold: t.parameters } });
     severities.push('low');
     minutes += 10;
     parts.push(`${m.parameters} parámetros (umbral ${t.parameters})`);
@@ -232,7 +233,7 @@ export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresh
   if (evidence.length === 0) return null;
   if (m.cyclomatic > t.cyclomatic) {
     // Evidencia de apoyo: no dispara el hallazgo por sí sola (un switch largo y plano es legible).
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Complejidad ciclomática (McCabe): caminos independientes, ≈ casos de prueba necesarios', metric: { name: 'cyclomatic', value: m.cyclomatic, threshold: t.cyclomatic } });
+    evidence.push({ kind: 'metric', tool, description: 'Complejidad ciclomática (McCabe): caminos independientes, ≈ casos de prueba necesarios', metric: { name: 'cyclomatic', value: m.cyclomatic, threshold: t.cyclomatic } });
     parts.push(`${m.cyclomatic} caminos de ejecución`);
   }
 

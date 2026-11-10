@@ -1,6 +1,7 @@
 import type { FinalizeStore } from '../types.js';
 import { sha1 } from '../util.js';
 import { FP_STRIDE, fingerprints, K, W, tokenSequence, type DuplicationArtifact, type TokenSeq } from './duplication-tokens.js';
+import { isPythonPath } from './python-lexer.js';
 import { loadTypeScript } from './ts-runtime.js';
 
 /**
@@ -194,8 +195,8 @@ class SequenceCache {
     const file = this.files[fi] as string;
     const raw = await this.readText(file);
     this.reads++;
-    // Solo aquí (un par nuevo que verificar) hace falta el compilador si todo salió de la caché.
-    await loadTypeScript();
+    // Solo aquí (un par nuevo que verificar) hace falta el compilador si todo salió de la caché; Python no lo usa.
+    if (!isPythonPath(file)) await loadTypeScript();
     const text = raw !== null && raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
     const seq = text === null ? null : tokenSequence(text, file);
     if (raw !== null) this.readHashes.set(fi, sha1(raw));
