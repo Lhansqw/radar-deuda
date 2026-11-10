@@ -2,15 +2,16 @@ import type { AccountState } from '../../shared/account.js';
 import type { JobState } from '../../shared/jobs.js';
 import type { Project } from '../../shared/model.js';
 import { BrandMark, Icon, type IconName } from './Icon.js';
+import { tr } from '../i18n.js';
 
 export type View = 'panel' | 'hallazgos' | 'archivos' | 'historial' | 'preguntar' | 'ajustes';
 
-const PROJECT_VIEWS: Array<{ view: Exclude<View, 'ajustes'>; label: string; icon: IconName }> = [
-  { view: 'panel', label: 'Panel', icon: 'panel' },
-  { view: 'hallazgos', label: 'Hallazgos', icon: 'list' },
-  { view: 'archivos', label: 'Archivos', icon: 'tree' },
-  { view: 'historial', label: 'Historial', icon: 'history' },
-  { view: 'preguntar', label: 'Preguntar', icon: 'chat' },
+const PROJECT_VIEWS: Array<{ view: Exclude<View, 'ajustes'>; label: () => string; icon: IconName }> = [
+  { view: 'panel', label: () => tr('Panel', 'Dashboard'), icon: 'panel' },
+  { view: 'hallazgos', label: () => tr('Hallazgos', 'Findings'), icon: 'list' },
+  { view: 'archivos', label: () => tr('Archivos', 'Files'), icon: 'tree' },
+  { view: 'historial', label: () => tr('Historial', 'History'), icon: 'history' },
+  { view: 'preguntar', label: () => tr('Preguntar', 'Ask'), icon: 'chat' },
 ];
 
 interface Props {
@@ -32,14 +33,14 @@ interface Props {
 
 export function Sidebar(p: Props) {
   return (
-    <nav className="sidebar" aria-label="Proyectos y secciones">
+    <nav className="sidebar" aria-label={tr('Proyectos y secciones', 'Projects and sections')}>
       <div className="brand">
         <BrandMark />
-        Radar de deuda
+        {tr('Radar de deuda', 'Debt radar')}
       </div>
       <div className="sidebar-scroll">
         <h2 className="sidebar-heading" id="proyectos">
-          Proyectos
+          {tr('Proyectos', 'Projects')}
         </h2>
         <ul className="project-list" aria-labelledby="proyectos">
           {p.projects.map((project) => {
@@ -53,13 +54,13 @@ export function Sidebar(p: Props) {
                   </span>
                   <span className="name">{project.name}</span>
                   {running ? (
-                    <span className="rating-empty">analizando…</span>
+                    <span className="rating-empty">{tr('analizando…', 'analyzing…')}</span>
                   ) : last ? (
-                    <span className="rating" data-rating={last.rating} title={`Puntuación ${last.score}/100`}>
+                    <span className="rating" data-rating={last.rating} title={tr(`Puntuación ${last.score}/100`, `Score ${last.score}/100`)}>
                       {last.rating}
                     </span>
                   ) : (
-                    <span className="rating-empty">sin analizar</span>
+                    <span className="rating-empty">{tr('sin analizar', 'not analyzed')}</span>
                   )}
                 </button>
               </li>
@@ -68,22 +69,22 @@ export function Sidebar(p: Props) {
         </ul>
         <div className="sidebar-actions">
           <button type="button" className="btn btn-quiet btn-small btn-block" onClick={p.onAddFolder}>
-            <Icon name="plus" size={16} /> Añadir carpeta
+            <Icon name="plus" size={16} /> {tr('Añadir carpeta', 'Add folder')}
           </button>
           <button type="button" className="btn btn-quiet btn-small btn-block" onClick={p.onAddGithub}>
-            <Icon name="github" size={16} /> Añadir de GitHub
+            <Icon name="github" size={16} /> {tr('Añadir de GitHub', 'Add from GitHub')}
           </button>
         </div>
 
         {p.selectedId !== null ? (
           <>
-            <h2 className="sidebar-heading">Proyecto</h2>
+            <h2 className="sidebar-heading">{tr('Proyecto', 'Project')}</h2>
             <ul className="nav">
               {PROJECT_VIEWS.filter((v) => p.views.includes(v.view)).map((v) => (
                 <li key={v.view}>
                   <button type="button" className="nav-item" aria-current={p.view === v.view ? 'page' : undefined} onClick={() => p.onView(v.view)}>
                     <Icon name={v.icon} size={16} />
-                    {v.label}
+                    {v.label()}
                     {p.counts[v.view] !== undefined ? <span className="count">{p.counts[v.view]}</span> : null}
                   </button>
                 </li>
@@ -98,11 +99,11 @@ export function Sidebar(p: Props) {
             <p className="sidebar-account" title={p.account.email}>
               <Icon name="user" size={14} />
               <span className="email">{p.account.email}</span>
-              {p.account.offline ? <span className="tag">sin conexión</span> : null}
+              {p.account.offline ? <span className="tag">{tr('sin conexión', 'offline')}</span> : null}
             </p>
           ) : null}
           <button type="button" className="nav-item" aria-current={p.view === 'ajustes' ? 'page' : undefined} onClick={() => p.onView('ajustes')}>
-            <Icon name="settings" size={16} /> Configuración
+            <Icon name="settings" size={16} /> {tr('Configuración', 'Settings')}
           </button>
         </div>
       ) : null}

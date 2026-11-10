@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Locale } from './i18n.js';
 import type { AnalysisConfig, Thresholds } from './types.js';
 
 export const ENGINE_VERSION = '0.1.0';
@@ -46,6 +47,7 @@ export const DEFAULT_CONFIG: AnalysisConfig = {
   hardMaxFileSizeBytes: 20 * 1024 * 1024,
   concurrency: 8,
   thresholds: DEFAULT_THRESHOLDS,
+  locale: 'es',
 };
 
 export interface ConfigOverrides {
@@ -55,6 +57,7 @@ export interface ConfigOverrides {
   hardMaxFileSizeBytes?: number;
   concurrency?: number;
   thresholds?: Partial<Thresholds>;
+  locale?: Locale;
 }
 
 export function resolveConfig(overrides: ConfigOverrides = {}): AnalysisConfig {
@@ -65,6 +68,7 @@ export function resolveConfig(overrides: ConfigOverrides = {}): AnalysisConfig {
     hardMaxFileSizeBytes: overrides.hardMaxFileSizeBytes ?? DEFAULT_CONFIG.hardMaxFileSizeBytes,
     concurrency: overrides.concurrency ?? DEFAULT_CONFIG.concurrency,
     thresholds: { ...DEFAULT_THRESHOLDS, ...(overrides.thresholds ?? {}) },
+    locale: overrides.locale ?? DEFAULT_CONFIG.locale,
   };
   validateConfig(config);
   return config;
@@ -93,6 +97,8 @@ export function configHash(config: AnalysisConfig): string {
     respectGitignore: config.respectGitignore,
     maxFileSizeBytes: config.maxFileSizeBytes,
     thresholds: config.thresholds,
+    // Los textos de los hallazgos cacheados están en un idioma: si cambia, se recalculan.
+    locale: config.locale,
   };
   return createHash('sha1').update(JSON.stringify(relevant)).digest('hex').slice(0, 16);
 }

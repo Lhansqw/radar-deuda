@@ -1,6 +1,7 @@
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { AnalysisSummary } from '../../shared/model.js';
-import { formatDateTime } from '../lib/format.js';
+import { formatAxisDate, formatDateTime } from '../lib/format.js';
+import { tr } from '../i18n.js';
 
 const W = 720;
 const H = 200;
@@ -15,16 +16,19 @@ const TICKS = [0, 25, 50, 75, 100];
 export function TrendChart({ analyses, selectedId, onSelect }: { analyses: AnalysisSummary[]; selectedId: number | null; onSelect?: (id: number) => void }) {
   const points = [...analyses].reverse(); // del más antiguo al más reciente
   const [active, setActive] = useState<number | null>(null);
+  // Id del degradado del área: url(#…) no admite los signos que puede llevar useId.
+  const fillId = `evolucion-${useId().replace(/[^\w-]/g, '')}`;
   const svg = useRef<SVGSVGElement>(null);
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
   const x = (i: number): number => PAD.left + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
   const y = (score: number): number => PAD.top + (1 - score / 100) * plotH;
   const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)} ${y(p.score).toFixed(1)}`).join(' ');
+  // Área bajo la línea, hasta el eje.
+  const area = points.length > 1 ? `${path} L${x(points.length - 1).toFixed(1)} ${y(0)} L${x(0).toFixed(1)} ${y(0)} Z` : null;
   // Si todos los análisis son del mismo día, el eje muestra la hora.
   const sameDay = points.length > 0 && new Date(points[0]?.finishedAt ?? 0).toDateString() === new Date(points.at(-1)?.finishedAt ?? 0).toDateString();
-  const tickLabel = (iso: string): string =>
-    sameDay ? new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  const tickLabel = (iso: string): string => formatAxisDate(iso, sameDay);
 
   const nearest = (clientX: number): number | null => {
     const rect = svg.current?.getBoundingClientRect();
@@ -56,7 +60,10 @@ export function TrendChart({ analyses, selectedId, onSelect }: { analyses: Analy
         ref={svg}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-label={`Evolución de la puntuación en ${points.length} análisis: de ${points[0]?.score ?? 0} a ${points.at(-1)?.score ?? 0} sobre 100.`}
+        aria-label={tr(
+          `Evolución de la puntuación en ${points.length} análisis: de ${points[0]?.score ?? 0} a ${points.at(-1)?.score ?? 0} sobre 100.`,
+          `Score trend over ${points.length} analyses: from ${points[0]?.score ?? 0} to ${points.at(-1)?.score ?? 0} out of 100.`,
+        )}
         tabIndex={0}
         onPointerMove={onMove}
         onPointerLeave={() => setActive(null)}
@@ -80,6 +87,13 @@ export function TrendChart({ analyses, selectedId, onSelect }: { analyses: Analy
             </text>
           ) : null,
         )}
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--malva)" stopOpacity="0.38" />
+            <stop offset="1" stopColor="var(--malva)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {area ? <path d={area} fill={`url(#${fillId})`} className="trend-area" /> : null}
         <path d={path} className="trend-line" />
         {a && active !== null ? <line x1={x(active)} x2={x(active)} y1={PAD.top} y2={y(0)} className="crosshair" /> : null}
         {points.map((p, i) => (
@@ -95,9 +109,11 @@ export function TrendChart({ analyses, selectedId, onSelect }: { analyses: Analy
       {a && active !== null ? (
         <div className="tooltip tooltip-trend" data-below={y(a.score) < H * 0.35 || undefined} style={{ left: `${(x(active) / W) * 100}%`, top: `${(y(a.score) / H) * 100}%` }} role="tooltip">
           <strong>
-            {a.score}/100, calificación {a.rating}
+            {a.score}/100, {tr('calificación', 'rating')} {a.rating}
           </strong>
-          <span>{a.findings} hallazgos</span>
+          <span>
+            {a.findings} {tr('hallazgos', 'findings')}
+          </span>
           <span className="muted">{formatDateTime(a.finishedAt)}</span>
         </div>
       ) : null}

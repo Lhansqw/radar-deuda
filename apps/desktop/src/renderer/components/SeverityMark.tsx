@@ -1,5 +1,6 @@
 import type { Severity } from '@radar/engine';
 import { SEVERITY_LABEL } from '../lib/labels.js';
+import { tr } from '../i18n.js';
 
 /**
  * Cada severidad tiene forma propia además de color (rombo, triángulo,
@@ -35,7 +36,7 @@ export function SeverityGlyph({ severity, size = 10 }: { severity: Severity; siz
 
 export function SeverityMark({ severity, label = true }: { severity: Severity; label?: boolean }) {
   return (
-    <span className="sev" title={label ? undefined : `Severidad ${SEVERITY_LABEL[severity].toLowerCase()}`}>
+    <span className="sev" title={label ? undefined : tr(`Severidad ${SEVERITY_LABEL[severity].toLowerCase()}`, `${SEVERITY_LABEL[severity]} severity`)}>
       <SeverityGlyph severity={severity} />
       {label ? SEVERITY_LABEL[severity] : <span className="visually-hidden">{SEVERITY_LABEL[severity]}</span>}
     </span>

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { analyzeRepository, DEFAULT_PROJECT_ANALYZERS, defaultCacheDir, type AnalysisReport, type ProjectAnalyzer } from '@radar/engine';
+import { analyzeRepository, DEFAULT_PROJECT_ANALYZERS, defaultCacheDir, translator, type AnalysisReport, type ProjectAnalyzer } from '@radar/engine';
 import { NpmRegistryClient, OsvClient, outdatedAnalyzer, vulnerabilityAnalyzer } from '@radar/sources';
 import { runAiStep, type AiOptions, type ApiKeys } from './ai.js';
 import { addGitContext } from './git-context.js';
@@ -41,11 +41,14 @@ function onlineAnalyzers(cacheBase: string | null): ProjectAnalyzer[] {
  */
 export async function runPipeline(req: PipelineRequest, hooks: PipelineHooks, signal: AbortSignal): Promise<PipelineResult> {
   const { dir } = await resolveTarget(req, hooks, signal);
-  if (req.online) hooks.info('Modo en línea: se enviarán nombres y versiones de paquetes a api.osv.dev y registry.npmjs.org.');
+  const tr = translator(req.locale);
+  if (req.online) {
+    hooks.info(tr('Modo en línea: se enviarán nombres y versiones de paquetes a api.osv.dev y registry.npmjs.org.', 'Online mode: package names and versions will be sent to api.osv.dev and registry.npmjs.org.'));
+  }
   const cacheBase = req.noCache ? null : (req.cacheBase ?? defaultCacheDir());
 
   const report = await analyzeRepository(dir, {
-    config: req.concurrency !== undefined ? { concurrency: req.concurrency } : {},
+    config: { ...(req.concurrency !== undefined ? { concurrency: req.concurrency } : {}), ...(req.locale ? { locale: req.locale } : {}) },
     ...(req.noCache ? { cacheDir: null } : req.cacheDir ? { cacheDir: req.cacheDir } : {}),
     ...(req.online ? { projectAnalyzers: [...DEFAULT_PROJECT_ANALYZERS, ...onlineAnalyzers(cacheBase)] } : {}),
     signal,

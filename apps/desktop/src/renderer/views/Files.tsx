@@ -5,6 +5,7 @@ import { SeverityGlyph } from '../components/SeverityMark.js';
 import { formatEffort, formatNumber } from '../lib/format.js';
 import { SEVERITY_LABEL } from '../lib/labels.js';
 import { buildTree, flattenTree } from '../lib/tree.js';
+import { tr } from '../i18n.js';
 
 /** Deuda por carpeta y archivo. Abrir una fila filtra los hallazgos por esa ruta. */
 export function Files({ report, onOpenPath }: { report: AnalysisReport; onOpenPath: (path: string) => void }) {
@@ -27,19 +28,26 @@ export function Files({ report, onOpenPath }: { report: AnalysisReport; onOpenPa
     <div className="files">
       <div className="files-intro">
         <p>
-          {formatNumber(root.findings)} hallazgos en archivos, {formatEffort(root.minutes)} de corrección. Cada hallazgo cuenta una vez, en su ubicación principal.
-          {projectLevel === 1 ? ' Otro afecta al proyecto entero (por ejemplo, la falta de pruebas).' : projectLevel > 1 ? ` Otros ${projectLevel} afectan al proyecto entero (por ejemplo, la falta de pruebas).` : ''}
+          {tr(
+            `${formatNumber(root.findings)} hallazgos en archivos, ${formatEffort(root.minutes)} de corrección. Cada hallazgo cuenta una vez, en su ubicación principal.`,
+            `${formatNumber(root.findings)} findings in files, ${formatEffort(root.minutes)} to fix. Each finding counts once, at its main location.`,
+          )}
+          {projectLevel === 1
+            ? tr(' Otro afecta al proyecto entero (por ejemplo, la falta de pruebas).', ' Another one affects the whole project (for example, missing tests).')
+            : projectLevel > 1
+              ? tr(` Otros ${projectLevel} afectan al proyecto entero (por ejemplo, la falta de pruebas).`, ` ${projectLevel} others affect the whole project (for example, missing tests).`)
+              : ''}
         </p>
       </div>
       {rows.length === 0 ? (
-        <p className="pane-empty">Ningún hallazgo está en un archivo concreto.</p>
+        <p className="pane-empty">{tr('Ningún hallazgo está en un archivo concreto.', 'No finding is in a specific file.')}</p>
       ) : (
-        <div role="treegrid" aria-label="Deuda por archivo" className="tree">
+        <div role="treegrid" aria-label={tr('Deuda por archivo', 'Debt by file')} className="tree">
           <div role="row" className="tree-row tree-head">
-            <span role="columnheader">Ruta</span>
-            <span role="columnheader">Peor severidad</span>
-            <span role="columnheader">Hallazgos</span>
-            <span role="columnheader">Esfuerzo</span>
+            <span role="columnheader">{tr('Ruta', 'Path')}</span>
+            <span role="columnheader">{tr('Peor severidad', 'Worst severity')}</span>
+            <span role="columnheader">{tr('Hallazgos', 'Findings')}</span>
+            <span role="columnheader">{tr('Esfuerzo', 'Effort')}</span>
           </div>
           {rows.map(({ node, depth }) => (
             <div key={node.path} role="row" className="tree-row" aria-level={depth + 1} aria-expanded={node.isFile ? undefined : expanded.has(node.path)}>
@@ -47,14 +55,14 @@ export function Files({ report, onOpenPath }: { report: AnalysisReport; onOpenPa
                 {node.isFile ? (
                   <span className="tree-toggle" aria-hidden="true" />
                 ) : (
-                  <button type="button" className="tree-toggle" onClick={() => toggle(node.path)} aria-label={expanded.has(node.path) ? `Contraer ${node.name}` : `Desplegar ${node.name}`}>
+                  <button type="button" className="tree-toggle" onClick={() => toggle(node.path)} aria-label={expanded.has(node.path) ? tr(`Contraer ${node.name}`, `Collapse ${node.name}`) : tr(`Desplegar ${node.name}`, `Expand ${node.name}`)}>
                     <span data-open={expanded.has(node.path) || undefined}>
                       <Icon name="chevron" size={14} />
                     </span>
                   </button>
                 )}
                 <Icon name={node.isFile ? 'file' : 'folder'} size={16} />
-                <button type="button" className="tree-link mono" onClick={() => onOpenPath(node.path)} title={`Ver los hallazgos de ${node.path}`}>
+                <button type="button" className="tree-link mono" onClick={() => onOpenPath(node.path)} title={tr(`Ver los hallazgos de ${node.path}`, `See the findings of ${node.path}`)}>
                   {node.name}
                 </button>
               </span>

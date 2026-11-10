@@ -6,6 +6,7 @@ import { parseReport, type AiFixProposal, type AnalysisReport } from '@radar/eng
 import type { AnalysisSummary, ChatMessage, ChatMeta, Project, ProjectKind } from '../shared/model.js';
 import { CloudLedger } from './cloud-ledger.js';
 import { HISTORY_LIMIT, insertAnalysis, SUMMARY_COLUMNS, toSummary, type Row } from './store-rows.js';
+import { tr } from './i18n.js';
 
 export { HISTORY_LIMIT } from './store-rows.js';
 
@@ -91,7 +92,7 @@ export const CHAT_LIMIT = 200;
 
 export class DuplicateProjectError extends Error {
   constructor(location: string) {
-    super(`El proyecto ${location} ya está en la lista.`);
+    super(tr(`El proyecto ${location} ya está en la lista.`, `The project ${location} is already in the list.`));
     this.name = 'DuplicateProjectError';
   }
 }
@@ -157,7 +158,7 @@ export class Store {
   private migrate(): void {
     const current = this.schemaVersion;
     if (current > MIGRATIONS.length) {
-      throw new Error(`La base de datos es de una versión más reciente de la aplicación (esquema ${current}). Actualiza la aplicación.`);
+      throw new Error(tr(`La base de datos es de una versión más reciente de la aplicación (esquema ${current}). Actualiza la aplicación.`, `The database is from a newer version of the app (schema ${current}). Update the app.`));
     }
     for (let v = current; v < MIGRATIONS.length; v++) {
       this.transaction(() => {
@@ -244,7 +245,7 @@ export class Store {
   /** Guarda un análisis terminado. El informe completo se comprime (suele reducirse a un 10 %). */
   saveAnalysis(projectId: number, report: AnalysisReport, timing: { startedAt: string; durationMs: number }): AnalysisSummary {
     const summary = this.transaction(() => insertAnalysis(this.db, projectId, report, { startedAt: timing.startedAt, finishedAt: new Date().toISOString(), durationMs: timing.durationMs }));
-    if (!summary) throw new Error('No se pudo guardar el análisis.');
+    if (!summary) throw new Error(tr('No se pudo guardar el análisis.', 'Could not save the analysis.'));
     this.changed();
     return summary;
   }

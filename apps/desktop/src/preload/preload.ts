@@ -38,6 +38,7 @@ const api: RadarApi = {
   app: {
     info: () => invoke('app:info'),
     openExternal: (url) => invoke('app:openExternal', url),
+    setLanguage: (language) => invoke('app:setLanguage', language),
     copyText: (text) => invoke('app:copyText', text),
     storage: () => invoke('app:storage'),
     clearCache: () => invoke('app:clearCache'),

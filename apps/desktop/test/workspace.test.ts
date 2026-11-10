@@ -26,7 +26,8 @@ const noWorker = () => {
 };
 
 const app: AppDeps = {
-  info: () => ({ versions: { app: '0.1.0', electron: '44', chrome: '152', node: '24' }, dataDir: '/datos', cacheDir: '/cache', reposDir: '/cache/repos' }),
+  info: () => ({ versions: { app: '0.1.0', electron: '44', chrome: '152', node: '24' }, dataDir: '/datos', cacheDir: '/cache', reposDir: '/cache/repos', language: 'auto', locale: 'es' }),
+  setLanguage: () => 'es',
   chooseFolder: async () => null,
   openExternal: async () => true,
   reveal: () => undefined,

@@ -9,6 +9,8 @@ import { AiSection } from './settings/AiSection.js';
 import { AnalysisSection } from './settings/AnalysisSection.js';
 import { AppSection } from './settings/AppSection.js';
 import { Credentials } from './settings/Credentials.js';
+import { LanguageSection } from './settings/LanguageSection.js';
+import { tr } from '../i18n.js';
 
 /** Cuánto se ve «Cambios guardados» después de guardar. */
 const SAVED_NOTICE_MS = 2500;
@@ -77,8 +79,9 @@ export function Settings({ account }: { account: Extract<AccountState, { status:
   return (
     <div className="settings">
       <header className="settings-head">
-        <h1>Configuración</h1>
+        <h1>{tr('Configuración', 'Settings')}</h1>
       </header>
+      <LanguageSection />
       <AccountSection
         account={account}
         cloud={draft.cloud}
@@ -98,15 +101,15 @@ export function Settings({ account }: { account: Extract<AccountState, { status:
 function SaveBar({ dirty, error, savedOk, onSave, onDiscard }: { dirty: boolean; error: string | null; savedOk: boolean; onSave: () => void; onDiscard: () => void }) {
   if (!dirty && !error && !savedOk) return null;
   return (
-    <div className="save-bar" role="region" aria-label="Guardar cambios">
-      {error ? <p className="form-error">{error}</p> : dirty ? <p>Tienes cambios sin guardar.</p> : <p>Cambios guardados.</p>}
+    <div className="save-bar" role="region" aria-label={tr('Guardar cambios', 'Save changes')}>
+      {error ? <p className="form-error">{error}</p> : dirty ? <p>{tr('Tienes cambios sin guardar.', 'You have unsaved changes.')}</p> : <p>{tr('Cambios guardados.', 'Changes saved.')}</p>}
       {dirty ? (
         <>
           <button type="button" className="btn btn-quiet" onClick={onDiscard}>
-            Descartar
+            {tr('Descartar', 'Discard')}
           </button>
           <button type="button" className="btn btn-primary" onClick={onSave}>
-            Guardar cambios
+            {tr('Guardar cambios', 'Save changes')}
           </button>
         </>
       ) : null}

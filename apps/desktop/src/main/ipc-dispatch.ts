@@ -3,6 +3,7 @@ import type { Channel, IpcResult } from '../shared/ipc.js';
 import { isAppUrl } from '../shared/origin.js';
 import type { Handlers } from './handlers.js';
 import { VALIDATORS } from './ipc-validation.js';
+import { tr } from './i18n.js';
 
 /**
  * Atiende un mensaje: comprueba que viene de la interfaz de la aplicación,
@@ -16,7 +17,7 @@ export async function dispatch<C extends Channel>(
   handlers: Handlers,
   devServerUrl: string | null,
 ): Promise<IpcResult<unknown>> {
-  if (!isAppUrl(senderUrl, devServerUrl)) return { ok: false, error: 'Remitente no autorizado.' };
+  if (!isAppUrl(senderUrl, devServerUrl)) return { ok: false, error: tr('Remitente no autorizado.', 'Unauthorized sender.') };
   try {
     const parsed = VALIDATORS[channel](args);
     const handler = handlers[channel] as (...a: unknown[]) => unknown;

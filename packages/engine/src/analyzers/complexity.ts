@@ -4,6 +4,7 @@ import { SEVERITY_ORDER } from '../types.js';
 import { findingId } from '../util.js';
 import { isJsLike, scriptKindFor, severityByRatio, getSourceFile } from './shared.js';
 import { lazy, loadTypeScript, tsApi } from './ts-runtime.js';
+import { SPANISH, translator, type Translate } from '../i18n.js';
 
 const ID = 'complexity';
 const VERSION = '1.1.0';
@@ -199,41 +200,41 @@ function maxSeverity(list: Severity[]): Severity {
   return list.reduce<Severity>((acc, s) => (SEVERITY_ORDER[s] > SEVERITY_ORDER[acc] ? s : acc), 'info');
 }
 
-export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresholds, ordinal: number): Finding | null {
+export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresholds, ordinal: number, tr: Translate = SPANISH): Finding | null {
   const evidence: Evidence[] = [];
   const severities: Severity[] = [];
   let minutes = 0;
   const parts: string[] = [];
 
   if (m.cognitive > t.cognitive) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Complejidad cognitiva (SonarSource)', metric: { name: 'cognitive', value: m.cognitive, threshold: t.cognitive } });
+    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Complejidad cognitiva (SonarSource)', 'Cognitive complexity (SonarSource)'), metric: { name: 'cognitive', value: m.cognitive, threshold: t.cognitive } });
     severities.push(severityByRatio(m.cognitive, t.cognitive));
     minutes += 4 * (m.cognitive - t.cognitive);
-    parts.push(`complejidad cognitiva ${m.cognitive} (umbral ${t.cognitive})`);
+    parts.push(tr(`complejidad cognitiva ${m.cognitive} (umbral ${t.cognitive})`, `cognitive complexity ${m.cognitive} (threshold ${t.cognitive})`));
   }
   if (m.lines > t.functionLines) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Líneas propias de la función (sin funciones anidadas)', metric: { name: 'lines', value: m.lines, threshold: t.functionLines, unit: 'líneas' } });
+    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Líneas propias de la función (sin funciones anidadas)', 'Own lines of the function (without nested functions)'), metric: { name: 'lines', value: m.lines, threshold: t.functionLines, unit: tr('líneas', 'lines') } });
     severities.push(severityByRatio(m.lines, t.functionLines, 'high'));
     minutes += 0.5 * (m.lines - t.functionLines);
-    parts.push(`${m.lines} líneas propias (umbral ${t.functionLines})`);
+    parts.push(tr(`${m.lines} líneas propias (umbral ${t.functionLines})`, `${m.lines} own lines (threshold ${t.functionLines})`));
   }
   if (m.maxNesting > t.nesting) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Profundidad máxima de anidamiento', metric: { name: 'nesting', value: m.maxNesting, threshold: t.nesting, unit: 'niveles' } });
+    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Profundidad máxima de anidamiento', 'Maximum nesting depth'), metric: { name: 'nesting', value: m.maxNesting, threshold: t.nesting, unit: tr('niveles', 'levels') } });
     severities.push(m.maxNesting >= t.nesting + 3 ? 'high' : 'medium');
     minutes += 10 * (m.maxNesting - t.nesting);
-    parts.push(`anidamiento de ${m.maxNesting} niveles (umbral ${t.nesting})`);
+    parts.push(tr(`anidamiento de ${m.maxNesting} niveles (umbral ${t.nesting})`, `nesting of ${m.maxNesting} levels (threshold ${t.nesting})`));
   }
   if (m.parameters > t.parameters) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Número de parámetros', metric: { name: 'parameters', value: m.parameters, threshold: t.parameters } });
+    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Número de parámetros', 'Number of parameters'), metric: { name: 'parameters', value: m.parameters, threshold: t.parameters } });
     severities.push('low');
     minutes += 10;
-    parts.push(`${m.parameters} parámetros (umbral ${t.parameters})`);
+    parts.push(tr(`${m.parameters} parámetros (umbral ${t.parameters})`, `${m.parameters} parameters (threshold ${t.parameters})`));
   }
   if (evidence.length === 0) return null;
   if (m.cyclomatic > t.cyclomatic) {
     // Evidencia de apoyo: no dispara el hallazgo por sí sola (un switch largo y plano es legible).
-    evidence.push({ kind: 'metric', tool: TOOL, description: 'Complejidad ciclomática (McCabe): caminos independientes, ≈ casos de prueba necesarios', metric: { name: 'cyclomatic', value: m.cyclomatic, threshold: t.cyclomatic } });
-    parts.push(`${m.cyclomatic} caminos de ejecución`);
+    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Complejidad ciclomática (McCabe): caminos independientes, ≈ casos de prueba necesarios', 'Cyclomatic complexity (McCabe): independent paths, ≈ test cases needed'), metric: { name: 'cyclomatic', value: m.cyclomatic, threshold: t.cyclomatic } });
+    parts.push(tr(`${m.cyclomatic} caminos de ejecución`, `${m.cyclomatic} execution paths`));
   }
 
   const total = Math.min(480, Math.round(15 + minutes));
@@ -243,14 +244,20 @@ export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresh
     category: 'complexity',
     severity: maxSeverity(severities),
     confidence: 'high',
-    title: `Función difícil de mantener: ${m.name}`,
-    message: `La función ${m.name} supera los umbrales: ${parts.join('; ')}.`,
+    title: tr(`Función difícil de mantener: ${m.name}`, `Hard-to-maintain function: ${m.name}`),
+    message: tr(`La función ${m.name} supera los umbrales: ${parts.join('; ')}.`, `The function ${m.name} exceeds the thresholds: ${parts.join('; ')}.`),
     locations: [{ file, startLine: m.startLine, endLine: m.endLine, symbol: m.name }],
     evidence,
-    impact: 'El código anidado y con muchas ramas es difícil de entender, necesita más pruebas y es más propenso a defectos al modificarlo.',
+    impact: tr(
+      'El código anidado y con muchas ramas es difícil de entender, necesita más pruebas y es más propenso a defectos al modificarlo.',
+      'Nested code with many branches is hard to understand, needs more tests and is more prone to defects when changed.',
+    ),
     effort: {
       minutes: total,
-      rationale: '15 min base + 4 min por punto de complejidad cognitiva sobre el umbral + 0,5 min por línea propia sobre el umbral + 10 min por nivel de anidamiento extra + 10 min si hay exceso de parámetros (máx. 8 h).',
+      rationale: tr(
+        '15 min base + 4 min por punto de complejidad cognitiva sobre el umbral + 0,5 min por línea propia sobre el umbral + 10 min por nivel de anidamiento extra + 10 min si hay exceso de parámetros (máx. 8 h).',
+        '15 min base + 4 min per cognitive complexity point over the threshold + 0.5 min per own line over the threshold + 10 min per extra nesting level + 10 min if there are too many parameters (max. 8 h).',
+      ),
     },
   };
 }
@@ -270,7 +277,7 @@ export const complexityAnalyzer: FileAnalyzer = {
     for (const m of metrics) {
       const ordinal = seen.get(m.name) ?? 0;
       seen.set(m.name, ordinal + 1);
-      const f = buildFunctionFinding(input.meta.relPath, m, config.thresholds, ordinal);
+      const f = buildFunctionFinding(input.meta.relPath, m, config.thresholds, ordinal, translator(config.locale));
       if (f) findings.push(f);
     }
     return { findings };

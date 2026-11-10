@@ -4,6 +4,8 @@
  * nunca modifica `evidence`.
  */
 
+import type { Locale } from './i18n.js';
+
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type Confidence = 'high' | 'medium' | 'low';
 export type Category =
@@ -88,6 +90,8 @@ export interface AnalysisConfig {
   hardMaxFileSizeBytes: number;
   concurrency: number;
   thresholds: Thresholds;
+  /** Idioma de los textos de los hallazgos y de las notas de cobertura. */
+  locale: Locale;
 }
 
 /** Metadatos de un archivo descubierto (sin contenido). */

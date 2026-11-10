@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { errorMessage } from '../../../shared/errors.js';
 import type { OpenRouterKeyCheck } from '../../../shared/model.js';
-import { SECRET_LABELS, SECRET_NAMES, type SecretName, type SecretsStatus } from '../../../shared/secrets.js';
+import { SECRET_LABELS, SECRET_LABELS_EN, SECRET_NAMES, type SecretName, type SecretsStatus } from '../../../shared/secrets.js';
 import { Icon } from '../../components/Icon.js';
 import { FormError, SettingsSection } from './SettingsSection.js';
+import { tr } from '../../i18n.js';
 
 const KEY_PAGES: Record<SecretName, string> = {
   openrouter: 'https://openrouter.ai/settings/keys',
@@ -24,11 +25,19 @@ export function Credentials({ status, onChange }: { status: SecretsStatus | null
   return (
     <SettingsSection
       id="s-claves"
-      title="Credenciales"
-      intro="Se guardan cifradas con el sistema (DPAPI en Windows, el Llavero en macOS, el llavero del escritorio en Linux) y nunca vuelven a mostrarse. También se aceptan las variables de entorno de la línea de comandos."
+      title={tr('Credenciales', 'Credentials')}
+      intro={tr(
+        'Se guardan cifradas con el sistema (DPAPI en Windows, el Llavero en macOS, el llavero del escritorio en Linux) y nunca vuelven a mostrarse. También se aceptan las variables de entorno de la línea de comandos.',
+        'They are stored encrypted by the system (DPAPI on Windows, the Keychain on macOS, the desktop keyring on Linux) and are never shown again. The command-line environment variables are also accepted.',
+      )}
     >
       {status && !status.encryptionAvailable ? (
-        <p className="form-error">Este equipo no ofrece un almacén cifrado (en Linux, instala o desbloquea un llavero como GNOME Keyring o KWallet): no se pueden guardar credenciales. Usa las variables de entorno indicadas.</p>
+        <p className="form-error">
+          {tr(
+            'Este equipo no ofrece un almacén cifrado (en Linux, instala o desbloquea un llavero como GNOME Keyring o KWallet): no se pueden guardar credenciales. Usa las variables de entorno indicadas.',
+            'This computer has no encrypted store (on Linux, install or unlock a keyring such as GNOME Keyring or KWallet): credentials cannot be saved. Use the environment variables shown.',
+          )}
+        </p>
       ) : null}
       {status ? SECRET_NAMES.map((name) => <SecretRow key={name} name={name} status={status} onChange={onChange} />) : null}
     </SettingsSection>
@@ -86,18 +95,19 @@ function SecretRow({ name, status, onChange }: { name: SecretName; status: Secre
   const secret = useSecret(name, onChange);
   const s = status.secrets[name];
   const configured = s.stored || s.fromEnv;
-  const state = s.stored ? 'Guardada y cifrada' : s.fromEnv ? `Desde la variable ${ENV_NAMES[name]}` : 'Sin configurar';
+  const state = s.stored ? tr('Guardada y cifrada', 'Saved and encrypted') : s.fromEnv ? tr(`Desde la variable ${ENV_NAMES[name]}`, `From the ${ENV_NAMES[name]} variable`) : tr('Sin configurar', 'Not set');
+  const label = tr(SECRET_LABELS[name], SECRET_LABELS_EN[name]);
 
   return (
     <div className="secret">
       <div className="secret-head">
-        <span className="label">{SECRET_LABELS[name]}</span>
+        <span className="label">{label}</span>
         <span className="secret-state" data-set={configured || undefined}>
           {configured ? <Icon name="check" size={14} /> : null}
           {state}
         </span>
         <button type="button" className="btn btn-quiet btn-small secret-link" onClick={() => void window.radar.app.openExternal(KEY_PAGES[name])}>
-          <Icon name="external" size={14} /> {name === 'github' ? 'Crear un token' : 'Crear una clave'}
+          <Icon name="external" size={14} /> {name === 'github' ? tr('Crear un token', 'Create a token') : tr('Crear una clave', 'Create a key')}
         </button>
       </div>
       <form
@@ -112,23 +122,23 @@ function SecretRow({ name, status, onChange }: { name: SecretName; status: Secre
           type="password"
           value={secret.value}
           onChange={(e) => secret.setValue(e.target.value)}
-          placeholder={s.stored ? 'Pega una nueva para sustituirla' : 'Pega aquí la clave'}
+          placeholder={s.stored ? tr('Pega una nueva para sustituirla', 'Paste a new one to replace it') : tr('Pega aquí la clave', 'Paste the key here')}
           autoComplete="off"
           spellCheck={false}
-          aria-label={SECRET_LABELS[name]}
+          aria-label={label}
           disabled={!status.encryptionAvailable}
         />
         <button type="submit" className="btn" disabled={secret.busy || secret.value.trim() === ''}>
-          Guardar
+          {tr('Guardar', 'Save')}
         </button>
         {s.stored ? (
           <button type="button" className="btn btn-quiet" disabled={secret.busy} onClick={() => void secret.remove()}>
-            Borrar
+            {tr('Borrar', 'Delete')}
           </button>
         ) : null}
         {name === 'openrouter' && configured ? (
           <button type="button" className="btn btn-quiet" disabled={secret.busy} onClick={() => void secret.verify()}>
-            Comprobar
+            {tr('Comprobar', 'Check')}
           </button>
         ) : null}
       </form>
@@ -143,9 +153,13 @@ function SecretRow({ name, status, onChange }: { name: SecretName; status: Secre
 function KeyCheckResult({ result }: { result: OpenRouterKeyCheck }) {
   return (
     <p className="secret-ok" role="status">
-      <Icon name="check" size={14} /> OpenRouter acepta la clave.
-      {result.freeDaily ? ` Peticiones gratuitas hoy: ${result.freeDaily.remaining} de ${result.freeDaily.limit}.` : ''}
-      {result.limitRemaining !== null ? ` Crédito restante de la clave: ${result.limitRemaining.toFixed(2)} USD.` : ' La clave no tiene límite de crédito.'}
+      <Icon name="check" size={14} /> {tr('OpenRouter acepta la clave.', 'OpenRouter accepts the key.')}
+      {result.freeDaily
+        ? tr(` Peticiones gratuitas hoy: ${result.freeDaily.remaining} de ${result.freeDaily.limit}.`, ` Free requests today: ${result.freeDaily.remaining} of ${result.freeDaily.limit}.`)
+        : ''}
+      {result.limitRemaining !== null
+        ? tr(` Crédito restante de la clave: ${result.limitRemaining.toFixed(2)} USD.`, ` Remaining key credit: ${result.limitRemaining.toFixed(2)} USD.`)
+        : tr(' La clave no tiene límite de crédito.', ' The key has no credit limit.')}
     </p>
   );
 }

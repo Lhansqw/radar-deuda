@@ -4,6 +4,7 @@ import { formatEffort } from '../lib/format.js';
 import { CATEGORY_LABEL, SEVERITY_LABEL } from '../lib/labels.js';
 import { layoutRadar } from '../lib/radar.js';
 import { SeverityMark } from './SeverityMark.js';
+import { tr } from '../i18n.js';
 
 const SIZE = 460;
 /** Margen lateral dentro del dibujo para las etiquetas de los sectores de los lados. */
@@ -41,17 +42,25 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
   return (
     <div className="radar">
       <svg viewBox={`${-PAD_X} 0 ${WIDTH} ${SIZE}`} role="img" aria-labelledby="radar-titulo radar-desc">
-        <title id="radar-titulo">Radar de hallazgos</title>
+        <title id="radar-titulo">{tr('Radar de hallazgos', 'Findings radar')}</title>
         <desc id="radar-desc">
-          {drawn} hallazgos por categoría (sectores) y severidad (anillos; crítica en el centro); el tamaño de cada punto indica el esfuerzo de corrección. La lista completa está en la vista Hallazgos.
+          {tr(
+            `${drawn} hallazgos por categoría (sectores) y severidad (anillos; crítica en el centro); el tamaño de cada punto indica el esfuerzo de corrección. La lista completa está en la vista Hallazgos.`,
+            `${drawn} findings by category (sectors) and severity (rings; critical in the center); the size of each dot shows the fix effort. The full list is in the Findings view.`,
+          )}
         </desc>
         <defs>
           <linearGradient id="barrido" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="var(--tiza)" stopOpacity="0" />
-            <stop offset="1" stopColor="var(--tiza)" stopOpacity="0.16" />
+            <stop offset="0" stopColor="var(--malva-brillo)" stopOpacity="0" />
+            <stop offset="1" stopColor="var(--malva-brillo)" stopOpacity="0.3" />
           </linearGradient>
+          <radialGradient id="radar-brillo">
+            <stop offset="0" stopColor="var(--malva)" stopOpacity="0.16" />
+            <stop offset="1" stopColor="var(--malva)" stopOpacity="0" />
+          </radialGradient>
         </defs>
 
+        <circle cx={c} cy={c} r={R} fill="url(#radar-brillo)" />
         {/* Anillos (de fuera hacia dentro para que el relleno del centro quede encima) */}
         {[...layout.rings].reverse().map((r) => (
           <circle key={r.severity} cx={c} cy={c} r={r.outer} className="radar-ring" />
@@ -135,9 +144,11 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
           <SeverityMark severity={hovered.severity} />
           <strong>{hovered.title}</strong>
           <span className="mono">
-            {hovered.locations[0]?.file === '.' ? 'Proyecto' : `${hovered.locations[0]?.file}:${hovered.locations[0]?.startLine}`}
+            {hovered.locations[0]?.file === '.' ? tr('Proyecto', 'Project') : `${hovered.locations[0]?.file}:${hovered.locations[0]?.startLine}`}
           </span>
-          <span>Corregirlo: {formatEffort(hovered.effort.minutes)}</span>
+          <span>
+            {tr('Corregirlo:', 'Fix effort:')} {formatEffort(hovered.effort.minutes)}
+          </span>
         </div>
       ) : null}
     </div>
