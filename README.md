@@ -66,7 +66,7 @@ radar-deuda/
 └─ vitest.config.ts
 ```
 
-La aplicación de escritorio está en `apps/desktop` (Electron 44 + React 19); ver
+La aplicación de escritorio está en `apps/desktop` (Electron 45 + React 19); ver
 [docs/ESCRITORIO.md](docs/ESCRITORIO.md). Pide iniciar sesión: la conexión con el
 proyecto de Supabase viene incluida (`apps/desktop/nube.json`), así que funciona en
 cualquier equipo sin configurar nada ([docs/CUENTAS.md](docs/CUENTAS.md)).

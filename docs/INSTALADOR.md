@@ -71,7 +71,7 @@ No se puede ejecutar como `root` (Chromium no lo admite con el sandbox).
 | Credenciales | Cifradas con el Llavero de macOS (la primera vez puede pedir permiso para usarlo) |
 | Git | Viene con las Command Line Tools de Xcode (`xcode-select --install`) |
 
-Requisitos: macOS 12 o posterior (los de Electron 44).
+Requisitos: macOS 13 (Ventura) o posterior (los de Electron 45).
 
 ## Cómo está hecho
 
@@ -191,4 +191,3 @@ versiones de prueba (`-beta`, `-rc`).
 - **Actualizaciones automáticas.** Sin instaladores firmados la aplicación solo avisa:
   descargar e instalar sola exige comprobar la firma de lo que descarga (electron-updater).
   Con certificado de firma, es el siguiente paso.
-- **Electron 45.** Ya existe; la rama 44 sigue con soporte y es la que está probada.
