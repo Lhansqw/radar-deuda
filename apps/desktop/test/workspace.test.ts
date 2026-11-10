@@ -35,6 +35,8 @@ const app: AppDeps = {
   storage: async () => ({ cache: { files: 0, bytes: 0, parts: [] }, clones: { files: 0, bytes: 0 } }),
   clearCache: async () => ({ files: 0, bytes: 0 }),
   checkUpdate: async () => ({ current: '0.1.0', latest: null, url: null, newer: false }),
+  theme: () => 'dark',
+  setTheme: (theme) => theme,
   removeClone: async () => undefined,
 };
 
@@ -91,7 +93,7 @@ function setup() {
 }
 
 describe('SessionRouter', () => {
-  it('sin sesión solo responden la cuenta, app:info y abrir enlaces', async () => {
+  it('sin sesión solo responden la cuenta, app:info, el tema y abrir enlaces', async () => {
     const { call } = setup();
     expect(await call('projects:list')).toEqual({ ok: false, error: 'Inicia sesión para continuar.' });
     expect(await call('settings:get')).toEqual({ ok: false, error: 'Inicia sesión para continuar.' });
@@ -99,6 +101,8 @@ describe('SessionRouter', () => {
     expect(await call('account:state')).toEqual({ ok: true, value: { status: 'signed-out' } });
     expect(await call('app:info')).toMatchObject({ ok: true });
     expect(await call('app:openExternal', 'https://supabase.com/')).toEqual({ ok: true, value: true });
+    expect(await call('app:theme')).toEqual({ ok: true, value: 'dark' });
+    expect(await call('app:setTheme', 'light')).toEqual({ ok: true, value: 'light' });
   });
 
   it('con sesión, cada usuario ve sus datos; al cambiar de usuario se cierra lo del anterior', async () => {

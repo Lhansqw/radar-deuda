@@ -42,6 +42,8 @@ const api: RadarApi = {
     storage: () => invoke('app:storage'),
     clearCache: () => invoke('app:clearCache'),
     checkUpdate: () => invoke('app:checkUpdate'),
+    theme: () => invoke('app:theme'),
+    setTheme: (theme) => invoke('app:setTheme', theme),
   },
   projects: {
     list: () => invoke('projects:list'),

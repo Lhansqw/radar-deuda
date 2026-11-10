@@ -8,7 +8,8 @@
  * Deja capturas en apps/desktop/e2e/capturas.
  *
  * Variables opcionales: RADAR_E2E_ELECTRON (ejecutable de Electron, si no es
- * el de node_modules) y RADAR_E2E_KEEP=1 (no borrar la carpeta temporal).
+ * el de node_modules), RADAR_E2E_KEEP=1 (no borrar la carpeta temporal) y
+ * RADAR_E2E_THEME=light (abrir con ese tema; las capturas van a capturas/light).
  */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -22,7 +23,8 @@ import { _electron as electron, type ElectronApplication, type Page } from 'play
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const rootDir = path.resolve(appDir, '..', '..');
-const shotsDir = path.join(appDir, 'e2e', 'capturas');
+const theme = process.env['RADAR_E2E_THEME'];
+const shotsDir = path.join(appDir, 'e2e', 'capturas', ...(theme ? [theme] : []));
 const tmp = mkdtempSync(path.join(os.tmpdir(), 'radar-e2e-'));
 const repo = path.join(tmp, 'tienda');
 const FAKE_KEY = `sk-or-v1-${'a1'.repeat(32)}`;
@@ -272,10 +274,17 @@ async function main(): Promise<void> {
   rmSync(shotsDir, { recursive: true, force: true });
   mkdirSync(shotsDir, { recursive: true });
   createRepo();
+  if (theme) {
+    // El tema se guarda en el equipo (main/appearance.ts): se deja elegido antes de abrir.
+    mkdirSync(path.join(tmp, 'datos'), { recursive: true });
+    writeFileSync(path.join(tmp, 'datos', 'apariencia.json'), JSON.stringify({ theme }));
+  }
   const executablePath = process.env['RADAR_E2E_ELECTRON'] ?? (createRequire(import.meta.url)('electron') as string);
   const app = await electron.launch({
     executablePath,
     args: [appDir],
+    // Playwright simula prefers-color-scheme: light por defecto; aquí manda el tema de la aplicación (nativeTheme).
+    colorScheme: null,
     env: {
       ...process.env,
       RADAR_DATA_DIR: path.join(tmp, 'datos'),
@@ -379,6 +388,19 @@ async function main(): Promise<void> {
     await page.getByRole('button', { name: 'Configuración' }).click();
     assert.match((await page.locator('#cupo-ia').filter({ hasText: /Te quedan/ }).textContent()) ?? '', /Te quedan 29 de 30 consultas hoy/);
     log('explicación con la IA incluida, sin ninguna clave; el cupo del día se ve en Configuración');
+
+    // Tema: se aplica al elegirlo, sin «Guardar», y la interfaz lo recibe por prefers-color-scheme.
+    const LIGHT = "matchMedia('(prefers-color-scheme: light)').matches";
+    const startedLight = theme === 'light';
+    assert.equal(await page.evaluate(LIGHT), startedLight, 'La ventana se abre con el tema guardado');
+    await page.getByRole('radio', { name: startedLight ? 'Oscuro' : 'Claro' }).check();
+    await page.waitForFunction(`${LIGHT} === ${!startedLight}`);
+    await shot(page, 'tema-cambiado');
+    await page.getByRole('radio', { name: startedLight ? 'Claro' : 'Oscuro' }).check();
+    await page.waitForFunction(`${LIGHT} === ${startedLight}`);
+    const saved = JSON.parse(readFileSync(path.join(tmp, 'datos', 'apariencia.json'), 'utf8')) as { theme: string };
+    assert.equal(saved.theme, startedLight ? 'light' : 'dark', 'El tema se guarda en el equipo');
+    log('tema claro y oscuro: se aplica al momento y se guarda en el equipo');
 
     // Con OpenRouter y sin modelo, pedir la explicación lleva a Configuración.
     await page.getByLabel('Proveedor', { exact: true }).selectOption('openrouter');

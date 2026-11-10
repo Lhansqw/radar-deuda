@@ -3,7 +3,7 @@ import { parseGitHubRepo } from '@radar/sources';
 import { MAX_EMAIL } from '../shared/account.js';
 import type { ArgsOf, Channel } from '../shared/ipc.js';
 import { SECRET_NAMES, type SecretName } from '../shared/secrets.js';
-import { validateSettings } from '../shared/settings.js';
+import { THEME_SETTINGS, validateSettings, type ThemeSetting } from '../shared/settings.js';
 
 /**
  * Validación en tiempo de ejecución de los argumentos de cada canal IPC. Los
@@ -31,6 +31,11 @@ function text(v: unknown, invalid: string, max: number): string {
   return v;
 }
 
+function theme(v: unknown): ThemeSetting {
+  if (!THEME_SETTINGS.includes(v as ThemeSetting)) throw new IpcValidationError('Tema no válido.');
+  return v as ThemeSetting;
+}
+
 /** Mismas reglas que el clonado (packages/sources/src/github/clone.ts). */
 const SAFE_BRANCH = /^(?!-)(?!.*\.\.)[\w./-]{1,200}$/;
 
@@ -55,6 +60,8 @@ export const VALIDATORS: Validators = {
   'app:storage': (a) => (count(a, 0), []),
   'app:clearCache': (a) => (count(a, 0), []),
   'app:checkUpdate': (a) => (count(a, 0), []),
+  'app:theme': (a) => (count(a, 0), []),
+  'app:setTheme': (a) => (count(a, 1), [theme(a[0])]),
   'projects:list': (a) => (count(a, 0), []),
   'projects:addFolder': (a) => (count(a, 0), []),
   'projects:addGithub': (a) => {

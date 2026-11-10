@@ -67,6 +67,8 @@ function setup(over: Partial<HandlerDeps> = {}) {
     storage: async () => ({ cache: { files: 0, bytes: 0, parts: [] }, clones: { files: 0, bytes: 0 } }),
     clearCache: async () => ({ files: 0, bytes: 0 }),
     checkUpdate: async () => ({ current: '0.1.0', latest: null, url: null, newer: false }),
+    theme: () => 'dark',
+    setTheme: (theme) => theme,
     removeClone: async () => undefined,
     sync: fakeSync,
     ...over,
@@ -98,6 +100,8 @@ describe('contrato IPC', () => {
     expect(await call('secrets:set', 'aws', 'x')).toEqual({ ok: false, error: 'Credencial desconocida.' });
     expect(await call('secrets:set', 'openrouter', 'x'.repeat(1001))).toEqual({ ok: false, error: 'Credencial no válida.' });
     expect(await call('app:openExternal', 42)).toEqual({ ok: false, error: 'Enlace no válido.' });
+    expect(await call('app:setTheme', 'azul')).toEqual({ ok: false, error: 'Tema no válido.' });
+    expect(await call('app:setTheme', 'system')).toEqual({ ok: true, value: 'system' });
   });
 
   it('valida los argumentos de la cuenta sin repetirlos en el error', async () => {

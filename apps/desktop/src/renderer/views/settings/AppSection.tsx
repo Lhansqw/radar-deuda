@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { errorMessage } from '../../../shared/errors.js';
 import type { AppInfo } from '../../../shared/ipc.js';
 import type { StorageInfo } from '../../../shared/model.js';
-import type { UpdateSettings } from '../../../shared/settings.js';
+import type { ThemeSetting, UpdateSettings } from '../../../shared/settings.js';
 import { formatBytes } from '../../lib/format.js';
 import { CheckField, SettingsSection } from './SettingsSection.js';
 
-/** Versiones, actualizaciones, dónde guarda los datos y espacio en disco. */
+/** Versiones, tema, actualizaciones, dónde guarda los datos y espacio en disco. */
 export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; updates: UpdateSettings; onUpdatesChange: (patch: Partial<UpdateSettings>) => void }) {
   return (
     <SettingsSection id="s-acerca" title="Aplicación">
@@ -24,9 +24,65 @@ export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; 
         <dt>Clones de GitHub</dt>
         <dd className="mono">{info.reposDir}</dd>
       </dl>
+      <Appearance />
       <Updates updates={updates} onChange={onUpdatesChange} />
       <Storage />
     </SettingsSection>
+  );
+}
+
+const THEMES: readonly { value: ThemeSetting; label: string }[] = [
+  { value: 'dark', label: 'Oscuro' },
+  { value: 'light', label: 'Claro' },
+  { value: 'system', label: 'Como el sistema' },
+];
+
+/**
+ * Tema de la interfaz. Se aplica al elegirlo, sin pasar por «Guardar»: es un
+ * ajuste de este equipo, no de la cuenta.
+ */
+function Appearance() {
+  const [theme, setTheme] = useState<ThemeSetting | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.radar.app.theme().then((t) => !cancelled && setTheme(t));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!theme) return null;
+  const choose = async (next: ThemeSetting): Promise<void> => {
+    setError(null);
+    try {
+      setTheme(await window.radar.app.setTheme(next));
+    } catch (err) {
+      setError(`No se pudo cambiar el tema: ${errorMessage(err)}`);
+    }
+  };
+  return (
+    <div className="storage">
+      <h3>Apariencia</h3>
+      <fieldset className="field">
+        <legend className="label">Tema</legend>
+        <div className="radios">
+          {THEMES.map((t) => (
+            <label key={t.value} className="check">
+              <input type="radio" name="tema" checked={theme === t.value} onChange={() => void choose(t.value)} />
+              <span>{t.label}</span>
+            </label>
+          ))}
+        </div>
+        <p className="hint">Se guarda en este equipo y también se usa en la pantalla de acceso.</p>
+      </fieldset>
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
