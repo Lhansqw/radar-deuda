@@ -8,19 +8,22 @@ import { translator } from '../i18n.js';
  * algo que nunca hacemos automáticamente con código de terceros).
  */
 const ID = 'testing';
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const TOOL = `${ID}@${VERSION}`;
 
 const CONFIG_FILE = /(^|\/)[^/]*\.config\.[cm]?[jt]s$|(^|\/)\.[^/]+rc\.[cm]?[jt]s$/;
+/** Python: archivos de paquete, de instalación y de configuración de pytest, que no son código a probar. */
+const PYTHON_NOT_SOURCE = /(^|\/)(__init__|__main__|setup|conftest|manage)\.py$/;
+const TESTED_LANGUAGES = new Set(['typescript', 'javascript', 'python']);
 
 export const testingAnalyzer: ProjectAnalyzer = {
   id: ID,
   version: VERSION,
   description: 'Proporción entre archivos de prueba y de código fuente.',
   async analyzeProject(ctx) {
-    const code = ctx.files.filter((f) => f.isCode && (f.language === 'typescript' || f.language === 'javascript'));
+    const code = ctx.files.filter((f) => f.isCode && TESTED_LANGUAGES.has(f.language));
     const tests = code.filter((f) => f.isTest);
-    const sources = code.filter((f) => !f.isTest && !CONFIG_FILE.test(f.relPath) && !f.relPath.endsWith('.d.ts'));
+    const sources = code.filter((f) => !f.isTest && !CONFIG_FILE.test(f.relPath) && !PYTHON_NOT_SOURCE.test(f.relPath) && !f.relPath.endsWith('.d.ts'));
     if (sources.length < 5) return [];
 
     const ratio = tests.length / sources.length;
@@ -35,8 +38,8 @@ export const testingAnalyzer: ProjectAnalyzer = {
         confidence: 'medium',
         title: tr('No se detectaron pruebas automatizadas', 'No automated tests detected'),
         message: tr(
-          `Hay ${sources.length} archivos de código JS/TS y ningún archivo de prueba según las convenciones habituales (*.test.*, *.spec.*, __tests__/, test/).`,
-          `There are ${sources.length} JS/TS code files and no test files under the usual conventions (*.test.*, *.spec.*, __tests__/, test/).`,
+          `Hay ${sources.length} archivos de código (JS/TS y Python) y ningún archivo de prueba según las convenciones habituales (*.test.*, *.spec.*, __tests__/, test/, test_*.py, *_test.py).`,
+          `There are ${sources.length} code files (JS/TS and Python) and no test files under the usual conventions (*.test.*, *.spec.*, __tests__/, test/, test_*.py, *_test.py).`,
         ),
         locations: [{ file: '.', startLine: 1, endLine: 1 }],
         evidence: [{ kind: 'fact', tool: TOOL, description: tr('Conteo por convención de nombres', 'Count by naming convention'), metric: { name: 'testFiles', value: 0, threshold: 1 } }],

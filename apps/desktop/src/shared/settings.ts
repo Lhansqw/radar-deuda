@@ -12,6 +12,14 @@ export type ReasoningLevel = 'auto' | 'none' | 'minimal' | 'low' | 'medium' | 'h
 export const AI_PROVIDER_NAMES: readonly AiProviderName[] = ['incluida', 'openrouter', 'anthropic', 'openai', 'lmstudio', 'ollama'];
 export const PRIVACY_SETTINGS: readonly PrivacySetting[] = ['auto', 'local', 'metadatos', 'fragmentos'];
 export const REASONING_LEVELS: readonly ReasoningLevel[] = ['auto', 'none', 'minimal', 'low', 'medium', 'high'];
+/**
+ * Tema de la interfaz. No forma parte de AppSettings: es del equipo, no de la
+ * cuenta, y se aplica también en la pantalla de acceso (main/appearance.ts).
+ */
+export type ThemeSetting = 'dark' | 'light' | 'system';
+export const THEME_SETTINGS: readonly ThemeSetting[] = ['dark', 'light', 'system'];
+export const DEFAULT_THEME: ThemeSetting = 'dark';
+
 export const LOCAL_PROVIDERS: ReadonlySet<AiProviderName> = new Set(['lmstudio', 'ollama']);
 
 /** Idiomas de la interfaz, de los hallazgos y de las respuestas de la IA. */

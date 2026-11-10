@@ -1,11 +1,9 @@
 import { mkdtempSync, rmSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { defaultCacheDir } from '@radar/engine';
-import { defaultReposDir, parseGitHubRepo, removeClone } from '@radar/sources';
-import { cacheUsage, clearCache, folderSize, pruneCache } from '@radar/pipeline';
-import { app, BrowserWindow, clipboard, dialog, Menu, nativeTheme, safeStorage, shell } from 'electron';
+import { pruneCache } from '@radar/pipeline';
+import { app, BrowserWindow, Menu, safeStorage } from 'electron';
 import { errorMessage } from '../shared/errors.js';
 import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
@@ -13,25 +11,21 @@ import { createAccountHandlers } from './account-handlers.js';
 import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
-import type { AppDeps } from './handlers.js';
-import { trustedCipher } from './credentials.js';
-import { currentLocale, initLanguage, languageSetting, setLanguage, tr } from './i18n.js';
+import { trustedCipher, type Cipher } from './credentials.js';
+import { initLanguage, tr } from './i18n.js';
 import { registerIpc } from './ipc.js';
 import { menuTemplate } from './menu.js';
 import { devServerFromEnv } from './policy.js';
 import { registerAppScheme, serveRenderer } from './protocol.js';
-import { enableSandboxEverywhere, hardenApp, openExternal } from './security.js';
+import { enableSandboxEverywhere, hardenApp } from './security.js';
 import { EncryptedSessionStorage } from './session-storage.js';
 import { checkRenderer, checkWorker, SMOKE_FLAG } from './smoke.js';
-import { checkForUpdate } from './updates.js';
+import { currentWindowBackground, prefixed, setupAppearance, systemDeps, watchErrors } from './system.js';
 import { spawnAnalysisWorker } from './worker-process.js';
 import { openWorkspace, SessionRouter } from './workspace.js';
 
 /** Conexión con Supabase incrustada al compilar (scripts/config.ts); null si no se definió. */
 declare const __RADAR_NUBE__: BuiltCloudConfig | null;
-/** Nombre en inglés de cada parte de la caché (en español lo da @radar/pipeline). */
-const CACHE_PART_EN = { motor: 'Per-file analysis', ia: 'AI answers', historial: 'Git history', dependencias: 'Vulnerabilities and versions' } as const;
-
 const builtCloud: BuiltCloudConfig | null = typeof __RADAR_NUBE__ === 'undefined' ? null : __RADAR_NUBE__;
 
 /** URL del servidor de Vite en desarrollo (npm run dev); null en la aplicación compilada o empaquetada. */
@@ -41,6 +35,17 @@ const distDir = __dirname;
 
 /** Prueba de arranque de la aplicación empaquetada (smoke.ts): datos temporales y salir. */
 const smoke = process.argv.includes(SMOKE_FLAG);
+
+/** Sin cifrado del sistema: nada se guarda en disco (la sesión solo vive en memoria). */
+const NO_CIPHER: Cipher = {
+  isEncryptionAvailable: () => false,
+  encryptString: () => {
+    throw new Error('El cifrado del sistema no está disponible.');
+  },
+  decryptString: () => {
+    throw new Error('El cifrado del sistema no está disponible.');
+  },
+};
 
 // Datos en la carpeta de datos del sistema (%APPDATA%\radar-deuda en Windows,
 // ~/Library/Application Support/radar-deuda en macOS, ~/.config/radar-deuda en
@@ -84,7 +89,7 @@ function createWindow(): BrowserWindow {
     minHeight: 640,
     show: false,
     title: tr('Radar de Deuda Técnica', 'Technical Debt Radar'),
-    backgroundColor: '#131b26',
+    backgroundColor: currentWindowBackground(),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(distDir, 'preload.cjs'),
@@ -107,62 +112,32 @@ function createWindow(): BrowserWindow {
 }
 
 function start(): void {
-  // La interfaz es oscura: la barra de título y los controles nativos también.
-  nativeTheme.themeSource = 'dark';
+  const dataDir = app.getPath('userData');
+  initLanguage(dataDir, app.getLocale());
+  // El tema elegido rige la interfaz (prefers-color-scheme), la barra de título y los controles nativos.
+  const appearanceFile = setupAppearance(dataDir);
+  const errors = watchErrors(dataDir);
   const template = menuTemplate(process.platform, app.isPackaged);
   if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   hardenApp(devServerUrl);
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
 
-  const dataDir = app.getPath('userData');
-  initLanguage(dataDir, app.getLocale());
+
   // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
-  const cipher = trustedCipher(safeStorage);
+  // La prueba de arranque no usa el llavero: comprueba el paquete, no el cifrado del sistema. En macOS, el elemento
+  // «<nombre> Safe Storage» que creó otra copia de la aplicación (otra firma) hace que el sistema pida permiso con un
+  // diálogo, y en un equipo sin pantalla (integración continua) nadie lo contesta y la aplicación se queda esperando.
+  const cipher = smoke ? NO_CIPHER : trustedCipher(safeStorage);
   const spawn = ({ memoryLimitMb }: { memoryLimitMb: number }) => spawnAnalysisWorker(path.join(distDir, 'worker.cjs'), memoryLimitMb);
   const broadcast = (channel: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
   };
   let win: BrowserWindow | null = null;
   let router: SessionRouter | null = null;
+  /** Cada análisis fallido se registra una vez, aunque su estado se emita varias. */
+  const failedJobs = new Set<string>();
 
-  const appDeps: AppDeps = {
-    info: () => ({
-      versions: { app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node },
-      dataDir: router?.userDir ?? dataDir,
-      cacheDir: defaultCacheDir(),
-      reposDir: defaultReposDir(),
-      language: languageSetting(),
-      locale: currentLocale(),
-    }),
-    setLanguage,
-    chooseFolder: async () => {
-      const options = { title: tr('Elige la carpeta del proyecto', 'Choose the project folder'), properties: ['openDirectory' as const] };
-      const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
-      return r.canceled ? null : (r.filePaths[0] ?? null);
-    },
-    openExternal,
-    // Solo se muestra en el explorador: abrir el archivo con su programa asociado podría ejecutarlo (.js, .bat…).
-    reveal: (abs) => shell.showItemInFolder(abs),
-    copyText: (text) => clipboard.writeText(text),
-    storage: async () => {
-      const [cache, clones] = await Promise.all([cacheUsage(defaultCacheDir()), folderSize(defaultReposDir())]);
-      return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ name, label, files, bytes }) => ({ label: tr(label, CACHE_PART_EN[name]), files, bytes })) }, clones };
-    },
-    clearCache: () => clearCache(defaultCacheDir()),
-    checkUpdate: () => checkForUpdate(app.getVersion()),
-    removeClone: async (repo) => {
-      const ref = parseGitHubRepo(repo);
-      if (ref) await removeClone(ref, defaultReposDir());
-    },
-    // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
-    savePatch: async (name, content) => {
-      const options = { title: tr('Guardar el parche', 'Save the patch'), defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: tr('Parche', 'Patch'), extensions: ['patch', 'diff'] }] };
-      const r = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
-      if (r.canceled || !r.filePath) return null;
-      await writeFile(r.filePath, content, 'utf8');
-      return r.filePath;
-    },
-  };
+  const appDeps = systemDeps({ dataDir, userDir: () => router?.userDir ?? null, window: () => win, errors, appearanceFile });
 
   // Cuentas (fase 13): sin sesión no se abre ninguna base de datos; con sesión, la del usuario.
   const account = new AccountService({
@@ -178,7 +153,13 @@ function start(): void {
         dataDir,
         cipher,
         spawn,
-        emit: (state) => broadcast(JOB_EVENT_CHANNEL, state),
+        emit: (state) => {
+          if (state.status === 'failed' && !failedJobs.has(state.jobId)) {
+            failedJobs.add(state.jobId);
+            errors.record('análisis', state.error ?? 'El análisis falló.');
+          }
+          broadcast(JOB_EVENT_CHANNEL, state);
+        },
         cloud: async () => {
           const db = await account.database();
           return db ? new SupabaseRepo(db) : null;
@@ -194,7 +175,7 @@ function start(): void {
     sessions.dispose();
     account.dispose();
   });
-  registerIpc(() => sessions.handlers(), devServerUrl);
+  registerIpc(() => sessions.handlers(), devServerUrl, (channel, err) => errors.record('ipc', prefixed(`${channel}: `, err)));
 
   win = createWindow();
   if (smoke) {

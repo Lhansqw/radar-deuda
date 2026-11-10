@@ -9,9 +9,14 @@
  * radar y la gráfica de evolución. La gravedad conserva sus colores de estado.
  * Contrastes comprobados (WCAG) sobre el plano: tinta 15:1, tinta-2 8:1,
  * apagado 5,3:1 (4,7:1 sobre el elevado).
+ *
+ * El tema claro redefine las mismas variables más abajo: tarjetas blancas
+ * sobre un marco gris ciruela muy claro, con el malva oscurecido para que se
+ * lea como texto. El tema lo elige el proceso principal (nativeTheme), que es
+ * quien decide prefers-color-scheme.
  */
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
 
   /* Marco de la ventana, alrededor de las tarjetas. */
   --fondo: #110d13;
@@ -25,11 +30,18 @@
   --tinta-2: #bcb0bf;
   --apagado: #9a8e9d;
   --tiza: #efe9f0;
+  --tiza-hover: #ffffff;
   /* El acento: malva y su versión luminosa para brillos y gráficas. */
   --malva: #c9a1c6;
   --malva-brillo: #e9bde3;
+  /* Brillo malva de fondo de las tarjetas y del panel de acceso. */
+  --malva-niebla: rgb(150 110 150 / 0.18);
   --enlace: var(--malva-brillo);
   --seleccion: color-mix(in srgb, var(--malva) 16%, var(--plano));
+  /* Fondo de la tarjeta de trabajo y de los controles hundidos (campos, botones secundarios). */
+  --trabajo: #18131a;
+  --hundido: rgb(0 0 0 / 0.28);
+  --sombra-barra: 0 16px 32px -10px rgb(0 0 0 / 0.6);
 
   /* Severidad: paleta de estado; siempre acompañada de forma y texto. */
   --sev-critical: #e0464a;
@@ -39,6 +51,11 @@
   --sev-info: #7d7385;
   --bien: #2fb344;
   --error-texto: #ff9b95;
+  --bien-texto: #7ed98d;
+
+  --velo: rgb(10 6 12 / 0.7);
+  --sombra-dialogo: 0 30px 60px -12px rgb(0 0 0 / 0.6);
+  --sombra-flotante: 0 16px 32px -8px rgb(0 0 0 / 0.55);
 
   --font-ui: 'Instrument Sans Variable', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
   --font-code: 'JetBrains Mono Variable', 'Cascadia Code', Consolas, monospace;
@@ -60,6 +77,49 @@
   --r: var(--r-s);
   --sidebar: 15.75rem;
   --hueco: 12px;
+}
+
+/*
+ * Tema claro. Contrastes comprobados (WCAG) sobre el papel (--pizarra) y el
+ * plano: tinta 14:1, tinta-2 7,7:1, apagado 5:1, enlace 5,4:1 y todas las
+ * severidades ≥ 4,5:1, porque también se usan como color de texto.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --fondo: #e8e2ea;
+    --pizarra: #f2eef3;
+    --plano: #fbf9fc;
+    --elevado: #ffffff;
+    --linea: #ddd3df;
+    --linea-fuerte: #b9aabd;
+
+    --tinta: #1e1520;
+    --tinta-2: #4a3d4e;
+    --apagado: #64566a;
+    --tiza: #2a1e2d;
+    --tiza-hover: #140d16;
+    --malva: #8e5689;
+    --malva-brillo: #a8619f;
+    --malva-niebla: rgb(150 90 145 / 0.1);
+    --enlace: #7e3f79;
+    --seleccion: #efe3ee;
+    --trabajo: #fbf9fc;
+    --hundido: rgb(30 21 32 / 0.04);
+    --sombra-barra: 0 12px 28px -10px rgb(30 21 32 / 0.2);
+
+    --sev-critical: #c42b2b;
+    --sev-high: #ad4716;
+    --sev-medium: #8a5c00;
+    --sev-low: #4d6c93;
+    --sev-info: #5f6a7a;
+    --bien: #187a2f;
+    --error-texto: #b3261e;
+    --bien-texto: #17702a;
+
+    --velo: rgb(30 21 32 / 0.35);
+    --sombra-dialogo: 0 24px 48px rgb(30 21 32 / 0.18);
+    --sombra-flotante: 0 12px 28px rgb(30 21 32 / 0.14);
+  }
 }
 
 *,
@@ -313,9 +373,9 @@ code,
   border: 1px solid var(--linea);
   border-radius: var(--r-l);
   background:
-    radial-gradient(70% 55% at 30% -10%, rgb(150 110 150 / 0.32), transparent 70%),
-    radial-gradient(50% 40% at 95% 0%, rgb(120 85 125 / 0.22), transparent 70%),
-    #18131a;
+    radial-gradient(70% 55% at 30% -10%, var(--malva-niebla), transparent 70%),
+    radial-gradient(50% 40% at 95% 0%, var(--malva-niebla), transparent 70%),
+    var(--trabajo);
   overflow: hidden;
 }
 
@@ -378,7 +438,7 @@ code,
   padding: 0 1.125rem;
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-pill);
-  background: rgb(0 0 0 / 0.28);
+  background: var(--hundido);
   color: var(--tinta);
   font-weight: 500;
   white-space: nowrap;
@@ -402,7 +462,7 @@ code,
 }
 
 .btn-primary:hover {
-  background: #fff;
+  background: var(--tiza-hover);
 }
 
 .btn-quiet {
@@ -454,7 +514,7 @@ code,
   padding: 0 0.875rem;
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-pill);
-  background: rgb(0 0 0 / 0.3);
+  background: var(--hundido);
 }
 
 textarea.input {
@@ -822,7 +882,7 @@ textarea.input {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgb(10 6 12 / 0.7);
+  background: var(--velo);
   backdrop-filter: blur(3px);
 }
 
@@ -833,8 +893,8 @@ textarea.input {
   padding: 1.75rem;
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-l);
-  background: radial-gradient(90% 60% at 20% 0%, rgb(150 110 150 / 0.18), transparent 70%), var(--plano);
-  box-shadow: 0 30px 60px -12px rgb(0 0 0 / 0.6);
+  background: radial-gradient(90% 60% at 20% 0%, var(--malva-niebla), transparent 70%), var(--plano);
+  box-shadow: var(--sombra-dialogo);
 }
 
 .dialog h2 {
@@ -913,7 +973,7 @@ textarea.input {
   padding: 0 0.75rem;
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-pill);
-  background: rgb(0 0 0 / 0.28);
+  background: var(--hundido);
   color: var(--tinta-2);
   font-size: var(--t-s);
   cursor: pointer;
@@ -1254,7 +1314,7 @@ textarea.input {
   padding: 1.125rem 1.25rem;
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-m);
-  background: radial-gradient(80% 70% at 50% 110%, rgb(150 110 150 / 0.22), transparent 70%), var(--pizarra);
+  background: radial-gradient(80% 70% at 50% 110%, var(--malva-niebla), transparent 70%), var(--pizarra);
 }
 
 .ai-fields {
@@ -1340,7 +1400,7 @@ textarea.input {
   display: grid;
   place-items: center;
   padding: 1rem 1.5rem;
-  background: radial-gradient(60% 60% at 50% 50%, rgb(150 110 150 / 0.12), transparent 75%), var(--plano);
+  background: radial-gradient(60% 60% at 50% 50%, var(--malva-niebla), transparent 75%), var(--plano);
 }
 
 .panel-summary {
@@ -1685,7 +1745,7 @@ textarea.input {
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-m);
   background: var(--elevado);
-  box-shadow: 0 16px 32px -8px rgb(0 0 0 / 0.55);
+  box-shadow: var(--sombra-flotante);
   font-size: var(--t-s);
   transform: translate(-50%, calc(-100% - 14px));
   pointer-events: none;
@@ -2399,7 +2459,7 @@ textarea.input {
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-pill);
   background: var(--elevado);
-  box-shadow: 0 16px 32px -10px rgb(0 0 0 / 0.6);
+  box-shadow: var(--sombra-barra);
 }
 
 .save-bar p {
@@ -2507,7 +2567,7 @@ textarea.input {
 }
 
 .diff-line[data-kind='added'] .diff-sign {
-  color: #7ed98d;
+  color: var(--bien-texto);
 }
 
 .diff-line[data-kind='removed'] {
@@ -2713,7 +2773,7 @@ textarea.input {
   border: 1px solid var(--linea-fuerte);
   border-radius: var(--r-l);
   background: var(--plano);
-  box-shadow: 0 16px 32px -14px rgb(0 0 0 / 0.6);
+  box-shadow: var(--sombra-barra);
 }
 
 .ask-input {
@@ -2812,7 +2872,7 @@ textarea.input {
   height: 100%;
   padding: var(--hueco);
   background:
-    radial-gradient(55% 60% at 32% 45%, rgb(150 110 150 / 0.24), transparent 70%),
+    radial-gradient(55% 60% at 32% 45%, var(--malva-niebla), transparent 70%),
     var(--fondo);
 }
 
@@ -2912,7 +2972,7 @@ textarea.input {
   padding: 3rem 2.5rem;
   border: 1px solid var(--linea);
   border-radius: var(--r-l);
-  background: radial-gradient(90% 45% at 50% 0%, rgb(150 110 150 / 0.16), transparent 70%), var(--plano);
+  background: radial-gradient(90% 45% at 50% 0%, var(--malva-niebla), transparent 70%), var(--plano);
 }
 
 .access-form {

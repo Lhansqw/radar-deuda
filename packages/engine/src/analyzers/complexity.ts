@@ -200,32 +200,38 @@ function maxSeverity(list: Severity[]): Severity {
   return list.reduce<Severity>((acc, s) => (SEVERITY_ORDER[s] > SEVERITY_ORDER[acc] ? s : acc), 'info');
 }
 
-export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresholds, ordinal: number, tr: Translate = SPANISH): Finding | null {
+/** `tool`: herramienta que midió la función (`complexity@…` en JS/TS, `complexity-python@…` en Python); `tr`: idioma de los textos. */
+export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresholds, ordinal: number, tool: string = TOOL, tr: Translate = SPANISH): Finding | null {
   const evidence: Evidence[] = [];
   const severities: Severity[] = [];
   let minutes = 0;
   const parts: string[] = [];
 
   if (m.cognitive > t.cognitive) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Complejidad cognitiva (SonarSource)', 'Cognitive complexity (SonarSource)'), metric: { name: 'cognitive', value: m.cognitive, threshold: t.cognitive } });
+    evidence.push({ kind: 'metric', tool, description: tr('Complejidad cognitiva (SonarSource)', 'Cognitive complexity (SonarSource)'), metric: { name: 'cognitive', value: m.cognitive, threshold: t.cognitive } });
     severities.push(severityByRatio(m.cognitive, t.cognitive));
     minutes += 4 * (m.cognitive - t.cognitive);
     parts.push(tr(`complejidad cognitiva ${m.cognitive} (umbral ${t.cognitive})`, `cognitive complexity ${m.cognitive} (threshold ${t.cognitive})`));
   }
   if (m.lines > t.functionLines) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Líneas propias de la función (sin funciones anidadas)', 'Own lines of the function (without nested functions)'), metric: { name: 'lines', value: m.lines, threshold: t.functionLines, unit: tr('líneas', 'lines') } });
+    evidence.push({
+      kind: 'metric',
+      tool,
+      description: tr('Líneas propias de la función (sin funciones anidadas)', 'Own lines of the function (without nested functions)'),
+      metric: { name: 'lines', value: m.lines, threshold: t.functionLines, unit: tr('líneas', 'lines') },
+    });
     severities.push(severityByRatio(m.lines, t.functionLines, 'high'));
     minutes += 0.5 * (m.lines - t.functionLines);
     parts.push(tr(`${m.lines} líneas propias (umbral ${t.functionLines})`, `${m.lines} own lines (threshold ${t.functionLines})`));
   }
   if (m.maxNesting > t.nesting) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Profundidad máxima de anidamiento', 'Maximum nesting depth'), metric: { name: 'nesting', value: m.maxNesting, threshold: t.nesting, unit: tr('niveles', 'levels') } });
+    evidence.push({ kind: 'metric', tool, description: tr('Profundidad máxima de anidamiento', 'Maximum nesting depth'), metric: { name: 'nesting', value: m.maxNesting, threshold: t.nesting, unit: tr('niveles', 'levels') } });
     severities.push(m.maxNesting >= t.nesting + 3 ? 'high' : 'medium');
     minutes += 10 * (m.maxNesting - t.nesting);
     parts.push(tr(`anidamiento de ${m.maxNesting} niveles (umbral ${t.nesting})`, `nesting of ${m.maxNesting} levels (threshold ${t.nesting})`));
   }
   if (m.parameters > t.parameters) {
-    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Número de parámetros', 'Number of parameters'), metric: { name: 'parameters', value: m.parameters, threshold: t.parameters } });
+    evidence.push({ kind: 'metric', tool, description: tr('Número de parámetros', 'Number of parameters'), metric: { name: 'parameters', value: m.parameters, threshold: t.parameters } });
     severities.push('low');
     minutes += 10;
     parts.push(tr(`${m.parameters} parámetros (umbral ${t.parameters})`, `${m.parameters} parameters (threshold ${t.parameters})`));
@@ -233,7 +239,12 @@ export function buildFunctionFinding(file: string, m: FunctionMetrics, t: Thresh
   if (evidence.length === 0) return null;
   if (m.cyclomatic > t.cyclomatic) {
     // Evidencia de apoyo: no dispara el hallazgo por sí sola (un switch largo y plano es legible).
-    evidence.push({ kind: 'metric', tool: TOOL, description: tr('Complejidad ciclomática (McCabe): caminos independientes, ≈ casos de prueba necesarios', 'Cyclomatic complexity (McCabe): independent paths, ≈ test cases needed'), metric: { name: 'cyclomatic', value: m.cyclomatic, threshold: t.cyclomatic } });
+    evidence.push({
+      kind: 'metric',
+      tool,
+      description: tr('Complejidad ciclomática (McCabe): caminos independientes, ≈ casos de prueba necesarios', 'Cyclomatic complexity (McCabe): independent paths, ≈ test cases needed'),
+      metric: { name: 'cyclomatic', value: m.cyclomatic, threshold: t.cyclomatic },
+    });
     parts.push(tr(`${m.cyclomatic} caminos de ejecución`, `${m.cyclomatic} execution paths`));
   }
 
@@ -277,7 +288,7 @@ export const complexityAnalyzer: FileAnalyzer = {
     for (const m of metrics) {
       const ordinal = seen.get(m.name) ?? 0;
       seen.set(m.name, ordinal + 1);
-      const f = buildFunctionFinding(input.meta.relPath, m, config.thresholds, ordinal, translator(config.locale));
+      const f = buildFunctionFinding(input.meta.relPath, m, config.thresholds, ordinal, TOOL, translator(config.locale));
       if (f) findings.push(f);
     }
     return { findings };

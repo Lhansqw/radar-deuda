@@ -3,9 +3,8 @@ import { parseGitHubRepo } from '@radar/sources';
 import { MAX_EMAIL } from '../shared/account.js';
 import type { ArgsOf, Channel } from '../shared/ipc.js';
 import { SECRET_NAMES, type SecretName } from '../shared/secrets.js';
-import { isLanguageSetting, validateSettings } from '../shared/settings.js';
-import { currentLocale } from './i18n.js';
-import { tr } from './i18n.js';
+import { isLanguageSetting, THEME_SETTINGS, validateSettings, type ThemeSetting } from '../shared/settings.js';
+import { currentLocale, tr } from './i18n.js';
 
 /**
  * Validación en tiempo de ejecución de los argumentos de cada canal IPC. Los
@@ -31,6 +30,11 @@ function id(v: unknown, invalid: string): number {
 function text(v: unknown, invalid: string, max: number): string {
   if (typeof v !== 'string' || v.length === 0 || v.length > max) throw new IpcValidationError(invalid);
   return v;
+}
+
+function theme(v: unknown): ThemeSetting {
+  if (!THEME_SETTINGS.includes(v as ThemeSetting)) throw new IpcValidationError(tr('Tema no válido.', 'Invalid theme.'));
+  return v as ThemeSetting;
 }
 
 /** Mismas reglas que el clonado (packages/sources/src/github/clone.ts). */
@@ -62,6 +66,15 @@ export const VALIDATORS: Validators = {
   'app:storage': (a) => (count(a, 0), []),
   'app:clearCache': (a) => (count(a, 0), []),
   'app:checkUpdate': (a) => (count(a, 0), []),
+  'app:theme': (a) => (count(a, 0), []),
+  'app:setTheme': (a) => (count(a, 1), [theme(a[0])]),
+  'app:diagnostics': (a) => (count(a, 0), []),
+  'app:clearErrors': (a) => (count(a, 0), []),
+  'app:reportError': (a) => {
+    count(a, 2);
+    if (a[1] !== null && (typeof a[1] !== 'string' || a[1].length > 20_000)) throw new IpcValidationError('Pila no válida.');
+    return [text(a[0], 'Error no válido.', 5000), a[1]];
+  },
   'projects:list': (a) => (count(a, 0), []),
   'projects:addFolder': (a) => (count(a, 0), []),
   'projects:addGithub': (a) => {

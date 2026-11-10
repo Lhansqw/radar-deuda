@@ -9,7 +9,7 @@ import type { AccountState, SignUpResult } from './account.js';
 import type { JobState } from './jobs.js';
 import type { AnalysisSummary, CatalogModel, ChatMessage, CodeSnippet, FixPreviewInfo, IncludedQuota, OpenRouterKeyCheck, Project, StorageInfo, StoredFixProposal, UpdateInfo } from './model.js';
 import type { SecretName, SecretsStatus } from './secrets.js';
-import type { AppSettings, LanguageSetting, Locale } from './settings.js';
+import type { AppSettings, LanguageSetting, Locale, ThemeSetting } from './settings.js';
 import type { SyncState } from './sync.js';
 
 export interface AppInfo {
@@ -51,6 +51,14 @@ export interface IpcContract {
   'app:clearCache': { args: []; result: { files: number; bytes: number } };
   /** Última versión publicada en GitHub Releases (solo avisa: no descarga nada). */
   'app:checkUpdate': { args: []; result: UpdateInfo };
+  /** Tema de la interfaz en este equipo (main/appearance.ts). */
+  'app:theme': { args: []; result: ThemeSetting };
+  'app:setTheme': { args: [theme: ThemeSetting]; result: ThemeSetting };
+  /** Diagnóstico para un informe de error: versiones, sistema y errores recientes, sin rutas, código ni claves (main/error-log.ts). */
+  'app:diagnostics': { args: []; result: string };
+  'app:clearErrors': { args: []; result: null };
+  /** Un error de la interfaz, para el registro local. */
+  'app:reportError': { args: [message: string, stack: string | null]; result: null };
   'projects:list': { args: []; result: Project[] };
   /** Abre el selector de carpetas del sistema; null si se cancela. */
   'projects:addFolder': { args: []; result: Project | null };
@@ -127,7 +135,17 @@ export const ACCOUNT_CHANNELS = [
 export type AccountChannel = (typeof ACCOUNT_CHANNELS)[number];
 
 /** Canales que responden sin sesión iniciada. */
-export const PUBLIC_CHANNELS: readonly Channel[] = [...ACCOUNT_CHANNELS, 'app:info', 'app:openExternal', 'app:setLanguage'];
+export const PUBLIC_CHANNELS: readonly Channel[] = [
+  ...ACCOUNT_CHANNELS,
+  'app:info',
+  'app:openExternal',
+  'app:setLanguage',
+  'app:theme',
+  'app:setTheme',
+  'app:diagnostics',
+  'app:clearErrors',
+  'app:reportError',
+];
 
 export const CHANNELS = [
   ...ACCOUNT_CHANNELS,
@@ -138,6 +156,11 @@ export const CHANNELS = [
   'app:storage',
   'app:clearCache',
   'app:checkUpdate',
+  'app:theme',
+  'app:setTheme',
+  'app:diagnostics',
+  'app:clearErrors',
+  'app:reportError',
   'projects:list',
   'projects:addFolder',
   'projects:addGithub',

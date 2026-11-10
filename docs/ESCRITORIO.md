@@ -38,7 +38,11 @@ npm run dist           # o genera el instalador para Windows (docs/INSTALADOR.md
    código); las referencias de la respuesta (`H2`) llevan al hallazgo.
 7. **Configuración**: la cuenta (copia en la nube y «Cerrar sesión»), opciones del análisis (incluida la memoria máxima del proceso de
    análisis), proveedor y modelo de IA (con el catálogo de OpenRouter y sus modelos
-   gratuitos), privacidad, presupuesto, credenciales y espacio en disco (vaciar la caché).
+   gratuitos), privacidad, presupuesto, credenciales, espacio en disco (vaciar la caché),
+   tema (oscuro, claro o como el sistema; se aplica al momento) y **diagnóstico**: copia para
+   un informe de error las versiones, el sistema y los últimos errores de este equipo, sin
+   rutas, código ni claves. Se puede ver antes de copiarlo y la aplicación no lo envía a
+   ningún sitio.
 
 La IA funciona sin configurar nada: por defecto es la **IA incluida**, gpt-oss-120b (Groq)
 con la cuenta de la aplicación y un cupo diario que se ve en Configuración
@@ -130,6 +134,8 @@ certificado y las actualizaciones automáticas firmadas.
 |---|---|
 | Proyectos, historial (hasta 100 análisis por proyecto, informe completo comprimido), propuestas, conversaciones (200 mensajes por análisis), ajustes y credenciales cifradas, de cada cuenta | `%APPDATA%\radar-deuda\usuarios\<id>\radar.db` |
 | Sesión de la cuenta (cifrada, solo con «Seguir conectado») | `%APPDATA%\radar-deuda\sesion.bin` |
+| Tema de la interfaz (de este equipo, también para la pantalla de acceso) | `%APPDATA%\radar-deuda\apariencia.json` |
+| Registro de errores (sin rutas, correos ni claves; como mucho 2 × 256 KB) | `%APPDATA%\radar-deuda\registros` |
 | Copia de los proyectos y del historial, sin código (si está activada) | Supabase: tablas `projects` y `analyses` ([CUENTAS.md](CUENTAS.md#4-la-copia-en-la-nube-13b)) |
 | Caché del motor, de la IA y de OSV/npm (compartida con la CLI) | `%LOCALAPPDATA%\radar-deuda\cache` |
 | Clones de GitHub | `%LOCALAPPDATA%\radar-deuda\repos` |

@@ -1,0 +1,3 @@
+IVA = 0.21
+ENVIO_GRATIS_DESDE = 50
+PAISES_UE = {"ES", "FR", "DE", "IT", "PT"}

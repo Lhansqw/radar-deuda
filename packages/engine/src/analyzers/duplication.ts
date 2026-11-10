@@ -24,6 +24,8 @@ export { fingerprints, fingerprintSource, forEachToken, FP_STRIDE, type Duplicat
 const ID = 'duplication';
 const VERSION = '1.4.0';
 const TOOL = `${ID}@${VERSION}`;
+const PY_ID = 'duplication-python';
+const PY_VERSION = '1.0.0';
 
 /** Agrupa pares en clases de clones (union-find sobre regiones idénticas). */
 export function groupClones(pairs: ReadonlyArray<[Region, Region]>, config: AnalysisConfig): Region[][] {
@@ -70,7 +72,7 @@ export async function findClones(
   return groupClones(pairs, config);
 }
 
-export function cloneFinding(regions: Region[], tr: Translate = SPANISH): Finding {
+export function cloneFinding(regions: Region[], tool: string = TOOL, tr: Translate = SPANISH): Finding {
   const first = regions[0] as Region;
   const lines = Math.min(...regions.map((r) => r.endLine - r.startLine + 1));
   const copies = regions.length;
@@ -92,7 +94,7 @@ export function cloneFinding(regions: Region[], tr: Translate = SPANISH): Findin
     evidence: [
       {
         kind: 'clone',
-        tool: TOOL,
+        tool,
         description: tr(
           `Coincidencia exacta de tokens (sin espacios ni comentarios), verificada token a token. Huellas: k=${K}, ventana=${W}.`,
           `Exact token match (ignoring whitespace and comments), verified token by token. Fingerprints: k=${K}, window=${W}.`,
@@ -108,6 +110,20 @@ export function cloneFinding(regions: Region[], tr: Translate = SPANISH): Findin
   };
 }
 
+/** Clones entre archivos de Python (mismo método; sus tokens no se comparan con los de JS/TS). */
+export const pythonDuplicationAnalyzer: FileAnalyzer<DuplicationArtifact> = {
+  id: PY_ID,
+  version: PY_VERSION,
+  description: 'Clones de código de Python entre archivos y dentro del mismo archivo (tokens + winnowing).',
+  supports: (meta) => meta.language === 'python',
+  analyze(input) {
+    return { findings: [], artifact: { ...fingerprintSource(input.text, input.meta.relPath), hash: input.contentHash } };
+  },
+  async finalize(artifacts, config, ctx) {
+    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map((r) => cloneFinding(r, `${PY_ID}@${PY_VERSION}`, translator(config.locale)));
+  },
+};
+
 export const duplicationAnalyzer: FileAnalyzer<DuplicationArtifact> = {
   id: ID,
   version: VERSION,
@@ -121,6 +137,6 @@ export const duplicationAnalyzer: FileAnalyzer<DuplicationArtifact> = {
   },
   async finalize(artifacts, config, ctx) {
     const tr = translator(config.locale);
-    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map((regions) => cloneFinding(regions, tr));
+    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map((r) => cloneFinding(r, TOOL, tr));
   },
 };

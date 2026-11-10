@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { errorMessage } from '../../../shared/errors.js';
 import type { AppInfo } from '../../../shared/ipc.js';
 import type { StorageInfo } from '../../../shared/model.js';
-import type { UpdateSettings } from '../../../shared/settings.js';
+import type { ThemeSetting, UpdateSettings } from '../../../shared/settings.js';
 import { formatBytes } from '../../lib/format.js';
+import { Diagnostics } from './Diagnostics.js';
 import { CheckField, SettingsSection } from './SettingsSection.js';
 import { tr } from '../../i18n.js';
 
-/** Versiones, actualizaciones, dónde guarda los datos y espacio en disco. */
+/** Versiones, tema, actualizaciones, dónde guarda los datos, espacio en disco y diagnóstico. */
 export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; updates: UpdateSettings; onUpdatesChange: (patch: Partial<UpdateSettings>) => void }) {
   return (
     <SettingsSection id="s-acerca" title={tr('Aplicación', 'App')}>
@@ -25,9 +26,66 @@ export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; 
         <dt>{tr('Clones de GitHub', 'GitHub clones')}</dt>
         <dd className="mono">{info.reposDir}</dd>
       </dl>
+      <Appearance />
       <Updates updates={updates} onChange={onUpdatesChange} />
       <Storage />
+      <Diagnostics />
     </SettingsSection>
+  );
+}
+
+const themes = (): readonly { value: ThemeSetting; label: string }[] => [
+  { value: 'dark', label: tr('Oscuro', 'Dark') },
+  { value: 'light', label: tr('Claro', 'Light') },
+  { value: 'system', label: tr('Como el sistema', 'Same as the system') },
+];
+
+/**
+ * Tema de la interfaz. Se aplica al elegirlo, sin pasar por «Guardar»: es un
+ * ajuste de este equipo, no de la cuenta.
+ */
+function Appearance() {
+  const [theme, setTheme] = useState<ThemeSetting | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.radar.app.theme().then((t) => !cancelled && setTheme(t));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!theme) return null;
+  const choose = async (next: ThemeSetting): Promise<void> => {
+    setError(null);
+    try {
+      setTheme(await window.radar.app.setTheme(next));
+    } catch (err) {
+      setError(tr(`No se pudo cambiar el tema: ${errorMessage(err)}`, `Could not change the theme: ${errorMessage(err)}`));
+    }
+  };
+  return (
+    <div className="storage">
+      <h3>{tr('Apariencia', 'Appearance')}</h3>
+      <fieldset className="field">
+        <legend className="label">{tr('Tema', 'Theme')}</legend>
+        <div className="radios">
+          {themes().map((t) => (
+            <label key={t.value} className="check">
+              <input type="radio" name="tema" checked={theme === t.value} onChange={() => void choose(t.value)} />
+              <span>{t.label}</span>
+            </label>
+          ))}
+        </div>
+        <p className="hint">{tr('Se guarda en este equipo y también se usa en la pantalla de acceso.', 'It is saved on this computer and also used on the sign-in screen.')}</p>
+      </fieldset>
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

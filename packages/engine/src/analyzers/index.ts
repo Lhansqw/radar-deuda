@@ -2,8 +2,10 @@ import type { FileAnalyzer, ProjectAnalyzer } from '../types.js';
 import { architectureAnalyzer } from './architecture.js';
 import { complexityAnalyzer } from './complexity.js';
 import { dependenciesAnalyzer } from './dependencies.js';
-import { duplicationAnalyzer } from './duplication.js';
+import { duplicationAnalyzer, pythonDuplicationAnalyzer } from './duplication.js';
 import { markersAnalyzer } from './markers.js';
+import { pythonArchitectureAnalyzer } from './python-architecture.js';
+import { pythonComplexityAnalyzer } from './python-complexity.js';
 import { secretsAnalyzer } from './secrets.js';
 import { sizeAnalyzer } from './size.js';
 import { testingAnalyzer } from './testing.js';
@@ -17,6 +19,9 @@ export const DEFAULT_FILE_ANALYZERS: readonly FileAnalyzer[] = [
   complexityAnalyzer,
   duplicationAnalyzer as FileAnalyzer,
   architectureAnalyzer as FileAnalyzer,
+  pythonComplexityAnalyzer,
+  pythonDuplicationAnalyzer as FileAnalyzer,
+  pythonArchitectureAnalyzer as FileAnalyzer,
   secretsAnalyzer,
   markersAnalyzer,
 ];
@@ -29,6 +34,9 @@ export {
   dependenciesAnalyzer,
   duplicationAnalyzer,
   markersAnalyzer,
+  pythonArchitectureAnalyzer,
+  pythonComplexityAnalyzer,
+  pythonDuplicationAnalyzer,
   secretsAnalyzer,
   sizeAnalyzer,
   testingAnalyzer,
