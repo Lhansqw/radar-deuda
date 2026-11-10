@@ -3,6 +3,7 @@ import type { Channel, IpcResult } from '../shared/ipc.js';
 import { isAppUrl } from '../shared/origin.js';
 import type { Handlers } from './handlers.js';
 import { VALIDATORS } from './ipc-validation.js';
+import { tr } from './i18n.js';
 
 export interface DispatchOptions {
   /** Servidor de Vite en desarrollo: también es un remitente válido. */
@@ -17,7 +18,7 @@ export interface DispatchOptions {
  * Separado de Electron para poder probarlo.
  */
 export async function dispatch<C extends Channel>(channel: C, senderUrl: string | undefined, args: unknown[], handlers: Handlers, options: DispatchOptions = {}): Promise<IpcResult<unknown>> {
-  if (!isAppUrl(senderUrl, options.devServerUrl ?? null)) return { ok: false, error: 'Remitente no autorizado.' };
+  if (!isAppUrl(senderUrl, options.devServerUrl ?? null)) return { ok: false, error: tr('Remitente no autorizado.', 'Unauthorized sender.') };
   try {
     const parsed = VALIDATORS[channel](args);
     const handler = handlers[channel] as (...a: unknown[]) => unknown;

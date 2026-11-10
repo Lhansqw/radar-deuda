@@ -4,10 +4,11 @@ import type { AiOptions, ApiKeys } from '@radar/pipeline';
 import { errorMessage } from '../shared/errors.js';
 import type { JobLogEntry, JobPhase, JobState } from '../shared/jobs.js';
 import type { Project } from '../shared/model.js';
-import { LOCAL_PROVIDERS, type AppSettings, type AiSettings } from '../shared/settings.js';
+import { LOCAL_PROVIDERS, type AppSettings, type AiSettings, type Locale } from '../shared/settings.js';
 import type { FromWorker, StartMessage, ToWorker } from '../worker/protocol.js';
 import type { CredentialStore } from './credentials.js';
 import type { Store } from './store.js';
+import { currentLocale, tr } from './i18n.js';
 
 /** Lo que el gestor necesita de un proceso de análisis (en Electron, un utilityProcess). */
 export interface WorkerHandle {
@@ -41,11 +42,12 @@ export interface IncludedAccess {
 }
 
 /** Ajustes de la aplicación → opciones de la capa de IA. */
-export function aiOptionsFrom(s: AiSettings, included: IncludedAccess | null = null): AiOptions {
+export function aiOptionsFrom(s: AiSettings, included: IncludedAccess | null = null, locale: Locale = 'es'): AiOptions {
   const openrouter = s.provider === 'openrouter';
   const incluida = s.provider === 'incluida';
   return {
     provider: s.provider,
+    ...(locale !== 'es' ? { locale } : {}),
     limit: s.limit,
     budgetUsd: s.budgetUsd,
     plan: s.plan,
@@ -68,7 +70,7 @@ export function aiKeysFrom(credentials: Pick<CredentialStore, 'apiKeys'>, s: AiS
 
 /** La IA incluida necesita la sesión con conexión a Supabase. */
 export function includedProblem(s: AiSettings, included: IncludedAccess | null): string | null {
-  return s.provider === 'incluida' && !included ? 'La IA incluida necesita la sesión iniciada con conexión. Vuelve a iniciar sesión o elige otro proveedor en Configuración.' : null;
+  return s.provider === 'incluida' && !included ? tr('La IA incluida necesita la sesión iniciada con conexión. Vuelve a iniciar sesión o elige otro proveedor en Configuración.', 'The included AI needs you to be signed in and online. Sign in again or choose another provider in Settings.') : null;
 }
 
 /** Fecha de inicio del historial a partir de los meses configurados (AAAA-MM-DD). */
@@ -89,7 +91,7 @@ export class JobError extends Error {
 }
 
 const LOG_LIMIT = 60;
-const CANCELLED = 'Análisis cancelado.';
+const cancelledText = (): string => tr('Análisis cancelado.', 'Analysis cancelled.');
 /** Como mucho un aviso de progreso de archivos cada 100 ms, para no saturar la interfaz. */
 const PROGRESS_INTERVAL_MS = 100;
 
@@ -119,14 +121,14 @@ export class JobManager {
 
   start(projectId: number): JobState {
     const project = this.d.store.getProject(projectId);
-    if (!project) throw new JobError('Ese proyecto ya no existe.');
+    if (!project) throw new JobError(tr('Ese proyecto ya no existe.', 'That project no longer exists.'));
     // Un proyecto local añadido en otro equipo (llegó con la copia en la nube): aquí solo hay su historial.
     if (project.kind === 'local' && !(this.d.folderExists ?? existsSync)(project.location)) {
-      throw new JobError(`La carpeta ${project.location} no está en este equipo. Si el proyecto se añadió en otro equipo, aquí puedes ver su historial, pero para analizarlo hay que añadir su carpeta desde este.`);
+      throw new JobError(tr(`La carpeta ${project.location} no está en este equipo. Si el proyecto se añadió en otro equipo, aquí puedes ver su historial, pero para analizarlo hay que añadir su carpeta desde este.`, `The folder ${project.location} is not on this computer. If the project was added on another computer, you can see its history here, but to analyze it you have to add its folder from this one.`));
     }
     if (this.running) {
       const busy = this.d.store.getProject(this.running.state.projectId);
-      throw new JobError(`Ya hay un análisis en curso${busy ? ` (${busy.name})` : ''}. Espera a que termine o cancélalo.`);
+      throw new JobError(tr(`Ya hay un análisis en curso${busy ? ` (${busy.name})` : ''}. Espera a que termine o cancélalo.`, `An analysis is already in progress${busy ? ` (${busy.name})` : ''}. Wait for it to finish or cancel it.`));
     }
     const now = this.now();
     const settings = this.d.settings();
@@ -162,7 +164,7 @@ export class JobManager {
     r.killTimer = setTimeout(() => {
       if (this.running === r) {
         r.worker.kill();
-        this.finish('cancelled', CANCELLED);
+        this.finish('cancelled', cancelledText());
       }
     }, this.d.cancelGraceMs ?? 5000);
   }
@@ -185,6 +187,7 @@ export class JobManager {
         since: sinceFromMonths(a.historyMonths, now),
         online: a.online,
         noCache: false,
+        ...(currentLocale() !== 'es' ? { locale: currentLocale() } : {}),
         ...(github && project.branch ? { branch: project.branch } : {}),
         ...(token ? { githubToken: token } : {}),
       },
@@ -194,7 +197,7 @@ export class JobManager {
 
   private aiRequest(settings: AppSettings): NonNullable<StartMessage['ai']> {
     const included = this.d.includedAi?.() ?? null;
-    return { options: aiOptionsFrom(settings.ai, included), keys: aiKeysFrom(this.d.credentials, settings.ai, included) };
+    return { options: aiOptionsFrom(settings.ai, included, currentLocale()), keys: aiKeysFrom(this.d.credentials, settings.ai, included) };
   }
 
   /** El informe del motor: se guarda en cuanto llega (con IA, se ve mientras la IA trabaja). */
@@ -206,7 +209,7 @@ export class JobManager {
       s.analysisId = summary.id;
     } catch (err) {
       r.worker.kill();
-      this.finish('failed', `No se pudo guardar el análisis: ${errorMessage(err)}`);
+      this.finish('failed', tr(`No se pudo guardar el análisis: ${errorMessage(err)}`, `Could not save the analysis: ${errorMessage(err)}`));
       return;
     }
     if (r.aiRequested) s.phase = 'ai';
@@ -250,12 +253,12 @@ export class JobManager {
         return;
       case 'ai-error':
         s.aiError = m.message;
-        this.log('warn', `La IA no se pudo ejecutar: ${m.message}`);
+        this.log('warn', tr(`La IA no se pudo ejecutar: ${m.message}`, `The AI could not run: ${m.message}`));
         return;
       case 'error': {
         r.worker.kill();
         const cancelled = m.cancelled || r.cancelRequested;
-        this.finish(cancelled ? 'cancelled' : 'failed', cancelled ? CANCELLED : m.message);
+        this.finish(cancelled ? 'cancelled' : 'failed', cancelled ? cancelledText() : m.message);
         return;
       }
       case 'finished':
@@ -268,13 +271,13 @@ export class JobManager {
   private onExit(jobId: string, code: number): void {
     const r = this.running;
     if (!r || r.state.jobId !== jobId) return;
-    if (r.cancelRequested) this.finish('cancelled', CANCELLED);
+    if (r.cancelRequested) this.finish('cancelled', cancelledText());
     else
       this.finish(
         'failed',
         r.state.analysisId !== null
-          ? `El proceso de análisis terminó inesperadamente (código ${code}). El análisis del motor sí se guardó.`
-          : `El proceso de análisis terminó inesperadamente (código ${code}). Si el repositorio es muy grande, puede haberse quedado sin memoria: sube el límite en Configuración → Análisis o excluye carpetas con un archivo .radarignore.`,
+          ? tr(`El proceso de análisis terminó inesperadamente (código ${code}). El análisis del motor sí se guardó.`, `The analysis process ended unexpectedly (code ${code}). The engine analysis was saved.`)
+          : tr(`El proceso de análisis terminó inesperadamente (código ${code}). Si el repositorio es muy grande, puede haberse quedado sin memoria: sube el límite en Configuración → Análisis o excluye carpetas con un archivo .radarignore.`, `The analysis process ended unexpectedly (code ${code}). If the repository is very large, it may have run out of memory: raise the limit in Settings → Analysis or exclude folders with a .radarignore file.`),
       );
   }
 

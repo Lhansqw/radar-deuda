@@ -32,26 +32,36 @@ La CLI no cambia: no necesita cuenta.
    confirmada: conviene poner una página propia (por ejemplo, la del proyecto en GitHub). Si
    quieres, cambia el texto de la plantilla:
 
-   **Confirm signup** — asunto: `Confirma tu correo para Radar de Deuda Técnica`
+   Supabase envía la misma plantilla a todas las cuentas, así que van en los dos idiomas de
+   la aplicación:
+
+   **Confirm signup** — asunto: `Confirma tu correo · Confirm your email — Radar de Deuda Técnica`
 
    ```html
    <h2>Confirma tu correo</h2>
    <p>Pulsa el enlace para terminar de crear tu cuenta y vuelve a la aplicación:</p>
    <p><a href="{{ .ConfirmationURL }}">Confirmar mi correo</a></p>
    <p>Si no creaste una cuenta en Radar de Deuda Técnica, ignora este mensaje.</p>
+   <hr>
+   <h2>Confirm your email</h2>
+   <p>Click the link to finish creating your account, then go back to the app:</p>
+   <p><a href="{{ .ConfirmationURL }}">Confirm my email</a></p>
+   <p>If you did not create a Technical Debt Radar account, ignore this message.</p>
    ```
 
    La recuperación de la contraseña, en cambio, usa el código de un solo uso que Supabase pone
    en `{{ .Token }}` (sin una página web propia, el enlace no tendría dónde pedir la
    contraseña nueva). Esta plantilla **hay que cambiarla**:
 
-   **Reset password** — asunto: `Tu código para cambiar la contraseña`
+   **Reset password** — asunto: `Tu código para cambiar la contraseña · Your password reset code`
 
    ```html
-   <h2>Elige una contraseña nueva</h2>
-   <p>Escribe este código en la aplicación junto con tu contraseña nueva:</p>
    <p style="font-size: 28px; letter-spacing: 6px"><strong>{{ .Token }}</strong></p>
-   <p>Si no lo pediste, ignora este mensaje: tu contraseña no cambia.</p>
+   <h2>Elige una contraseña nueva</h2>
+   <p>Escribe este código en la aplicación junto con tu contraseña nueva. Si no lo pediste, ignora este mensaje: tu contraseña no cambia.</p>
+   <hr>
+   <h2>Choose a new password</h2>
+   <p>Enter this code in the app together with your new password. If you did not request it, ignore this message: your password does not change.</p>
    ```
 
 4. **Servidor de correo.** El que trae Supabase de serie **solo envía a los miembros del
@@ -136,7 +146,7 @@ Acceso: correo, contraseña ──▶ AccountService (@supabase/supabase-js) ─
 - **Recuperar la contraseña.** Se pide un código, y con el código se elige la contraseña
   nueva. Si Supabase la rechaza (por ejemplo, por débil), se elige otra sin pedir otro
   código. Mientras tanto no se abren los datos ni se guarda la sesión en el disco.
-- **Mensajes.** Los errores de Supabase se muestran en español y nunca repiten el correo,
+- **Mensajes.** Los errores de Supabase se muestran en el idioma de la aplicación y nunca repiten el correo,
   la contraseña ni el código. Al pedir un código de recuperación, la respuesta es la misma
   exista o no la cuenta.
 

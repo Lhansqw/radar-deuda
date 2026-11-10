@@ -24,7 +24,20 @@ export interface RadarApi {
     /** Avisa de cada cambio de la cuenta (también si la sesión caduca). Devuelve la función para dejar de escuchar. */
     onChange: (cb: (state: AccountState) => void) => () => void;
   };
-  app: { info: Fn<'app:info'>; openExternal: Fn<'app:openExternal'>; copyText: Fn<'app:copyText'>; storage: Fn<'app:storage'>; clearCache: Fn<'app:clearCache'>; checkUpdate: Fn<'app:checkUpdate'>; theme: Fn<'app:theme'>; setTheme: Fn<'app:setTheme'>; diagnostics: Fn<'app:diagnostics'>; clearErrors: Fn<'app:clearErrors'>; reportError: Fn<'app:reportError'> };
+  app: {
+    info: Fn<'app:info'>;
+    openExternal: Fn<'app:openExternal'>;
+    setLanguage: Fn<'app:setLanguage'>;
+    copyText: Fn<'app:copyText'>;
+    storage: Fn<'app:storage'>;
+    clearCache: Fn<'app:clearCache'>;
+    checkUpdate: Fn<'app:checkUpdate'>;
+    theme: Fn<'app:theme'>;
+    setTheme: Fn<'app:setTheme'>;
+    diagnostics: Fn<'app:diagnostics'>;
+    clearErrors: Fn<'app:clearErrors'>;
+    reportError: Fn<'app:reportError'>;
+  };
   projects: { list: Fn<'projects:list'>; addFolder: Fn<'projects:addFolder'>; addGithub: Fn<'projects:addGithub'>; remove: Fn<'projects:remove'> };
   analyses: { list: Fn<'analyses:list'>; report: Fn<'analyses:report'>; compare: Fn<'analyses:compare'> };
   settings: { get: Fn<'settings:get'>; set: Fn<'settings:set'> };

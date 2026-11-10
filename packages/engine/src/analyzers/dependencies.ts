@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type { Finding, ProjectAnalyzer, ProjectContext } from '../types.js';
 import { findingId, splitLines } from '../util.js';
+import { translator, type Translate } from '../i18n.js';
 
 /**
  * Higiene de dependencias npm, sin red. Las dependencias desactualizadas y las
@@ -68,109 +69,119 @@ function specEvidence(deps: readonly Declared[]): Finding['evidence'] {
 
 const names = (deps: readonly Declared[]): string[] => deps.map((d) => d.name);
 
-function invalidManifest(rel: string): Finding {
+function invalidManifest(rel: string, tr: Translate): Finding {
   return {
     id: findingId('dependencies/invalid-manifest', rel, 'json'),
     ruleId: 'dependencies/invalid-manifest',
     category: 'dependencies',
     severity: 'medium',
     confidence: 'high',
-    title: 'package.json no es JSON válido',
-    message: 'El manifiesto no se puede interpretar; las herramientas de construcción y auditoría fallarán.',
+    title: tr('package.json no es JSON válido', 'package.json is not valid JSON'),
+    message: tr('El manifiesto no se puede interpretar; las herramientas de construcción y auditoría fallarán.', 'The manifest cannot be parsed; build and audit tools will fail.'),
     locations: [{ file: rel, startLine: 1, endLine: 1 }],
-    evidence: [{ kind: 'fact', tool: TOOL, description: 'JSON.parse falló' }],
-    impact: 'Instalaciones y auditorías no reproducibles.',
-    effort: { minutes: 10, rationale: 'Corrección de sintaxis (estimación fija).' },
+    evidence: [{ kind: 'fact', tool: TOOL, description: tr('JSON.parse falló', 'JSON.parse failed') }],
+    impact: tr('Instalaciones y auditorías no reproducibles.', 'Installs and audits are not reproducible.'),
+    effort: { minutes: 10, rationale: tr('Corrección de sintaxis (estimación fija).', 'Syntax fix (fixed estimate).') },
   };
 }
 
-function noLockfile(rel: string, count: number): Finding {
+function noLockfile(rel: string, count: number, tr: Translate): Finding {
   return {
     id: findingId('dependencies/no-lockfile', rel, 'lock'),
     ruleId: 'dependencies/no-lockfile',
     category: 'dependencies',
     severity: 'medium',
     confidence: 'high',
-    title: 'Dependencias sin archivo de bloqueo (lockfile)',
-    message: `El manifiesto declara ${count} dependencias pero no hay package-lock.json, yarn.lock, pnpm-lock.yaml ni bun.lock en su directorio ni en los superiores.`,
+    title: tr('Dependencias sin archivo de bloqueo (lockfile)', 'Dependencies without a lockfile'),
+    message: tr(
+      `El manifiesto declara ${count} dependencias pero no hay package-lock.json, yarn.lock, pnpm-lock.yaml ni bun.lock en su directorio ni en los superiores.`,
+      `The manifest declares ${count} dependencies but there is no package-lock.json, yarn.lock, pnpm-lock.yaml or bun.lock in its folder or any parent folder.`,
+    ),
     locations: [{ file: rel, startLine: 1, endLine: 1 }],
-    evidence: [{ kind: 'fact', tool: TOOL, description: `Lockfiles buscados: ${LOCKFILES.join(', ')}` }],
-    impact: 'Cada instalación puede resolver versiones distintas: builds no reproducibles y auditoría de vulnerabilidades imprecisa.',
-    effort: { minutes: 15, rationale: 'Generar y versionar el lockfile, verificar el build (estimación fija).' },
+    evidence: [{ kind: 'fact', tool: TOOL, description: tr(`Lockfiles buscados: ${LOCKFILES.join(', ')}`, `Lockfiles searched: ${LOCKFILES.join(', ')}`) }],
+    impact: tr(
+      'Cada instalación puede resolver versiones distintas: builds no reproducibles y auditoría de vulnerabilidades imprecisa.',
+      'Each install can resolve different versions: builds are not reproducible and the vulnerability audit is imprecise.',
+    ),
+    effort: { minutes: 15, rationale: tr('Generar y versionar el lockfile, verificar el build (estimación fija).', 'Generate and commit the lockfile, verify the build (fixed estimate).') },
   };
 }
 
-function unboundedRange(rel: string, lines: readonly string[], deps: readonly Declared[]): Finding {
+function unboundedRange(rel: string, lines: readonly string[], deps: readonly Declared[], tr: Translate): Finding {
   return {
     id: findingId('dependencies/unbounded-range', rel, names(deps).sort().join(',')),
     ruleId: 'dependencies/unbounded-range',
     category: 'dependencies',
     severity: 'medium',
     confidence: 'high',
-    title: `Versiones sin límite superior (${deps.length})`,
-    message: `Dependencias con rangos abiertos: ${deps.map((d) => `${d.name}@"${d.spec}"`).join(', ')}.`,
+    title: tr(`Versiones sin límite superior (${deps.length})`, `Versions without an upper bound (${deps.length})`),
+    message: tr('Dependencias con rangos abiertos: ', 'Dependencies with open ranges: ') + `${deps.map((d) => `${d.name}@"${d.spec}"`).join(', ')}.`,
     locations: perDependency(rel, lines, names(deps)),
     evidence: specEvidence(deps),
-    impact: 'Una nueva versión mayor con cambios incompatibles puede instalarse sin aviso.',
-    effort: { minutes: 5 * deps.length, rationale: '5 min por dependencia para fijar un rango compatible (^ o ~).' },
+    impact: tr('Una nueva versión mayor con cambios incompatibles puede instalarse sin aviso.', 'A new major version with breaking changes can be installed without warning.'),
+    effort: { minutes: 5 * deps.length, rationale: tr('5 min por dependencia para fijar un rango compatible (^ o ~).', '5 min per dependency to set a compatible range (^ or ~).') },
   };
 }
 
-function nonRegistry(rel: string, lines: readonly string[], deps: readonly Declared[]): Finding {
+function nonRegistry(rel: string, lines: readonly string[], deps: readonly Declared[], tr: Translate): Finding {
   return {
     id: findingId('dependencies/non-registry', rel, names(deps).sort().join(',')),
     ruleId: 'dependencies/non-registry',
     category: 'dependencies',
     severity: 'low',
     confidence: 'high',
-    title: `Dependencias fuera del registro npm (${deps.length})`,
-    message: `Se instalan desde Git, URL o rutas locales: ${names(deps).join(', ')}.`,
+    title: tr(`Dependencias fuera del registro npm (${deps.length})`, `Dependencies outside the npm registry (${deps.length})`),
+    message: tr(`Se instalan desde Git, URL o rutas locales: ${names(deps).join(', ')}.`, `Installed from Git, URLs or local paths: ${names(deps).join(', ')}.`),
     locations: perDependency(rel, lines, names(deps)),
     evidence: specEvidence(deps),
-    impact: 'No reciben avisos de seguridad del registro y pueden cambiar sin control de versiones semántico.',
-    effort: { minutes: 20 * deps.length, rationale: '20 min por dependencia para migrar a una versión publicada o documentar la excepción.' },
+    impact: tr('No reciben avisos de seguridad del registro y pueden cambiar sin control de versiones semántico.', 'They get no security advisories from the registry and can change without semantic versioning.'),
+    effort: {
+      minutes: 20 * deps.length,
+      rationale: tr('20 min por dependencia para migrar a una versión publicada o documentar la excepción.', '20 min per dependency to move to a published version or document the exception.'),
+    },
   };
 }
 
 /** `dupes` ya ordenadas: el id, el mensaje y las ubicaciones siguen ese orden. */
-function duplicated(rel: string, lines: readonly string[], dupes: readonly string[]): Finding {
+function duplicated(rel: string, lines: readonly string[], dupes: readonly string[], tr: Translate): Finding {
   return {
     id: findingId('dependencies/duplicated', rel, dupes.join(',')),
     ruleId: 'dependencies/duplicated',
     category: 'dependencies',
     severity: 'low',
     confidence: 'high',
-    title: `Dependencias declaradas dos veces (${dupes.length})`,
-    message: `Aparecen en dependencies y devDependencies: ${dupes.join(', ')}.`,
+    title: tr(`Dependencias declaradas dos veces (${dupes.length})`, `Dependencies declared twice (${dupes.length})`),
+    message: tr(`Aparecen en dependencies y devDependencies: ${dupes.join(', ')}.`, `They appear in both dependencies and devDependencies: ${dupes.join(', ')}.`),
     locations: perDependency(rel, lines, dupes),
-    evidence: [{ kind: 'fact', tool: TOOL, description: 'Intersección de dependencies y devDependencies' }],
-    impact: 'Ambigüedad sobre qué versión se usa en producción.',
-    effort: { minutes: 5 * dupes.length, rationale: '5 min por dependencia.' },
+    evidence: [{ kind: 'fact', tool: TOOL, description: tr('Intersección de dependencies y devDependencies', 'Intersection of dependencies and devDependencies') }],
+    impact: tr('Ambigüedad sobre qué versión se usa en producción.', 'Ambiguity about which version is used in production.'),
+    effort: { minutes: 5 * dupes.length, rationale: tr('5 min por dependencia.', '5 min per dependency.') },
   };
 }
 
 /** Los hallazgos de un package.json. */
 async function analyzeManifest(ctx: ProjectContext, rel: string): Promise<Finding[]> {
+  const tr = translator(ctx.config.locale);
   const text = await ctx.readText(rel);
   if (text === null) return [];
   let manifest: Manifest;
   try {
     manifest = JSON.parse(text) as Manifest;
   } catch {
-    return [invalidManifest(rel)];
+    return [invalidManifest(rel, tr)];
   }
   const runtime = declared(manifest).filter((d) => d.section !== 'peerDependencies');
   if (runtime.length === 0) return [];
   const lines = splitLines(text);
   const findings: Finding[] = [];
-  if (!(await hasLockfile(ctx, rel))) findings.push(noLockfile(rel, runtime.length));
+  if (!(await hasLockfile(ctx, rel))) findings.push(noLockfile(rel, runtime.length, tr));
   const unbounded = runtime.filter((d) => isUnbounded(d.spec));
-  if (unbounded.length > 0) findings.push(unboundedRange(rel, lines, unbounded));
+  if (unbounded.length > 0) findings.push(unboundedRange(rel, lines, unbounded, tr));
   const outside = runtime.filter((d) => isNonRegistry(d.spec));
-  if (outside.length > 0) findings.push(nonRegistry(rel, lines, outside));
+  if (outside.length > 0) findings.push(nonRegistry(rel, lines, outside, tr));
   const prod = new Set(Object.keys(manifest.dependencies ?? {}));
   const dupes = Object.keys(manifest.devDependencies ?? {}).filter((n) => prod.has(n)).sort();
-  if (dupes.length > 0) findings.push(duplicated(rel, lines, dupes));
+  if (dupes.length > 0) findings.push(duplicated(rel, lines, dupes, tr));
   return findings;
 }
 

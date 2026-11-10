@@ -4,6 +4,7 @@ import { findCandidates, refineCandidates, type Region } from './duplication-pai
 import { fingerprintSource, K, W, type DuplicationArtifact } from './duplication-tokens.js';
 import { isJsLike } from './shared.js';
 import { loadTypeScript } from './ts-runtime.js';
+import { SPANISH, translator, type Translate } from '../i18n.js';
 
 export { findCandidates, refineCandidates, type Candidate, type RefineOptions, type Region } from './duplication-pairs.js';
 export { fingerprints, fingerprintSource, forEachToken, FP_STRIDE, type DuplicationArtifact, type Fingerprint } from './duplication-tokens.js';
@@ -71,7 +72,7 @@ export async function findClones(
   return groupClones(pairs, config);
 }
 
-export function cloneFinding(regions: Region[], tool: string = TOOL): Finding {
+export function cloneFinding(regions: Region[], tool: string = TOOL, tr: Translate = SPANISH): Finding {
   const first = regions[0] as Region;
   const lines = Math.min(...regions.map((r) => r.endLine - r.startLine + 1));
   const copies = regions.length;
@@ -84,19 +85,28 @@ export function cloneFinding(regions: Region[], tool: string = TOOL): Finding {
     category: 'duplication',
     severity,
     confidence: 'high',
-    title: `Código duplicado en ${copies} lugares (~${lines} líneas)`,
-    message: `Se encontró un bloque de unos ${first.tokens} tokens repetido de forma idéntica en ${copies} ubicaciones.`,
+    title: tr(`Código duplicado en ${copies} lugares (~${lines} líneas)`, `Duplicated code in ${copies} places (~${lines} lines)`),
+    message: tr(
+      `Se encontró un bloque de unos ${first.tokens} tokens repetido de forma idéntica en ${copies} ubicaciones.`,
+      `A block of about ${first.tokens} tokens was found repeated identically in ${copies} locations.`,
+    ),
     locations,
     evidence: [
       {
         kind: 'clone',
         tool,
-        description: `Coincidencia exacta de tokens (sin espacios ni comentarios), verificada token a token. Huellas: k=${K}, ventana=${W}.`,
+        description: tr(
+          `Coincidencia exacta de tokens (sin espacios ni comentarios), verificada token a token. Huellas: k=${K}, ventana=${W}.`,
+          `Exact token match (ignoring whitespace and comments), verified token by token. Fingerprints: k=${K}, window=${W}.`,
+        ),
         metric: { name: 'duplicatedTokens', value: first.tokens, threshold: 0, unit: 'tokens' },
       },
     ],
-    impact: 'Cada corrección o cambio debe replicarse en todas las copias; es fácil que diverjan y aparezcan defectos inconsistentes.',
-    effort: { minutes, rationale: '20 min base + 0,5 min por línea duplicada por cada copia adicional (máx. 8 h).' },
+    impact: tr(
+      'Cada corrección o cambio debe replicarse en todas las copias; es fácil que diverjan y aparezcan defectos inconsistentes.',
+      'Every fix or change has to be repeated in all copies; they easily drift apart and cause inconsistent defects.',
+    ),
+    effort: { minutes, rationale: tr('20 min base + 0,5 min por línea duplicada por cada copia adicional (máx. 8 h).', '20 min base + 0.5 min per duplicated line for each extra copy (max. 8 h).') },
   };
 }
 
@@ -110,7 +120,7 @@ export const pythonDuplicationAnalyzer: FileAnalyzer<DuplicationArtifact> = {
     return { findings: [], artifact: { ...fingerprintSource(input.text, input.meta.relPath), hash: input.contentHash } };
   },
   async finalize(artifacts, config, ctx) {
-    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map((r) => cloneFinding(r, `${PY_ID}@${PY_VERSION}`));
+    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map((r) => cloneFinding(r, `${PY_ID}@${PY_VERSION}`, translator(config.locale)));
   },
 };
 
@@ -126,6 +136,7 @@ export const duplicationAnalyzer: FileAnalyzer<DuplicationArtifact> = {
     return { findings: [], artifact: { ...fingerprintSource(input.text, input.meta.relPath), hash: input.contentHash } };
   },
   async finalize(artifacts, config, ctx) {
-    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map((r) => cloneFinding(r));
+    const tr = translator(config.locale);
+    return (await findClones(artifacts, config, ctx.readText, ctx.store)).map((r) => cloneFinding(r, TOOL, tr));
   },
 };

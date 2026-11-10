@@ -1,4 +1,5 @@
-import { PHASE_LABELS, type JobPhase } from '../../shared/jobs.js';
+import type { JobPhase } from '../../shared/jobs.js';
+import { phaseLabel } from './labels.js';
 import type { ProjectKind } from '../../shared/model.js';
 
 export type StepState = 'done' | 'current' | 'pending';
@@ -22,6 +23,6 @@ export function scanSteps(kind: ProjectKind, phase: JobPhase): ScanStep[] {
     if (p === 'clone' && kind !== 'github') return [];
     if (p === 'ai' && phase !== 'ai') return [];
     const state: StepState = i < current ? 'done' : i === current ? 'current' : 'pending';
-    return [{ phase: p, label: PHASE_LABELS[p], state }];
+    return [{ phase: p, label: phaseLabel(p), state }];
   });
 }

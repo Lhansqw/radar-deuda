@@ -5,6 +5,7 @@ import type { CloudConfigResult } from './cloud-config.js';
 import type { Database } from './cloud-schema.js';
 import type { IncludedAccess } from './jobs.js';
 import type { EncryptedSessionStorage } from './session-storage.js';
+import { tr } from './i18n.js';
 
 /** Clave con la que Supabase Auth guarda la sesión en EncryptedSessionStorage. */
 export const SESSION_KEY = 'radar-deuda-sesion';
@@ -118,7 +119,7 @@ export class AccountService {
 
   /** Crea la cuenta. Si el proyecto pide confirmar el correo, Supabase envía un enlace. */
   async signUp(email: string, password: string): Promise<SignUpResult> {
-    check(emailProblem(email) ?? newPasswordProblem(password));
+    check(emailProblem(email, tr) ?? newPasswordProblem(password, tr));
     const auth = await this.auth();
     this.d.storage.setPersist(true);
     const { data, error } = await auth.signUp({ email: normalizeEmail(email), password });
@@ -152,22 +153,22 @@ export class AccountService {
    * pasa a 'password-reset' para elegir otra sin pedir un código nuevo.
    */
   async resetPassword(email: string, code: string, password: string): Promise<AccountState> {
-    check(newPasswordProblem(password));
+    check(newPasswordProblem(password, tr));
     const auth = await this.auth();
     // La sesión de recuperación no se guarda en el disco hasta tener la contraseña nueva.
     this.d.storage.setPersist(false);
     const { data, error } = await auth.verifyOtp({ email: normalizeEmail(email), token: code.trim(), type: 'recovery' });
-    if (error || !data.session) throw accountError(error ?? new AccountError('Supabase no devolvió ninguna sesión.'));
+    if (error || !data.session) throw accountError(error ?? new AccountError(tr('Supabase no devolvió ninguna sesión.', 'Supabase did not return a session.')));
     this.set({ state: { status: 'password-reset', email: normalizeEmail(email) }, user: null });
     return this.setNewPassword(password);
   }
 
   /** Contraseña nueva tras un código de recuperación válido. */
   async setNewPassword(password: string): Promise<AccountState> {
-    check(newPasswordProblem(password));
+    check(newPasswordProblem(password, tr));
     const auth = await this.auth();
     const state = this.current.state;
-    if (state.status !== 'password-reset') throw new AccountError('Primero escribe el código de recuperación que llegó a tu correo.');
+    if (state.status !== 'password-reset') throw new AccountError(tr('Primero escribe el código de recuperación que llegó a tu correo.', 'First enter the recovery code sent to your email.'));
     const { data, error } = await auth.updateUser({ password });
     if (error) throw accountError(error);
     this.d.storage.setPersist(true);
@@ -244,12 +245,12 @@ export class AccountService {
 
   private async auth(): Promise<SupabaseClient<Database>['auth']> {
     await this.ready;
-    if (!this.client) throw new AccountError(this.current.state.status === 'unconfigured' ? this.current.state.message : 'Falta la conexión con Supabase.');
+    if (!this.client) throw new AccountError(this.current.state.status === 'unconfigured' ? this.current.state.message : tr('Falta la conexión con Supabase.', 'The Supabase connection is missing.'));
     return this.client.auth;
   }
 
   private signedIn(user: User | null, fallbackEmail: string, offline: boolean): void {
-    if (!user || !USER_ID.test(user.id)) throw new AccountError('Supabase devolvió un usuario no válido.');
+    if (!user || !USER_ID.test(user.id)) throw new AccountError(tr('Supabase devolvió un usuario no válido.', 'Supabase returned an invalid user.'));
     const email = user.email ?? (normalizeEmail(fallbackEmail) || (this.current.user?.email ?? ''));
     this.set({ state: { status: 'signed-in', email, offline }, user: { id: user.id, email } });
   }

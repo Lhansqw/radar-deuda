@@ -10,12 +10,16 @@ import { buildDiagnostics, ErrorLog, interfaceReporter } from './error-log.js';
 import type { AppDeps } from './handlers.js';
 import { openExternal } from './security.js';
 import { checkForUpdate } from './updates.js';
+import { currentLocale, languageSetting, setLanguage, tr } from './i18n.js';
 
 /**
  * Lo que la aplicación usa del sistema y no depende del usuario: diálogos,
  * portapapeles, caché, actualizaciones, tema, diagnóstico y registro de
  * errores. main.ts solo lo conecta.
  */
+
+/** Nombre en inglés de cada parte de la caché (en español lo da @radar/pipeline). */
+const CACHE_PART_EN = { motor: 'Per-file analysis', ia: 'AI answers', historial: 'Git history', dependencias: 'Vulnerabilities and versions' } as const;
 
 const versions = () => ({ app: app.getVersion(), electron: process.versions.electron, chrome: process.versions.chrome, node: process.versions.node });
 
@@ -81,9 +85,17 @@ export function systemDeps(ctx: SystemContext): AppDeps {
     return win ? dialog.showSaveDialog(win, options) : dialog.showSaveDialog(options);
   };
   return {
-    info: () => ({ versions: versions(), dataDir: ctx.userDir() ?? ctx.dataDir, cacheDir: defaultCacheDir(), reposDir: defaultReposDir() }),
+    info: () => ({
+      versions: versions(),
+      dataDir: ctx.userDir() ?? ctx.dataDir,
+      cacheDir: defaultCacheDir(),
+      reposDir: defaultReposDir(),
+      language: languageSetting(),
+      locale: currentLocale(),
+    }),
+    setLanguage,
     chooseFolder: async () => {
-      const r = await openDialog({ title: 'Elige la carpeta del proyecto', properties: ['openDirectory'] });
+      const r = await openDialog({ title: tr('Elige la carpeta del proyecto', 'Choose the project folder'), properties: ['openDirectory'] });
       return r.canceled ? null : (r.filePaths[0] ?? null);
     },
     openExternal,
@@ -92,7 +104,7 @@ export function systemDeps(ctx: SystemContext): AppDeps {
     copyText: (text) => clipboard.writeText(text),
     storage: async () => {
       const [cache, clones] = await Promise.all([cacheUsage(defaultCacheDir()), folderSize(defaultReposDir())]);
-      return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ label, files, bytes }) => ({ label, files, bytes })) }, clones };
+      return { cache: { files: cache.files, bytes: cache.bytes, parts: cache.parts.map(({ name, label, files, bytes }) => ({ label: tr(label, CACHE_PART_EN[name]), files, bytes })) }, clones };
     },
     clearCache: () => clearCache(defaultCacheDir()),
     checkUpdate: () => checkForUpdate(app.getVersion()),
@@ -117,7 +129,7 @@ export function systemDeps(ctx: SystemContext): AppDeps {
     },
     // La interfaz no envía el contenido: el proceso principal guarda el parche que generó él mismo.
     savePatch: async (name, content) => {
-      const r = await saveDialog({ title: 'Guardar el parche', defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: 'Parche', extensions: ['patch', 'diff'] }] });
+      const r = await saveDialog({ title: tr('Guardar el parche', 'Save the patch'), defaultPath: path.join(app.getPath('downloads'), name), filters: [{ name: tr('Parche', 'Patch'), extensions: ['patch', 'diff'] }] });
       if (r.canceled || !r.filePath) return null;
       await writeFile(r.filePath, content, 'utf8');
       return r.filePath;
