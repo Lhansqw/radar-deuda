@@ -1,5 +1,6 @@
 import { CHANNELS, PUBLIC_CHANNELS, type AccountChannel, type Channel } from '../shared/ipc.js';
 import type { AccountService } from './account-service.js';
+import type { ThemeSetting } from '../shared/settings.js';
 import type { HandlerDeps, Handlers, WorkspaceHandlers } from './handlers.js';
 
 /** Lo que los canales de la cuenta necesitan del servicio (se sustituye en las pruebas). */
@@ -34,12 +35,18 @@ export function signedInHandlers(workspace: WorkspaceHandlers, account: Pick<Han
 }
 
 /**
- * Manejadores sin sesión: la cuenta, la versión de la aplicación y abrir
+ * Manejadores sin sesión: la cuenta, la versión de la aplicación, el tema y abrir
  * enlaces. Cualquier otro canal responde «Inicia sesión para continuar»; no
  * hay base de datos abierta a la que llegar.
  */
-export function signedOutHandlers(account: Pick<Handlers, AccountChannel>, app: Pick<HandlerDeps, 'info' | 'openExternal'>): Handlers {
-  const open: Partial<Record<Channel, unknown>> = { ...account, 'app:info': () => app.info(), 'app:openExternal': (url: string) => app.openExternal(url) };
+export function signedOutHandlers(account: Pick<Handlers, AccountChannel>, app: Pick<HandlerDeps, 'info' | 'openExternal' | 'theme' | 'setTheme'>): Handlers {
+  const open: Partial<Record<Channel, unknown>> = {
+    ...account,
+    'app:info': () => app.info(),
+    'app:openExternal': (url: string) => app.openExternal(url),
+    'app:theme': () => app.theme(),
+    'app:setTheme': (theme: ThemeSetting) => app.setTheme(theme),
+  };
   const locked = () => {
     throw new SignedOutError();
   };

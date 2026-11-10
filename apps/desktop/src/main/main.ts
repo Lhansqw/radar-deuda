@@ -10,6 +10,7 @@ import { errorMessage } from '../shared/errors.js';
 import { ACCOUNT_EVENT_CHANNEL, JOB_EVENT_CHANNEL, SYNC_EVENT_CHANNEL } from '../shared/ipc.js';
 import { APP_ENTRY } from '../shared/origin.js';
 import { createAccountHandlers } from './account-handlers.js';
+import { APPEARANCE_FILE, readTheme, windowBackground, writeTheme } from './appearance.js';
 import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
@@ -91,7 +92,7 @@ function createWindow(): BrowserWindow {
     minHeight: 640,
     show: false,
     title: 'Radar de Deuda Técnica',
-    backgroundColor: '#131b26',
+    backgroundColor: windowBackground(nativeTheme.shouldUseDarkColors),
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(distDir, 'preload.cjs'),
@@ -114,8 +115,13 @@ function createWindow(): BrowserWindow {
 }
 
 function start(): void {
-  // La interfaz es oscura: la barra de título y los controles nativos también.
-  nativeTheme.themeSource = 'dark';
+  // El tema elegido (oscuro por defecto) rige la interfaz (prefers-color-scheme), la barra de título y los
+  // controles nativos. Se aplica antes de crear la ventana para que no destelle el tema por defecto.
+  const appearanceFile = path.join(app.getPath('userData'), APPEARANCE_FILE);
+  nativeTheme.themeSource = readTheme(appearanceFile);
+  nativeTheme.on('updated', () => {
+    for (const w of BrowserWindow.getAllWindows()) w.setBackgroundColor(windowBackground(nativeTheme.shouldUseDarkColors));
+  });
   const template = menuTemplate(process.platform, app.isPackaged);
   if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   hardenApp(devServerUrl);
@@ -156,6 +162,12 @@ function start(): void {
     },
     clearCache: () => clearCache(defaultCacheDir()),
     checkUpdate: () => checkForUpdate(app.getVersion()),
+    theme: () => nativeTheme.themeSource,
+    setTheme: (theme) => {
+      writeTheme(appearanceFile, theme);
+      nativeTheme.themeSource = theme;
+      return theme;
+    },
     removeClone: async (repo) => {
       const ref = parseGitHubRepo(repo);
       if (ref) await removeClone(ref, defaultReposDir());
