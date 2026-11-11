@@ -162,7 +162,14 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
             })}
           </pre>
         </>
-      ) : current ? null : <p className="code-loading">{tr('Cargando…', 'Loading…')}</p>}
+      ) : current ? null : (
+        <div className="code-loading" role="status">
+          <span className="visually-hidden">{tr('Cargando…', 'Loading…')}</span>
+          <span className="skeleton" style={{ width: '62%' }} />
+          <span className="skeleton" style={{ width: '84%' }} />
+          <span className="skeleton" style={{ width: '48%' }} />
+        </div>
+      )}
     </figure>
   );
 }

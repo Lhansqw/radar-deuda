@@ -94,7 +94,7 @@ export function TrendChart({ analyses, selectedId, onSelect }: { analyses: Analy
           </linearGradient>
         </defs>
         {area ? <path d={area} fill={`url(#${fillId})`} className="trend-area" /> : null}
-        <path d={path} className="trend-line" />
+        <path d={path} pathLength={1} className="trend-line" />
         {a && active !== null ? <line x1={x(active)} x2={x(active)} y1={PAD.top} y2={y(0)} className="crosshair" /> : null}
         {points.map((p, i) => (
           <circle key={p.id} cx={x(i)} cy={y(p.score)} r={p.id === selectedId || i === active ? 5.5 : 4} className="trend-dot" data-selected={p.id === selectedId || undefined} />

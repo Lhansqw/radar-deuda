@@ -145,5 +145,10 @@ function AnalysisView({
       />
     ),
   };
-  return <>{views[view]()}</>;
+  // La clave reinicia la animación de entrada en cada cambio de sección.
+  return (
+    <div className="view-enter" key={view}>
+      {views[view]()}
+    </div>
+  );
 }

@@ -77,6 +77,13 @@
   --r: var(--r-s);
   --sidebar: 15.75rem;
   --hueco: 12px;
+
+  /* Movimiento: corto y sobrio; el radar es el único que se toma su tiempo. */
+  --dur-rapida: 120ms;
+  --dur: 200ms;
+  --dur-lenta: 320ms;
+  --curva-salida: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --curva-entrada: cubic-bezier(0.4, 0, 1, 1);
 }
 
 /*
@@ -645,7 +652,7 @@ textarea.input {
   inset: 0 auto 0 0;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--malva), var(--malva-brillo));
-  transition: width 0.2s ease-out;
+  transition: width var(--dur) var(--curva-salida);
 }
 
 .progress[data-indeterminate='true'] > span {
@@ -1300,7 +1307,9 @@ textarea.input {
 .code-error,
 .code-warn,
 .code-loading {
-  padding: 0.75rem 0.875rem;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.875rem;
   color: var(--tinta-2);
   font-size: var(--t-s);
 }
@@ -1415,9 +1424,10 @@ textarea.input {
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
 }
 
-.score-figure span {
+.score-figure .score-of {
   margin-left: 0.25rem;
   color: var(--apagado);
   font-size: var(--t-xl);
@@ -3170,4 +3180,194 @@ textarea.input {
   display: flex;
   gap: 0.375rem;
   justify-self: end;
+}
+
+/* ── Movimiento ─────────────────────────────────────────────────────────
+ * Solo se animan opacidad y transform (y colores al pasar el ratón). Las
+ * entradas usan relleno «backwards»: al terminar no dejan transform puesto,
+ * así no crean un bloque contenedor para los diálogos con position: fixed.
+ * Con movimiento reducido, la regla global del principio lo anula todo.
+ */
+
+/* Microinteracciones */
+.btn,
+.chip,
+.nav-item,
+.project-item,
+.priority,
+.finding-row,
+.input,
+.select {
+  transition:
+    background-color var(--dur-rapida) ease-out,
+    border-color var(--dur-rapida) ease-out,
+    color var(--dur-rapida) ease-out,
+    box-shadow var(--dur) ease-out,
+    transform var(--dur-rapida) ease-out;
+}
+
+.btn:active:not(:disabled),
+.chip:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.input:focus,
+.select:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--enlace) 18%, transparent);
+}
+
+/* Diálogos, avisos y tooltips */
+.backdrop {
+  animation: fundido var(--dur) ease-out backwards;
+}
+
+.dialog {
+  animation: dialogo-entra var(--dur-lenta) var(--curva-salida) backwards;
+}
+
+.notice,
+.job {
+  animation: aviso-entra var(--dur-lenta) var(--curva-salida) backwards;
+}
+
+.tooltip {
+  animation: fundido var(--dur-rapida) ease-out backwards;
+}
+
+/* Cambio de sección */
+.view-enter {
+  height: 100%;
+  animation: vista-entra var(--dur) var(--curva-salida) backwards;
+}
+
+/* Listas del panel y mensajes del chat: llegan escalonados. */
+.stagger {
+  animation: fila-entra var(--dur-lenta) var(--curva-salida) backwards;
+  animation-delay: calc(min(var(--i, 0), 8) * 35ms + 120ms);
+}
+
+.msg {
+  animation: fila-entra var(--dur-lenta) var(--curva-salida) backwards;
+}
+
+/* Datos que llegan en vez de saltar */
+.sevbar-track {
+  animation: revela 700ms var(--curva-salida) 150ms backwards;
+}
+
+.sevbar-track > span {
+  transition: flex-grow var(--dur-lenta) var(--curva-salida);
+}
+
+.metric-bar > span,
+.hotspot-bar > span {
+  transform-origin: left;
+  animation: crece 600ms var(--curva-salida) 200ms backwards;
+}
+
+.rating-scale-track > i {
+  transition: left var(--dur-lenta) var(--curva-salida);
+  animation: fundido var(--dur-lenta) ease-out 400ms backwards;
+}
+
+.trend-line {
+  stroke-dasharray: 1;
+  animation: traza 900ms var(--curva-salida) 150ms backwards;
+}
+
+.trend-dot {
+  animation: fundido var(--dur-lenta) ease-out 700ms backwards;
+}
+
+/* Esqueletos de carga */
+.skeleton {
+  display: block;
+  height: 0.75rem;
+  border-radius: var(--r-pill);
+  background: linear-gradient(
+    90deg,
+    var(--linea) 0%,
+    color-mix(in srgb, var(--malva) 22%, var(--linea)) 50%,
+    var(--linea) 100%
+  );
+  background-size: 200% 100%;
+  animation: brillo 1.4s ease-in-out infinite;
+}
+
+.skeleton-list {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
+}
+
+.skeleton-list .skeleton {
+  height: 2.25rem;
+  border-radius: var(--r-s);
+}
+
+@keyframes fundido {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogo-entra {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@keyframes aviso-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes vista-entra {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes fila-entra {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes revela {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes crece {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes traza {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes brillo {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
 }

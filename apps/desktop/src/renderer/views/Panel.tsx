@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import type { AnalysisReport, Finding, ReportComparison } from '@radar/engine';
 import type { AnalysisSummary } from '../../shared/model.js';
 import { FindingLine } from '../components/FindingLine.js';
@@ -8,6 +8,7 @@ import { TrendChart } from '../components/TrendChart.js';
 import { sortFindings } from '../lib/findings.js';
 import { formatDateTime, formatEffort, formatNumber, formatPercent, formatRelative } from '../lib/format.js';
 import { RATING_HINT } from '../lib/labels.js';
+import { useCountUp } from '../lib/useCountUp.js';
 import { tr } from '../i18n.js';
 
 interface Props {
@@ -27,6 +28,7 @@ const horizon = (h: 'inmediato' | 'corto' | 'medio'): string => (h === 'inmediat
 
 export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest, comparison, onShowNew, onOpenHistory }: Props) {
   const s = report.score;
+  const shownScore = useCountUp(s.score);
   const latest = analyses[0]?.id === analysisId;
 
   return (
@@ -49,8 +51,11 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
         <div className="panel-summary">
           <div className="score">
             <p className="score-figure">
-              {s.score}
-              <span>/100</span>
+              <span className="visually-hidden">{s.score}/100</span>
+              <span aria-hidden="true">
+                {shownScore}
+                <span className="score-of">/100</span>
+              </span>
             </p>
             <p className="score-rating">
               {tr('Calificación', 'Rating')} <strong>{s.rating}</strong>. {RATING_HINT[s.rating]}.
@@ -119,8 +124,8 @@ function WhereToStart({ report, onOpenFinding }: { report: AnalysisReport; onOpe
       <h2>{plan ? tr('Plan de reducción propuesto por la IA', 'Reduction plan proposed by the AI') : tr('Por dónde empezar', 'Where to start')}</h2>
       {plan ? (
         <ol className="plan">
-          {plan.steps.map((step) => (
-            <li key={step.order}>
+          {plan.steps.map((step, i) => (
+            <li key={step.order} className="stagger" style={{ '--i': i } as CSSProperties}>
               <p>
                 <span className="horizon">{horizon(step.horizon)}</span> <strong>{step.title}</strong>
               </p>
@@ -141,8 +146,8 @@ function WhereToStart({ report, onOpenFinding }: { report: AnalysisReport; onOpe
         </ol>
       ) : priorities.length > 0 ? (
         <ul className="priorities">
-          {priorities.map((f) => (
-            <li key={f.id}>
+          {priorities.map((f, i) => (
+            <li key={f.id} className="stagger" style={{ '--i': i } as CSSProperties}>
               <PriorityRow finding={f} onOpen={onOpenFinding} />
             </li>
           ))}
@@ -164,8 +169,8 @@ function Hotspots({ report, onOpenFiles }: { report: AnalysisReport; onOpenFiles
         <>
           <p className="muted small">{tr('Archivos que cambian a menudo y además acumulan deuda: donde reducirla rinde más.', 'Files that change often and also pile up debt: where reducing it pays off most.')}</p>
           <ul className="hotspots">
-            {hotspots.map((h) => (
-              <li key={h.file}>
+            {hotspots.map((h, i) => (
+              <li key={h.file} className="stagger" style={{ '--i': i } as CSSProperties}>
                 <span className="mono">{h.file}</span>
                 <span className="hotspot-bar" aria-hidden="true">
                   <span style={{ width: `${h.score}%` }} />
