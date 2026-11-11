@@ -123,6 +123,21 @@ describe('Hallazgos', () => {
     expect(onSelect).toHaveBeenLastCalledWith('b');
   });
 
+  // Orden por severidad: b (alta), a, c.
+  it('se recorre también con j/k, Inicio y Fin', async () => {
+    const onSelect = vi.fn();
+    const user = setup({ onSelect });
+    screen.getByRole('listbox', { name: 'Hallazgos' }).focus();
+    await user.keyboard('{End}');
+    expect(onSelect).toHaveBeenLastCalledWith('c');
+    await user.keyboard('k');
+    expect(onSelect).toHaveBeenLastCalledWith('a');
+    await user.keyboard('{Home}');
+    expect(onSelect).toHaveBeenLastCalledWith('b');
+    await user.keyboard('j');
+    expect(onSelect).toHaveBeenLastCalledWith('a');
+  });
+
   it('«Solo nuevos» deja la deuda que no estaba en el análisis anterior', async () => {
     const user = setup({ newIds: new Set(['c']) });
     await user.click(screen.getByRole('button', { name: /Solo nuevos/ }));

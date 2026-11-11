@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { findingRefs } from '@radar/engine/refs';
-import type { AiExplanation, AnalysisReport, Evidence, Finding, Location } from '@radar/engine';
+import type { AiExplanation, AnalysisReport, Evidence, Finding, Location, Severity } from '@radar/engine';
 import { errorMessage } from '../../shared/errors.js';
 import type { CodeSnippet } from '../../shared/model.js';
 import { Icon } from '../components/Icon.js';
@@ -48,7 +48,7 @@ export function FindingDetail({ finding, report, analysisId, onExplain, onOpenSe
       </header>
 
       {codeLocations.slice(0, 3).map((loc, i) => (
-        <CodeBlock key={`${loc.file}:${loc.startLine}:${i}`} location={loc} analysisId={analysisId} />
+        <CodeBlock key={`${loc.file}:${loc.startLine}:${i}`} location={loc} analysisId={analysisId} severity={finding.severity} note={i === 0 ? codeNote(finding) : null} />
       ))}
       {codeLocations.length > 3 ? (
         <p className="muted">{tr(`Y ${codeLocations.length - 3} ubicaciones más con el mismo problema.`, `And ${codeLocations.length - 3} more locations with the same problem.`)}</p>
@@ -112,7 +112,18 @@ function EvidenceItem({ evidence: e }: { evidence: Evidence }) {
   );
 }
 
-function CodeBlock({ location, analysisId }: { location: Location; analysisId: number }) {
+/**
+ * Nota que acompaña al código de la ubicación principal: las métricas que
+ * superan su umbral o, sin ellas, el título. Es del bloque entero: el análisis
+ * no dice qué línea concreta causa el problema.
+ */
+function codeNote(f: Finding): string {
+  const over = f.evidence.flatMap((e) => (e.metric && e.metric.threshold > 0 && e.metric.value > e.metric.threshold ? [e.metric] : []));
+  if (over.length === 0) return f.title;
+  return over.map((m) => `${m.name} ${m.value}${m.unit ? ` ${m.unit}` : ''} (${tr('umbral', 'threshold')} ${m.threshold})`).join('; ');
+}
+
+function CodeBlock({ location, analysisId, severity, note }: { location: Location; analysisId: number; severity: Severity; note: string | null }) {
   const [state, setState] = useState<{ key: string; snippet: CodeSnippet | null; error: string | null } | null>(null);
   const key = `${analysisId}:${location.file}:${location.startLine}:${location.endLine}`;
   useEffect(() => {
@@ -129,7 +140,7 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
   const current = state?.key === key ? state : null;
   const snippet = current?.snippet ?? null;
   return (
-    <figure className="code">
+    <figure className="code" style={{ '--sev': `var(--sev-${severity})` } as CSSProperties}>
       <figcaption>
         <span className="mono">
           {location.file}:{location.startLine}
@@ -148,16 +159,28 @@ function CodeBlock({ location, analysisId }: { location: Location; analysisId: n
           ) : null}
           <pre>
             {snippet.lines.map((text, i) => {
+              // La nota va encima de la primera línea del problema que se ve.
+              const firstHit = Math.max(location.startLine, snippet.startLine);
               const n = snippet.startLine + i;
               const hit = n >= location.startLine && n <= location.endLine;
               const hidden = snippet.redactedLines.includes(n);
               return (
-                <span key={n} className="code-line" data-hit={hit || undefined} data-hidden={hidden || undefined}>
-                  <span className="ln">{n}</span>
-                  {text === '' ? ' ' : text}
-                  {hidden ? <span className="code-note">{tr('valor oculto', 'hidden value')}</span> : null}
-                  {'\n'}
-                </span>
+                <Fragment key={n}>
+                  {note && n === firstHit ? (
+                    <span className="code-annot">
+                      <span className="ln" aria-hidden="true" />
+                      <Icon name="alert" size={12} />
+                      {note}
+                      {'\n'}
+                    </span>
+                  ) : null}
+                  <span className="code-line" data-hit={hit || undefined} data-hidden={hidden || undefined}>
+                    <span className="ln">{n}</span>
+                    {text === '' ? ' ' : text}
+                    {hidden ? <span className="code-note">{tr('valor oculto', 'hidden value')}</span> : null}
+                    {'\n'}
+                  </span>
+                </Fragment>
               );
             })}
           </pre>

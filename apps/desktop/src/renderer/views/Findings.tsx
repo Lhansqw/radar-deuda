@@ -9,7 +9,7 @@ import { visibleRange } from '../lib/virtual.js';
 import { FindingDetail } from './FindingDetail.js';
 import { tr } from '../i18n.js';
 
-const ROW = 58;
+const ROW = 68;
 
 interface Props {
   report: AnalysisReport;
@@ -129,10 +129,22 @@ function FindingList({
   }, [index]);
 
   const range = visibleRange(scroll, height, ROW, findings.length);
+  // Flechas o j/k para moverse, Inicio/Fin para saltar a los extremos.
   const onKey = (e: KeyboardEvent): void => {
-    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const target =
+      e.key === 'ArrowDown' || e.key === 'j'
+        ? index + 1
+        : e.key === 'ArrowUp' || e.key === 'k'
+          ? index - 1
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? findings.length - 1
+              : null;
+    if (target === null) return;
     e.preventDefault();
-    const next = findings[Math.min(findings.length - 1, Math.max(0, index + (e.key === 'ArrowDown' ? 1 : -1)))];
+    const next = findings[Math.min(findings.length - 1, Math.max(0, target))];
     if (next) onSelect(next.id);
   };
 
@@ -160,7 +172,7 @@ function FindingList({
               return (
                 <div key={f.id} id={`h-${f.id}`} role="option" aria-selected={f.id === selectedId} className="finding-row" style={{ height: ROW }} onClick={() => onSelect(f.id)}>
                   <SeverityGlyph severity={f.severity} />
-                  <span className="row-title">
+                  <span className="row-title" title={f.title}>
                     {newIds?.has(f.id) ? <span className="tag-new">{tr('Nuevo', 'New')}</span> : null}
                     {f.title}
                   </span>

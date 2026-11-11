@@ -91,6 +91,10 @@ function AnalysisView({
           openFinding(comparison?.added[0]?.id ?? null);
         }}
         onOpenHistory={() => onView('historial')}
+        onOpenSeverity={(severity) => {
+          memory.setFilter(id, () => ({ ...EMPTY_FILTER, severities: new Set([severity]) }));
+          openFinding(null);
+        }}
         onShowLatest={() => memory.chooseAnalysis(id, null)}
       />
     ),
@@ -145,10 +149,5 @@ function AnalysisView({
       />
     ),
   };
-  // La clave reinicia la animación de entrada en cada cambio de sección.
-  return (
-    <div className="view-enter" key={view}>
-      {views[view]()}
-    </div>
-  );
+  return <>{views[view]()}</>;
 }
