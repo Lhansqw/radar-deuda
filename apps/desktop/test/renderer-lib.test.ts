@@ -11,7 +11,6 @@ import { DEFAULT_SETTINGS } from '../src/shared/settings.js';
 import { layoutRadar, RADAR_RINGS } from '../src/renderer/lib/radar.js';
 import { buildTree, flattenTree } from '../src/renderer/lib/tree.js';
 import { visibleRange } from '../src/renderer/lib/virtual.js';
-import { squarify } from '../src/renderer/lib/treemap.js';
 import { scanSteps } from '../src/renderer/lib/scan.js';
 import { runAction } from '../src/renderer/lib/action.js';
 
@@ -283,37 +282,5 @@ describe('runAction', () => {
     const r = record();
     await runAction(() => Promise.reject(new Error('sin red')), r.setBusy, r.setError);
     expect(r.log).toEqual(['busy:true', 'error:null', 'error:sin red', 'busy:false']);
-  });
-});
-
-describe('mapa de rectángulos', () => {
-  const values = [60, 25, 10, 4, 1];
-  const cells = squarify(values, (v) => v, 400, 300);
-
-  it('reparte el área en proporción al valor', () => {
-    const total = 400 * 300;
-    for (const c of cells) expect(c.w * c.h).toBeCloseTo((c.item / 100) * total, 6);
-  });
-
-  it('no se sale del área ni solapa celdas', () => {
-    for (const c of cells) {
-      expect(c.x).toBeGreaterThanOrEqual(-1e-9);
-      expect(c.y).toBeGreaterThanOrEqual(-1e-9);
-      expect(c.x + c.w).toBeLessThanOrEqual(400 + 1e-9);
-      expect(c.y + c.h).toBeLessThanOrEqual(300 + 1e-9);
-    }
-    for (const a of cells)
-      for (const b of cells) {
-        if (a === b) continue;
-        const overlapW = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-        const overlapH = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-        expect(overlapW <= 1e-9 || overlapH <= 1e-9).toBe(true);
-      }
-  });
-
-  it('omite los valores nulos y no falla sin datos', () => {
-    expect(squarify([0, 5], (v) => v, 10, 10).map((c) => c.item)).toEqual([5]);
-    expect(squarify([], (v: number) => v, 10, 10)).toEqual([]);
-    expect(squarify([3], (v) => v, 0, 10)).toEqual([]);
   });
 });

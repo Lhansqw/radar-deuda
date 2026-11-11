@@ -368,7 +368,7 @@ async function main(): Promise<void> {
     log('detalle de un hallazgo con su código');
 
     await page.getByRole('button', { name: 'Archivos', exact: true }).click();
-    await page.locator('.debtmap-cell').first().waitFor();
+    await page.locator('.tree-row').first().waitFor();
     await shot(page, 'archivos');
 
     // Segundo análisis tras quitar el secreto: el historial lo muestra como resuelto.

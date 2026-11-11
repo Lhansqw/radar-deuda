@@ -208,7 +208,7 @@ function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<voi
     <section className="ai-ask" aria-label={tr('Explicación de la IA', 'AI explanation')}>
       <p>
         {busy
-          ? tr('Explicando… Con los modelos gratuitos puede tardar hasta un minuto.', 'Explaining… With free models it can take up to a minute.')
+          ? tr('Pensando…', 'Thinking…')
           : tr(
               'La IA puede explicar este hallazgo y proponer cómo corregirlo. Se usan el proveedor y la privacidad elegidos en Configuración.',
               'The AI can explain this finding and propose how to fix it. The provider and privacy chosen in Settings are used.',
@@ -221,7 +221,7 @@ function AiRequest({ onExplain, onOpenSettings }: { onExplain: () => Promise<voi
       ) : null}
       <div className="buttons">
         <button type="button" className="btn" onClick={() => void explain()} disabled={busy} aria-busy={busy || undefined}>
-          <Icon name="sparkle" size={16} /> {busy ? tr('Explicando…', 'Explaining…') : error ? tr('Reintentar', 'Retry') : tr('Explicar con IA', 'Explain with AI')}
+          <Icon name="sparkle" size={16} /> {busy ? tr('Pensando…', 'Thinking…') : error ? tr('Reintentar', 'Retry') : tr('Explicar con IA', 'Explain with AI')}
         </button>
         {error ? (
           <button type="button" className="btn btn-quiet" onClick={onOpenSettings}>

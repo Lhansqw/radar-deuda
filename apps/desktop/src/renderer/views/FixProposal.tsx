@@ -118,7 +118,7 @@ function FixRequest({ busy, error, onStart, onOpenSettings }: { busy: boolean; e
     <div className="ai-ask">
       <p>
         {busy
-          ? tr('Preparando la propuesta… Con los modelos gratuitos puede tardar hasta un minuto.', 'Preparing the proposal… With free models it can take up to a minute.')
+          ? tr('Pensando…', 'Thinking…')
           : tr(
               'La IA puede proponer el cambio como una diferencia que revisas antes de aplicarla tú. Necesita ver el fragmento de código del hallazgo.',
               'The AI can propose the change as a diff that you review before applying it yourself. It needs to see the code snippet of the finding.',
