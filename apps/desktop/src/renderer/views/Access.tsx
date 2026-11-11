@@ -3,6 +3,7 @@ import { codeProblem, emailProblem, newPasswordProblem, type AccountState } from
 import { AccessFrame } from '../components/AccessFrame.js';
 import { PasswordField } from '../components/PasswordField.js';
 import { useAction } from '../lib/action.js';
+import { tr } from '../i18n.js';
 
 /** Pasos del acceso. El correo se conserva al pasar de uno a otro. */
 type Step =
@@ -87,7 +88,7 @@ function Form({ ctx, title, intro, submit, onSubmit, links, children }: { ctx: C
 function EmailField({ ctx, autoFocus = true }: { ctx: Ctx; autoFocus?: boolean }) {
   return (
     <div className="field">
-      <label htmlFor="correo">Correo</label>
+      <label htmlFor="correo">{tr('Correo', 'Email')}</label>
       <input id="correo" className="input" type="email" value={ctx.email} onChange={(e) => ctx.setEmail(e.target.value)} autoComplete="email" spellCheck={false} autoFocus={autoFocus} required />
     </div>
   );
@@ -103,7 +104,7 @@ function SignInForm({ ctx }: { ctx: Ctx }) {
   const [remember, setRemember] = useState(true);
   const submit = () =>
     void ctx.run(async () => {
-      const problem = firstProblem(emailProblem(ctx.email), password === '' ? 'Escribe tu contraseña.' : null);
+      const problem = firstProblem(emailProblem(ctx.email, tr), password === '' ? tr('Escribe tu contraseña.', 'Enter your password.') : null);
       if (problem) throw new Error(problem);
       const r = await window.radar.account.signIn(ctx.email, password, remember);
       if (r.confirmEmail) ctx.go({ kind: 'confirm', sent: false, password, remember });
@@ -111,28 +112,28 @@ function SignInForm({ ctx }: { ctx: Ctx }) {
   return (
     <Form
       ctx={ctx}
-      title="Inicia sesión"
-      submit="Iniciar sesión"
+      title={tr('Inicia sesión', 'Sign in')}
+      submit={tr('Iniciar sesión', 'Sign in')}
       onSubmit={submit}
       links={
         <>
           <button type="button" className="link" onClick={() => ctx.go({ kind: 'forgot' })}>
-            ¿Olvidaste tu contraseña?
+            {tr('¿Olvidaste tu contraseña?', 'Forgot your password?')}
           </button>
           <span>
-            ¿No tienes cuenta?{' '}
+            {tr('¿No tienes cuenta?', 'No account?')}{' '}
             <button type="button" className="link" onClick={() => ctx.go({ kind: 'signUp' })}>
-              Crear una
+              {tr('Crear una', 'Create one')}
             </button>
           </span>
         </>
       }
     >
       <EmailField ctx={ctx} />
-      <PasswordField label="Contraseña" value={password} onChange={setPassword} autoComplete="current-password" />
+      <PasswordField label={tr('Contraseña', 'Password')} value={password} onChange={setPassword} autoComplete="current-password" />
       <label className="check">
         <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-        <span>Seguir conectado en este equipo</span>
+        <span>{tr('Seguir conectado en este equipo', 'Stay signed in on this computer')}</span>
       </label>
     </Form>
   );
@@ -143,7 +144,7 @@ function SignUpForm({ ctx }: { ctx: Ctx }) {
   const [repeat, setRepeat] = useState('');
   const submit = () =>
     void ctx.run(async () => {
-      const problem = firstProblem(emailProblem(ctx.email), newPasswordProblem(password), password !== repeat ? 'Las dos contraseñas no coinciden.' : null);
+      const problem = firstProblem(emailProblem(ctx.email, tr), newPasswordProblem(password, tr), password !== repeat ? tr('Las dos contraseñas no coinciden.', 'The two passwords do not match.') : null);
       if (problem) throw new Error(problem);
       const r = await window.radar.account.signUp(ctx.email, password);
       if (r.confirmEmail) ctx.go({ kind: 'confirm', sent: true, password, remember: true });
@@ -151,22 +152,25 @@ function SignUpForm({ ctx }: { ctx: Ctx }) {
   return (
     <Form
       ctx={ctx}
-      title="Crea tu cuenta"
-      intro="Con tu cuenta, tus proyectos, tu historial y tus claves de IA quedan separados de los de otras personas que usen este equipo."
-      submit="Crear cuenta"
+      title={tr('Crea tu cuenta', 'Create your account')}
+      intro={tr(
+        'Con tu cuenta, tus proyectos, tu historial y tus claves de IA quedan separados de los de otras personas que usen este equipo.',
+        'With your account, your projects, history and AI keys stay separate from those of other people using this computer.',
+      )}
+      submit={tr('Crear cuenta', 'Create account')}
       onSubmit={submit}
       links={
         <span>
-          ¿Ya tienes cuenta?{' '}
+          {tr('¿Ya tienes cuenta?', 'Already have an account?')}{' '}
           <button type="button" className="link" onClick={() => ctx.go({ kind: 'signIn' })}>
-            Inicia sesión
+            {tr('Inicia sesión', 'Sign in')}
           </button>
         </span>
       }
     >
       <EmailField ctx={ctx} />
-      <PasswordField label="Contraseña" value={password} onChange={setPassword} autoComplete="new-password" hint="Al menos 8 caracteres." />
-      <PasswordField label="Repite la contraseña" value={repeat} onChange={setRepeat} autoComplete="new-password" />
+      <PasswordField label={tr('Contraseña', 'Password')} value={password} onChange={setPassword} autoComplete="new-password" hint={tr('Al menos 8 caracteres.', 'At least 8 characters.')} />
+      <PasswordField label={tr('Repite la contraseña', 'Repeat the password')} value={repeat} onChange={setRepeat} autoComplete="new-password" />
     </Form>
   );
 }
@@ -177,31 +181,37 @@ function ConfirmForm({ ctx, step }: { ctx: Ctx; step: Extract<Step, { kind: 'con
   const submit = () =>
     void ctx.run(async () => {
       const r = await window.radar.account.signIn(ctx.email, step.password, step.remember);
-      if (r.confirmEmail) throw new Error('Tu correo aún no está confirmado. Pulsa el enlace del mensaje que te enviamos y vuelve a intentarlo.');
+      if (r.confirmEmail) throw new Error(tr('Tu correo aún no está confirmado. Pulsa el enlace del mensaje que te enviamos y vuelve a intentarlo.', 'Your email is not confirmed yet. Click the link in the message we sent you and try again.'));
     });
   return (
     <Form
       ctx={ctx}
-      title="Confirma tu correo"
+      title={tr('Confirma tu correo', 'Confirm your email')}
       intro={
         step.sent ? (
           <>
-            Te enviamos un enlace a <strong>{ctx.email.trim()}</strong>. Púlsalo y vuelve aquí para entrar. Si no llega en unos minutos, revisa el correo no deseado. Si ya
-            tenías una cuenta con ese correo, inicia sesión.
+            {tr('Te enviamos un enlace a', 'We sent a link to')} <strong>{ctx.email.trim()}</strong>.{' '}
+            {tr(
+              'Púlsalo y vuelve aquí para entrar. Si no llega en unos minutos, revisa el correo no deseado. Si ya tenías una cuenta con ese correo, inicia sesión.',
+              'Click it and come back here to sign in. If it does not arrive in a few minutes, check your spam folder. If you already had an account with that email, sign in.',
+            )}
           </>
         ) : (
           <>
-            La cuenta <strong>{ctx.email.trim()}</strong> aún no confirmó su correo. Pulsa el enlace del mensaje de confirmación y vuelve aquí para entrar. Si no lo
-            encuentras, pide otro.
+            {tr('La cuenta', 'The account')} <strong>{ctx.email.trim()}</strong>{' '}
+            {tr(
+              'aún no confirmó su correo. Pulsa el enlace del mensaje de confirmación y vuelve aquí para entrar. Si no lo encuentras, pide otro.',
+              'has not confirmed its email yet. Click the link in the confirmation message and come back here to sign in. If you cannot find it, request another one.',
+            )}
           </>
         )
       }
-      submit="Ya lo confirmé: entrar"
+      submit={tr('Ya lo confirmé: entrar', 'I confirmed it: sign in')}
       onSubmit={submit}
       links={
         <>
           <button type="button" className="link" disabled={ctx.busy || resend.wait > 0} onClick={() => void ctx.run(async () => resend.send(() => window.radar.account.resendConfirmation(ctx.email)))}>
-            {resend.label(step.sent ? 'Reenviar el correo' : 'Enviar otro correo')}
+            {resend.label(step.sent ? tr('Reenviar el correo', 'Resend the email') : tr('Enviar otro correo', 'Send another email'))}
           </button>
           <BackToSignIn ctx={ctx} />
         </>
@@ -213,7 +223,7 @@ function ConfirmForm({ ctx, step }: { ctx: Ctx; step: Extract<Step, { kind: 'con
 function ForgotForm({ ctx }: { ctx: Ctx }) {
   const submit = () =>
     void ctx.run(async () => {
-      const problem = emailProblem(ctx.email);
+      const problem = emailProblem(ctx.email, tr);
       if (problem) throw new Error(problem);
       await window.radar.account.requestPasswordReset(ctx.email);
       ctx.go({ kind: 'reset' });
@@ -221,9 +231,9 @@ function ForgotForm({ ctx }: { ctx: Ctx }) {
   return (
     <Form
       ctx={ctx}
-      title="Recupera tu contraseña"
-      intro="Escribe el correo de tu cuenta. Te enviaremos un código para elegir una contraseña nueva."
-      submit="Enviar el código"
+      title={tr('Recupera tu contraseña', 'Recover your password')}
+      intro={tr('Escribe el correo de tu cuenta. Te enviaremos un código para elegir una contraseña nueva.', 'Enter the email of your account. We will send you a code to choose a new password.')}
+      submit={tr('Enviar el código', 'Send the code')}
       onSubmit={submit}
       links={<BackToSignIn ctx={ctx} />}
     >
@@ -239,33 +249,34 @@ function ResetForm({ ctx }: { ctx: Ctx }) {
   const resend = useResend(true);
   const submit = () =>
     void ctx.run(async () => {
-      const problem = firstProblem(codeProblem(code), newPasswordProblem(password), password !== repeat ? 'Las dos contraseñas no coinciden.' : null);
+      const problem = firstProblem(codeProblem(code, tr), newPasswordProblem(password, tr), password !== repeat ? tr('Las dos contraseñas no coinciden.', 'The two passwords do not match.') : null);
       if (problem) throw new Error(problem);
       await window.radar.account.resetPassword(ctx.email, code, password);
     });
   return (
     <Form
       ctx={ctx}
-      title="Elige una contraseña nueva"
+      title={tr('Elige una contraseña nueva', 'Choose a new password')}
       intro={
         <>
-          Si <strong>{ctx.email.trim()}</strong> tiene una cuenta, le llegará un código. Escríbelo con tu contraseña nueva.
+          {tr('Si', 'If')} <strong>{ctx.email.trim()}</strong>{' '}
+          {tr('tiene una cuenta, le llegará un código. Escríbelo con tu contraseña nueva.', 'has an account, a code will arrive there. Enter it with your new password.')}
         </>
       }
-      submit="Guardar la contraseña"
+      submit={tr('Guardar la contraseña', 'Save the password')}
       onSubmit={submit}
       links={
         <>
           <button type="button" className="link" disabled={ctx.busy || resend.wait > 0} onClick={() => void ctx.run(async () => resend.send(() => window.radar.account.requestPasswordReset(ctx.email)))}>
-            {resend.label('Reenviar el código')}
+            {resend.label(tr('Reenviar el código', 'Resend the code'))}
           </button>
           <BackToSignIn ctx={ctx} />
         </>
       }
     >
       <CodeField value={code} onChange={setCode} />
-      <PasswordField label="Contraseña nueva" value={password} onChange={setPassword} autoComplete="new-password" hint="Al menos 8 caracteres." />
-      <PasswordField label="Repite la contraseña" value={repeat} onChange={setRepeat} autoComplete="new-password" />
+      <PasswordField label={tr('Contraseña nueva', 'New password')} value={password} onChange={setPassword} autoComplete="new-password" hint={tr('Al menos 8 caracteres.', 'At least 8 characters.')} />
+      <PasswordField label={tr('Repite la contraseña', 'Repeat the password')} value={repeat} onChange={setRepeat} autoComplete="new-password" />
     </Form>
   );
 }
@@ -276,29 +287,30 @@ function NewPasswordForm({ ctx, email }: { ctx: Ctx; email: string }) {
   const [repeat, setRepeat] = useState('');
   const submit = () =>
     void ctx.run(async () => {
-      const problem = firstProblem(newPasswordProblem(password), password !== repeat ? 'Las dos contraseñas no coinciden.' : null);
+      const problem = firstProblem(newPasswordProblem(password, tr), password !== repeat ? tr('Las dos contraseñas no coinciden.', 'The two passwords do not match.') : null);
       if (problem) throw new Error(problem);
       await window.radar.account.setNewPassword(password);
     });
   return (
     <Form
       ctx={ctx}
-      title="Elige una contraseña nueva"
+      title={tr('Elige una contraseña nueva', 'Choose a new password')}
       intro={
         <>
-          El código de <strong>{email}</strong> es válido. Elige la contraseña con la que entrarás a partir de ahora.
+          {tr('El código de', 'The code for')} <strong>{email}</strong>{' '}
+          {tr('es válido. Elige la contraseña con la que entrarás a partir de ahora.', 'is valid. Choose the password you will sign in with from now on.')}
         </>
       }
-      submit="Guardar la contraseña"
+      submit={tr('Guardar la contraseña', 'Save the password')}
       onSubmit={submit}
       links={
         <button type="button" className="link" onClick={() => void ctx.run(async () => void (await window.radar.account.signOut()))}>
-          Cancelar
+          {tr('Cancelar', 'Cancel')}
         </button>
       }
     >
-      <PasswordField label="Contraseña nueva" value={password} onChange={setPassword} autoComplete="new-password" hint="Al menos 8 caracteres." autoFocus />
-      <PasswordField label="Repite la contraseña" value={repeat} onChange={setRepeat} autoComplete="new-password" />
+      <PasswordField label={tr('Contraseña nueva', 'New password')} value={password} onChange={setPassword} autoComplete="new-password" hint={tr('Al menos 8 caracteres.', 'At least 8 characters.')} autoFocus />
+      <PasswordField label={tr('Repite la contraseña', 'Repeat the password')} value={repeat} onChange={setRepeat} autoComplete="new-password" />
     </Form>
   );
 }
@@ -306,7 +318,7 @@ function NewPasswordForm({ ctx, email }: { ctx: Ctx; email: string }) {
 function BackToSignIn({ ctx }: { ctx: Ctx }) {
   return (
     <button type="button" className="link" onClick={() => ctx.go({ kind: 'signIn' })}>
-      Volver a iniciar sesión
+      {tr('Volver a iniciar sesión', 'Back to sign in')}
     </button>
   );
 }
@@ -314,7 +326,7 @@ function BackToSignIn({ ctx }: { ctx: Ctx }) {
 function CodeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="field">
-      <label htmlFor="codigo">Código del correo</label>
+      <label htmlFor="codigo">{tr('Código del correo', 'Code from the email')}</label>
       <input
         id="codigo"
         className="input mono code-input"
@@ -340,7 +352,7 @@ function useResend(justSent: boolean) {
   }, [wait]);
   return {
     wait,
-    label: (text: string) => (wait > 0 ? `${text} (en ${wait} s)` : text),
+    label: (text: string) => (wait > 0 ? `${text} ${tr(`(en ${wait} s)`, `(in ${wait} s)`)}` : text),
     send: async (fn: () => Promise<null>) => {
       await fn();
       setWait(RESEND_WAIT_S);

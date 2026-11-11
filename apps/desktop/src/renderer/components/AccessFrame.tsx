@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { BrandMark } from './Icon.js';
+import { LanguageSwitch } from './LanguageSwitch.js';
+import { tr } from '../i18n.js';
 
 /** Ecos del radar de la portada: anillo (0 = centro) y ángulo en grados, con la severidad de su color. */
 const BLIPS = [
@@ -39,11 +41,14 @@ export function AccessFrame({ children }: { children: ReactNode }) {
         </svg>
         <div className="access-title">
           <BrandMark size={28} />
-          <h1>Radar de Deuda Técnica</h1>
-          <p>Encuentra el código que más cuesta mantener, en tus carpetas y en tus repositorios de GitHub.</p>
+          <h1>{tr('Radar de Deuda Técnica', 'Technical Debt Radar')}</h1>
+          <p>{tr('Encuentra el código que más cuesta mantener, en tus carpetas y en tus repositorios de GitHub.', 'Find the code that costs the most to maintain, in your folders and your GitHub repositories.')}</p>
         </div>
       </section>
-      <section className="access-panel">{children}</section>
+      <section className="access-panel">
+        <LanguageSwitch />
+        {children}
+      </section>
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import { sha1, type AiFixProposal, type AnalysisReport, type DiffHunk, type Finding } from '@radar/engine';
+import { sha1, type AiFixProposal, type AnalysisReport, type DiffHunk, type Finding, type Locale } from '@radar/engine';
 import { AiResponseCache } from './cache.js';
 import { assertProviderAllowed, buildFindingContext, OMITTED_LINE, PrivacyError, sanitizeLine, type FindingContext, type PrivacyMode, type SnippetRange } from './context.js';
 import { applyEdits, buildHunks, EditError, formatPatch, splitLines, type FilePatch, type LineEdit } from './diff.js';
-import { FIX_FORMAT_HINT, FIX_PROMPT_VERSION, FIX_SYSTEM } from './prompts.js';
+import { FIX_FORMAT_HINT, FIX_PROMPT_VERSION, FIX_SYSTEM, localizedSystem } from './prompts.js';
 import type { LlmProvider } from './provider.js';
 import { askJson } from './runner.js';
 import { FIX_SCHEMA, type RawFix } from './schemas.js';
@@ -52,6 +52,8 @@ export interface FixOptions {
   budget?: Budget;
   signal?: AbortSignal;
   now?: () => Date;
+  /** Idioma de la propuesta (por defecto, español). */
+  locale?: Locale;
 }
 
 /** Contexto exacto que se enviaría para proponer la corrección (para mostrarlo antes de enviarlo). */
@@ -97,7 +99,7 @@ export async function proposeFix(report: AnalysisReport, findingId: string, o: F
     { provider: o.provider, tracker, cache: new AiResponseCache(o.cacheDir ?? null), limit: createLimiter(1), ...(o.signal ? { signal: o.signal } : {}) },
     {
       model: o.model,
-      system: FIX_SYSTEM,
+      system: localizedSystem(FIX_SYSTEM, o.locale),
       user: `${ctx.text}\n\n${FIX_FORMAT_HINT}\nEl id del hallazgo es "${findingId}".`,
       schema: FIX_SCHEMA,
       maxOutputTokens: 3000,

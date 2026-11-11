@@ -38,6 +38,8 @@ export const APP_INFO: AppInfo = {
   dataDir: 'C:/datos',
   cacheDir: 'C:/cache',
   reposDir: 'C:/cache/repos',
+  language: 'auto',
+  locale: 'es',
 };
 
 afterEach(() => cleanup());

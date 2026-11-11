@@ -12,6 +12,7 @@ import { AccountService } from './account-service.js';
 import { cloudConfig, type BuiltCloudConfig } from './cloud-config.js';
 import { SupabaseRepo } from './cloud-repo.js';
 import { trustedCipher, type Cipher } from './credentials.js';
+import { initLanguage, tr } from './i18n.js';
 import { registerIpc } from './ipc.js';
 import { menuTemplate } from './menu.js';
 import { devServerFromEnv } from './policy.js';
@@ -87,7 +88,7 @@ function createWindow(): BrowserWindow {
     minWidth: 980,
     minHeight: 640,
     show: false,
-    title: 'Radar de Deuda Técnica',
+    title: tr('Radar de Deuda Técnica', 'Technical Debt Radar'),
     backgroundColor: currentWindowBackground(),
     autoHideMenuBar: true,
     webPreferences: {
@@ -112,6 +113,7 @@ function createWindow(): BrowserWindow {
 
 function start(): void {
   const dataDir = app.getPath('userData');
+  initLanguage(dataDir, app.getLocale());
   // El tema elegido rige la interfaz (prefers-color-scheme), la barra de título y los controles nativos.
   const appearanceFile = setupAppearance(dataDir);
   const errors = watchErrors(dataDir);
@@ -119,6 +121,7 @@ function start(): void {
   if (template) Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   hardenApp(devServerUrl);
   if (!devServerUrl) serveRenderer(path.join(distDir, 'renderer'));
+
 
   // El cifrado del sistema, salvo el de Linux sin llavero (credentials.ts).
   // La prueba de arranque no usa el llavero: comprueba el paquete, no el cifrado del sistema. En macOS, el elemento

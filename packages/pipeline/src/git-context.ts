@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { errorMessage, sha1, type AnalysisReport } from '@radar/engine';
+import { errorMessage, sha1, translator, type AnalysisReport, type Locale } from '@radar/engine';
 import { computeHotspots, fileChurn, getRepoInfo, type FileChurn } from '@radar/sources';
 import { historyStart } from './target.js';
 import type { PipelineHooks } from './types.js';
@@ -53,16 +53,17 @@ export async function cachedFileChurn(
 /** Añade al informe el commit analizado y, si se pide, los puntos críticos del historial. */
 export async function addGitContext(
   report: AnalysisReport,
-  o: { history: boolean; since?: string },
+  o: { history: boolean; since?: string; locale?: Locale },
   hooks: PipelineHooks,
   signal: AbortSignal,
   cacheBase: string | null = null,
 ): Promise<void> {
+  const tr = translator(o.locale);
   let info;
   try {
     info = await getRepoInfo(report.root, signal);
   } catch (err) {
-    hooks.warn(`Git no disponible: ${errorMessage(err)}`);
+    hooks.warn(tr(`Git no disponible: ${errorMessage(err)}`, `Git not available: ${errorMessage(err)}`));
     return;
   }
   if (!info) return;
@@ -75,7 +76,18 @@ export async function addGitContext(
   report.hotspots = computeHotspots(report, churn, { prefix });
   report.coverage.push(
     info.shallow
-      ? { area: 'Puntos críticos', status: 'partial', detail: `Clon superficial: solo se dispone del historial descargado (desde ${since} como mucho); ${churn.size} archivo(s) con cambios.` }
-      : { area: 'Puntos críticos', status: 'analyzed', detail: `Historial de Git desde ${since}: ${churn.size} archivo(s) con cambios.` },
+      ? {
+          area: tr('Puntos críticos', 'Hotspots'),
+          status: 'partial',
+          detail: tr(
+            `Clon superficial: solo se dispone del historial descargado (desde ${since} como mucho); ${churn.size} archivo(s) con cambios.`,
+            `Shallow clone: only the downloaded history is available (since ${since} at most); ${churn.size} file(s) with changes.`,
+          ),
+        }
+      : {
+          area: tr('Puntos críticos', 'Hotspots'),
+          status: 'analyzed',
+          detail: tr(`Historial de Git desde ${since}: ${churn.size} archivo(s) con cambios.`, `Git history since ${since}: ${churn.size} file(s) with changes.`),
+        },
   );
 }

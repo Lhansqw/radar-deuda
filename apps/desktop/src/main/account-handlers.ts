@@ -1,7 +1,9 @@
 import { CHANNELS, PUBLIC_CHANNELS, type AccountChannel, type Channel } from '../shared/ipc.js';
+import type { LanguageSetting } from '../shared/settings.js';
 import type { AccountService } from './account-service.js';
 import type { ThemeSetting } from '../shared/settings.js';
 import { errorHandlers, type HandlerDeps, type Handlers, type WorkspaceHandlers } from './handlers.js';
+import { tr } from './i18n.js';
 
 /** Lo que los canales de la cuenta necesitan del servicio (se sustituye en las pruebas). */
 export type AccountApi = Pick<
@@ -11,7 +13,7 @@ export type AccountApi = Pick<
 
 export class SignedOutError extends Error {
   constructor() {
-    super('Inicia sesión para continuar.');
+    super(tr('Inicia sesión para continuar.', 'Sign in to continue.'));
     this.name = 'SignedOutError';
   }
 }
@@ -39,11 +41,15 @@ export function signedInHandlers(workspace: WorkspaceHandlers, account: Pick<Han
  * enlaces. Cualquier otro canal responde «Inicia sesión para continuar»; no
  * hay base de datos abierta a la que llegar.
  */
-export function signedOutHandlers(account: Pick<Handlers, AccountChannel>, app: Pick<HandlerDeps, 'info' | 'openExternal' | 'theme' | 'setTheme' | 'diagnostics' | 'clearErrors' | 'reportError'>): Handlers {
+export function signedOutHandlers(
+  account: Pick<Handlers, AccountChannel>,
+  app: Pick<HandlerDeps, 'info' | 'openExternal' | 'setLanguage' | 'theme' | 'setTheme' | 'diagnostics' | 'clearErrors' | 'reportError'>,
+): Handlers {
   const open: Partial<Record<Channel, unknown>> = {
     ...account,
     'app:info': () => app.info(),
     'app:openExternal': (url: string) => app.openExternal(url),
+    'app:setLanguage': (language: LanguageSetting) => app.setLanguage(language),
     'app:theme': () => app.theme(),
     'app:setTheme': (theme: ThemeSetting) => app.setTheme(theme),
     ...errorHandlers(app),

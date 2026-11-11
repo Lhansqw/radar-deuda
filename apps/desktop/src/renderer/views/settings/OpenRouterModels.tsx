@@ -3,6 +3,10 @@ import { errorMessage } from '../../../shared/errors.js';
 import type { CatalogModel } from '../../../shared/model.js';
 import { Icon } from '../../components/Icon.js';
 import { CATALOG_PAGE, fallbackBlocked, filterCatalog, modelContext, modelPrice, type CatalogFilter } from '../../lib/catalog.js';
+import { tr } from '../../i18n.js';
+
+const reasoningLabel = (r: CatalogModel['reasoning']): string =>
+  r === 'no' ? tr('no', 'no') : r === 'desactivable' ? tr('desactivable', 'can be turned off') : r === 'obligatorio' ? tr('obligatorio', 'mandatory') : tr('no ajustable', 'not adjustable');
 
 interface ModelChoice {
   model: string;
@@ -19,18 +23,18 @@ export function OpenRouterModels(choice: ModelChoice) {
   const [filter, setFilter] = useState<CatalogFilter>({ query: '', onlyFree: false, hideMandatory: true });
   return (
     <div className="field field-wide">
-      <label htmlFor="modelo-or">Modelo</label>
+      <label htmlFor="modelo-or">{tr('Modelo', 'Model')}</label>
       <div className="model-line">
         <input
           id="modelo-or"
           className="input mono"
           value={choice.model}
           onChange={(e) => choice.onModel(e.target.value.trim())}
-          placeholder="proveedor/modelo"
+          placeholder={tr('proveedor/modelo', 'provider/model')}
           spellCheck={false}
         />
         <button type="button" className="btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-          {open ? 'Cerrar la lista' : 'Elegir de la lista'}
+          {open ? tr('Cerrar la lista', 'Close the list') : tr('Elegir de la lista', 'Choose from the list')}
         </button>
       </div>
       <FallbackChips fallback={choice.fallback} onFallback={choice.onFallback} />
@@ -43,9 +47,9 @@ function FallbackChips({ fallback, onFallback }: { fallback: string[]; onFallbac
   if (fallback.length === 0) return null;
   return (
     <div className="fallbacks">
-      <span className="hint">Respaldo, por orden, si el modelo falla o está saturado:</span>
+      <span className="hint">{tr('Respaldo, por orden, si el modelo falla o está saturado:', 'Fallback, in order, if the model fails or is overloaded:')}</span>
       {fallback.map((f) => (
-        <button key={f} type="button" className="chip" aria-pressed="true" onClick={() => onFallback(fallback.filter((x) => x !== f))} title="Quitar de los respaldos">
+        <button key={f} type="button" className="chip" aria-pressed="true" onClick={() => onFallback(fallback.filter((x) => x !== f))} title={tr('Quitar de los respaldos', 'Remove from the fallbacks')}>
           <span className="mono">{f}</span>
           <Icon name="close" size={12} />
         </button>
@@ -90,15 +94,19 @@ function Catalog({
     <div className="catalog">
       <CatalogFilters filter={filter} onChange={onFilter} />
       {error ? <p className="form-error">{error}</p> : null}
-      {!catalog && !error ? <p className="muted">Cargando el catálogo de OpenRouter…</p> : null}
+      {!catalog && !error ? <p className="muted">{tr('Cargando el catálogo de OpenRouter…', 'Loading the OpenRouter catalog…')}</p> : null}
       {catalog ? (
         <>
           <p className="hint">
-            {filtered.length} modelos compatibles. Precio en USD por millón de tokens de entrada y de salida. Los gratuitos tienen un límite de peticiones al día y suelen requerir permitir
-            proveedores que guardan datos.
+            {tr(
+              `${filtered.length} modelos compatibles. Precio en USD por millón de tokens de entrada y de salida. Los gratuitos tienen un límite de peticiones al día y suelen requerir permitir proveedores que guardan datos.`,
+              `${filtered.length} compatible models. Price in USD per million input and output tokens. Free ones have a daily request limit and usually require allowing providers that store data.`,
+            )}
           </p>
           <CatalogTable models={filtered.slice(0, CATALOG_PAGE)} {...choice} />
-          {filtered.length > CATALOG_PAGE ? <p className="hint">Y {filtered.length - CATALOG_PAGE} más: afina la búsqueda.</p> : null}
+          {filtered.length > CATALOG_PAGE ? (
+            <p className="hint">{tr(`Y ${filtered.length - CATALOG_PAGE} más: afina la búsqueda.`, `And ${filtered.length - CATALOG_PAGE} more: refine the search.`)}</p>
+          ) : null}
         </>
       ) : null}
     </div>
@@ -110,16 +118,16 @@ function CatalogFilters({ filter, onChange }: { filter: CatalogFilter; onChange:
     <div className="catalog-filters">
       <label className="search">
         <Icon name="search" size={16} />
-        <span className="visually-hidden">Buscar modelo</span>
-        <input className="input" type="search" value={filter.query} onChange={(e) => onChange({ query: e.target.value })} placeholder="Buscar (qwen, llama, nemotron…)" />
+        <span className="visually-hidden">{tr('Buscar modelo', 'Search model')}</span>
+        <input className="input" type="search" value={filter.query} onChange={(e) => onChange({ query: e.target.value })} placeholder={tr('Buscar (qwen, llama, nemotron…)', 'Search (qwen, llama, nemotron…)')} />
       </label>
       <label className="check">
         <input type="checkbox" checked={filter.onlyFree} onChange={(e) => onChange({ onlyFree: e.target.checked })} />
-        <span>Solo gratuitos</span>
+        <span>{tr('Solo gratuitos', 'Free only')}</span>
       </label>
       <label className="check">
         <input type="checkbox" checked={filter.hideMandatory} onChange={(e) => onChange({ hideMandatory: e.target.checked })} />
-        <span>Ocultar los que siempre razonan</span>
+        <span>{tr('Ocultar los que siempre razonan', 'Hide the ones that always reason')}</span>
       </label>
     </div>
   );
@@ -132,17 +140,17 @@ function CatalogTable({ models, model, fallback, onModel, onFallback }: ModelCho
         <thead>
           <tr>
             <th scope="col" className="col-model">
-              Modelo
+              {tr('Modelo', 'Model')}
             </th>
             <th scope="col" className="num">
-              Precio
+              {tr('Precio', 'Price')}
             </th>
             <th scope="col" className="num">
-              Contexto
+              {tr('Contexto', 'Context')}
             </th>
-            <th scope="col">Razonamiento</th>
+            <th scope="col">{tr('Razonamiento', 'Reasoning')}</th>
             <th scope="col">
-              <span className="visually-hidden">Acciones</span>
+              <span className="visually-hidden">{tr('Acciones', 'Actions')}</span>
             </th>
           </tr>
         </thead>
@@ -156,13 +164,13 @@ function CatalogTable({ models, model, fallback, onModel, onFallback }: ModelCho
                 </td>
                 <td className="num">{modelPrice(m)}</td>
                 <td className="num">{modelContext(m)}</td>
-                <td>{m.reasoning}</td>
+                <td>{reasoningLabel(m.reasoning)}</td>
                 <td className="actions">
                   <button type="button" className="btn btn-small" onClick={() => onModel(m.id)} disabled={m.id === model}>
-                    Usar
+                    {tr('Usar', 'Use')}
                   </button>
                   <button type="button" className="btn btn-quiet btn-small" onClick={() => onFallback([...fallback, m.id])} disabled={blocked !== null} title={blocked ?? undefined}>
-                    Respaldo
+                    {tr('Respaldo', 'Fallback')}
                   </button>
                 </td>
               </tr>

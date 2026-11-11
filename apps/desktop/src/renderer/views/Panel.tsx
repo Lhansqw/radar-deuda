@@ -8,6 +8,7 @@ import { TrendChart } from '../components/TrendChart.js';
 import { sortFindings } from '../lib/findings.js';
 import { formatDateTime, formatEffort, formatNumber, formatPercent, formatRelative } from '../lib/format.js';
 import { RATING_HINT } from '../lib/labels.js';
+import { tr } from '../i18n.js';
 
 interface Props {
   report: AnalysisReport;
@@ -22,25 +23,20 @@ interface Props {
   onOpenHistory?: () => void;
 }
 
-const HORIZON: Record<'inmediato' | 'corto' | 'medio', string> = { inmediato: 'Ya', corto: 'Pronto', medio: 'Más adelante' };
+const horizon = (h: 'inmediato' | 'corto' | 'medio'): string => (h === 'inmediato' ? tr('Ya', 'Now') : h === 'corto' ? tr('Pronto', 'Soon') : tr('Más adelante', 'Later'));
 
 export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest, comparison, onShowNew, onOpenHistory }: Props) {
   const s = report.score;
   const latest = analyses[0]?.id === analysisId;
-  const byId = useMemo(() => new Map(report.findings.map((f) => [f.id, f])), [report.findings]);
-  const priorities = useMemo(() => sortFindings(report.findings.filter((f) => f.severity !== 'info'), 'severity').slice(0, 6), [report.findings]);
-  const hotspots = (report.hotspots ?? []).slice(0, 6);
-  const plan = report.ai?.plan;
-  const limits = report.coverage.filter((c) => c.status !== 'analyzed');
 
   return (
     <div className="panel">
       {!latest ? (
         <div className="panel-banner">
-          <p>Estás viendo el análisis del {formatDateTime(report.generatedAt)}, no el más reciente.</p>
+          <p>{tr(`Estás viendo el análisis del ${formatDateTime(report.generatedAt)}, no el más reciente.`, `You are viewing the analysis from ${formatDateTime(report.generatedAt)}, not the latest one.`)}</p>
           {onShowLatest ? (
             <button type="button" className="btn btn-small" onClick={onShowLatest}>
-              Ver el más reciente
+              {tr('Ver el más reciente', 'See the latest')}
             </button>
           ) : null}
         </div>
@@ -57,135 +53,166 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
               <span>/100</span>
             </p>
             <p className="score-rating">
-              Calificación <strong>{s.rating}</strong>. {RATING_HINT[s.rating]}.
+              {tr('Calificación', 'Rating')} <strong>{s.rating}</strong>. {RATING_HINT[s.rating]}.
             </p>
             <RatingScale rating={s.rating} debtRatio={s.debtRatio} />
           </div>
           <dl className="facts">
             <div>
-              <dt>Ratio de deuda</dt>
+              <dt>{tr('Ratio de deuda', 'Debt ratio')}</dt>
               <dd>{formatPercent(s.debtRatio)}</dd>
             </div>
             <div>
-              <dt>Para corregirlo todo</dt>
+              <dt>{tr('Para corregirlo todo', 'To fix everything')}</dt>
               <dd>{formatEffort(s.remediationMinutes)}</dd>
             </div>
             <div>
-              <dt>Código analizado</dt>
-              <dd>{formatNumber(s.codeLines)} líneas</dd>
+              <dt>{tr('Código analizado', 'Code analyzed')}</dt>
+              <dd>
+                {formatNumber(s.codeLines)} {tr('líneas', 'lines')}
+              </dd>
             </div>
             <div>
-              <dt>Hallazgos</dt>
+              <dt>{tr('Hallazgos', 'Findings')}</dt>
               <dd>{formatNumber(report.findings.length)}</dd>
             </div>
           </dl>
           <SeverityBar counts={report.summary.bySeverity} />
           {comparison ? <SinceLast c={comparison} onShowNew={onShowNew} onOpenHistory={onOpenHistory} /> : null}
           <p className="muted small">
-            Puntuación según el método SQALE: esfuerzo de corrección frente al coste estimado de escribir el código. Análisis de {formatRelative(report.generatedAt)}.
+            {tr(
+              `Puntuación según el método SQALE: esfuerzo de corrección frente al coste estimado de escribir el código. Análisis de ${formatRelative(report.generatedAt)}.`,
+              `Score based on the SQALE method: fix effort compared with the estimated cost of writing the code. Analysis from ${formatRelative(report.generatedAt)}.`,
+            )}
           </p>
         </div>
       </section>
 
       <section className="panel-section">
-        <h2>Evolución de la puntuación</h2>
+        <h2>{tr('Evolución de la puntuación', 'Score trend')}</h2>
         {analyses.length >= 2 ? (
           <TrendChart analyses={analyses} selectedId={analysisId} />
         ) : (
-          <p className="muted">Con dos análisis o más verás aquí cómo cambia la puntuación. Vuelve a analizar después de hacer cambios.</p>
+          <p className="muted">
+            {tr('Con dos análisis o más verás aquí cómo cambia la puntuación. Vuelve a analizar después de hacer cambios.', 'With two or more analyses you will see here how the score changes. Analyze again after making changes.')}
+          </p>
         )}
       </section>
 
       <div className="panel-columns">
-        <section className="panel-section">
-          <h2>{plan ? 'Plan de reducción propuesto por la IA' : 'Por dónde empezar'}</h2>
-          {plan ? (
-            <ol className="plan">
-              {plan.steps.map((step) => (
-                <li key={step.order}>
-                  <p>
-                    <span className="horizon">{HORIZON[step.horizon]}</span> <strong>{step.title}</strong>
-                  </p>
-                  <p className="muted">{step.rationale}</p>
-                  <ul className="plan-findings">
-                    {step.findingIds
-                      .map((id) => byId.get(id))
-                      .filter((f): f is Finding => f !== undefined)
-                      .slice(0, 4)
-                      .map((f) => (
-                        <li key={f.id}>
-                          <PriorityRow finding={f} onOpen={onOpenFinding} />
-                        </li>
-                      ))}
-                  </ul>
-                </li>
-              ))}
-            </ol>
-          ) : priorities.length > 0 ? (
-            <ul className="priorities">
-              {priorities.map((f) => (
-                <li key={f.id}>
-                  <PriorityRow finding={f} onOpen={onOpenFinding} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">No hay hallazgos que priorizar.</p>
-          )}
-        </section>
-
-        <section className="panel-section">
-          <h2>Puntos críticos</h2>
-          {hotspots.length > 0 ? (
-            <>
-              <p className="muted small">Archivos que cambian a menudo y además acumulan deuda: donde reducirla rinde más.</p>
-              <ul className="hotspots">
-                {hotspots.map((h) => (
-                  <li key={h.file}>
-                    <span className="mono">{h.file}</span>
-                    <span className="hotspot-bar" aria-hidden="true">
-                      <span style={{ width: `${h.score}%` }} />
-                    </span>
-                    <span className="muted">
-                      {h.commits} cambios, {formatEffort(h.debtMinutes)} de deuda
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {onOpenFiles ? (
-                <button type="button" className="btn btn-quiet btn-small" onClick={onOpenFiles}>
-                  Ver la deuda por carpeta
-                </button>
-              ) : null}
-            </>
-          ) : (
-            <p className="muted">
-              {report.vcs
-                ? 'No hay archivos con cambios frecuentes y deuda en el periodo analizado.'
-                : 'Sin historial de Git: los puntos críticos necesitan que el proyecto sea un repositorio Git.'}
-            </p>
-          )}
-        </section>
+        <WhereToStart report={report} onOpenFinding={onOpenFinding} />
+        <Hotspots report={report} onOpenFiles={onOpenFiles} />
       </div>
 
-      {limits.length > 0 || report.errors.length > 0 ? (
-        <section className="panel-section">
-          <h2>Límites de este análisis</h2>
-          <ul className="limits">
-            {limits.map((c) => (
-              <li key={c.area}>
-                <strong>{c.area}.</strong> {c.detail}
-              </li>
-            ))}
-            {report.errors.map((e, i) => (
-              <li key={`e${i}`}>
-                <strong>{e.analyzer}.</strong> {e.message}
+      <Limits report={report} />
+    </div>
+  );
+}
+
+/** El plan de la IA o, si no lo hay, los hallazgos más urgentes. */
+function WhereToStart({ report, onOpenFinding }: { report: AnalysisReport; onOpenFinding: (id: string) => void }) {
+  const byId = useMemo(() => new Map(report.findings.map((f) => [f.id, f])), [report.findings]);
+  const priorities = useMemo(() => sortFindings(report.findings.filter((f) => f.severity !== 'info'), 'severity').slice(0, 6), [report.findings]);
+  const plan = report.ai?.plan;
+  return (
+    <section className="panel-section">
+      <h2>{plan ? tr('Plan de reducción propuesto por la IA', 'Reduction plan proposed by the AI') : tr('Por dónde empezar', 'Where to start')}</h2>
+      {plan ? (
+        <ol className="plan">
+          {plan.steps.map((step) => (
+            <li key={step.order}>
+              <p>
+                <span className="horizon">{horizon(step.horizon)}</span> <strong>{step.title}</strong>
+              </p>
+              <p className="muted">{step.rationale}</p>
+              <ul className="plan-findings">
+                {step.findingIds
+                  .map((id) => byId.get(id))
+                  .filter((f): f is Finding => f !== undefined)
+                  .slice(0, 4)
+                  .map((f) => (
+                    <li key={f.id}>
+                      <PriorityRow finding={f} onOpen={onOpenFinding} />
+                    </li>
+                  ))}
+              </ul>
+            </li>
+          ))}
+        </ol>
+      ) : priorities.length > 0 ? (
+        <ul className="priorities">
+          {priorities.map((f) => (
+            <li key={f.id}>
+              <PriorityRow finding={f} onOpen={onOpenFinding} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">{tr('No hay hallazgos que priorizar.', 'There are no findings to prioritize.')}</p>
+      )}
+    </section>
+  );
+}
+
+/** Archivos que cambian a menudo y acumulan deuda. */
+function Hotspots({ report, onOpenFiles }: { report: AnalysisReport; onOpenFiles?: (() => void) | undefined }) {
+  const hotspots = (report.hotspots ?? []).slice(0, 6);
+  return (
+    <section className="panel-section">
+      <h2>{tr('Puntos críticos', 'Hotspots')}</h2>
+      {hotspots.length > 0 ? (
+        <>
+          <p className="muted small">{tr('Archivos que cambian a menudo y además acumulan deuda: donde reducirla rinde más.', 'Files that change often and also pile up debt: where reducing it pays off most.')}</p>
+          <ul className="hotspots">
+            {hotspots.map((h) => (
+              <li key={h.file}>
+                <span className="mono">{h.file}</span>
+                <span className="hotspot-bar" aria-hidden="true">
+                  <span style={{ width: `${h.score}%` }} />
+                </span>
+                <span className="muted">
+                  {tr(`${h.commits} cambios, ${formatEffort(h.debtMinutes)} de deuda`, `${h.commits} changes, ${formatEffort(h.debtMinutes)} of debt`)}
+                </span>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-    </div>
+          {onOpenFiles ? (
+            <button type="button" className="btn btn-quiet btn-small" onClick={onOpenFiles}>
+              {tr('Ver la deuda por carpeta', 'See the debt by folder')}
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <p className="muted">
+          {report.vcs
+            ? tr('No hay archivos con cambios frecuentes y deuda en el periodo analizado.', 'There are no files with frequent changes and debt in the analyzed period.')
+            : tr('Sin historial de Git: los puntos críticos necesitan que el proyecto sea un repositorio Git.', 'No Git history: hotspots need the project to be a Git repository.')}
+        </p>
+      )}
+    </section>
+  );
+}
+
+/** Lo que el análisis no cubrió y los errores de los analizadores. */
+function Limits({ report }: { report: AnalysisReport }) {
+  const limits = report.coverage.filter((c) => c.status !== 'analyzed');
+  if (limits.length === 0 && report.errors.length === 0) return null;
+  return (
+    <section className="panel-section">
+      <h2>{tr('Límites de este análisis', 'Limits of this analysis')}</h2>
+      <ul className="limits">
+        {limits.map((c) => (
+          <li key={c.area}>
+            <strong>{c.area}.</strong> {c.detail}
+          </li>
+        ))}
+        {report.errors.map((e, i) => (
+          <li key={`e${i}`}>
+            <strong>{e.analyzer}.</strong> {e.message}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -239,18 +266,19 @@ function PriorityRow({ finding: f, onOpen }: { finding: Finding; onOpen: (id: st
 
 /** Una línea con lo que cambió desde el análisis anterior, con acceso a la deuda nueva. */
 function SinceLast({ c, onShowNew, onOpenHistory }: { c: ReportComparison; onShowNew?: (() => void) | undefined; onOpenHistory?: (() => void) | undefined }) {
-  const delta = c.scoreDelta === 0 ? 'misma puntuación' : `${c.scoreDelta > 0 ? '+' : '−'}${Math.abs(c.scoreDelta)} puntos`;
+  const delta = c.scoreDelta === 0 ? tr('misma puntuación', 'same score') : `${c.scoreDelta > 0 ? '+' : '−'}${Math.abs(c.scoreDelta)} ${tr('puntos', 'points')}`;
   const unchanged = c.added.length === 0 && c.resolved.length === 0 && c.changed.length === 0;
   return (
     <div className="since">
       <p>
-        Desde el análisis anterior ({formatRelative(c.baseline.generatedAt)}):{' '}
+        {tr(`Desde el análisis anterior (${formatRelative(c.baseline.generatedAt)}):`, `Since the previous analysis (${formatRelative(c.baseline.generatedAt)}):`)}{' '}
         {unchanged ? (
-          'sin cambios en los hallazgos'
+          tr('sin cambios en los hallazgos', 'no changes in the findings')
         ) : (
           <>
-            <strong>{c.added.length}</strong> {c.added.length === 1 ? 'nuevo' : 'nuevos'}, <strong>{c.resolved.length}</strong> {c.resolved.length === 1 ? 'resuelto' : 'resueltos'}
-            {c.changed.length > 0 ? `, ${c.changed.length} con otra severidad` : ''}
+            <strong>{c.added.length}</strong> {c.added.length === 1 ? tr('nuevo', 'new') : tr('nuevos', 'new')}, <strong>{c.resolved.length}</strong>{' '}
+            {c.resolved.length === 1 ? tr('resuelto', 'resolved') : tr('resueltos', 'resolved')}
+            {c.changed.length > 0 ? tr(`, ${c.changed.length} con otra severidad`, `, ${c.changed.length} with another severity`) : ''}
           </>
         )}
         , {delta}.
@@ -258,12 +286,12 @@ function SinceLast({ c, onShowNew, onOpenHistory }: { c: ReportComparison; onSho
       <div className="since-actions">
         {c.added.length > 0 && onShowNew ? (
           <button type="button" className="btn btn-small" onClick={onShowNew}>
-            Ver la deuda nueva
+            {tr('Ver la deuda nueva', 'See the new debt')}
           </button>
         ) : null}
         {onOpenHistory ? (
           <button type="button" className="btn btn-quiet btn-small" onClick={onOpenHistory}>
-            Comparar en el historial
+            {tr('Comparar en el historial', 'Compare in the history')}
           </button>
         ) : null}
       </div>

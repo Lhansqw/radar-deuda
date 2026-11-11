@@ -6,23 +6,24 @@ import type { ThemeSetting, UpdateSettings } from '../../../shared/settings.js';
 import { formatBytes } from '../../lib/format.js';
 import { Diagnostics } from './Diagnostics.js';
 import { CheckField, SettingsSection } from './SettingsSection.js';
+import { tr } from '../../i18n.js';
 
 /** Versiones, tema, actualizaciones, dónde guarda los datos, espacio en disco y diagnóstico. */
 export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; updates: UpdateSettings; onUpdatesChange: (patch: Partial<UpdateSettings>) => void }) {
   return (
-    <SettingsSection id="s-acerca" title="Aplicación">
+    <SettingsSection id="s-acerca" title={tr('Aplicación', 'App')}>
       <dl className="about">
-        <dt>Versión</dt>
+        <dt>{tr('Versión', 'Version')}</dt>
         <dd>{info.versions.app}</dd>
-        <dt>Electron, Chromium y Node</dt>
+        <dt>{tr('Electron, Chromium y Node', 'Electron, Chromium and Node')}</dt>
         <dd>
-          {info.versions.electron}, {info.versions.chrome} y {info.versions.node}
+          {info.versions.electron}, {info.versions.chrome} {tr('y', 'and')} {info.versions.node}
         </dd>
-        <dt>Proyectos, historial y ajustes</dt>
+        <dt>{tr('Proyectos, historial y ajustes', 'Projects, history and settings')}</dt>
         <dd className="mono">{info.dataDir}</dd>
-        <dt>Caché (compartida con la CLI)</dt>
+        <dt>{tr('Caché (compartida con la CLI)', 'Cache (shared with the CLI)')}</dt>
         <dd className="mono">{info.cacheDir}</dd>
-        <dt>Clones de GitHub</dt>
+        <dt>{tr('Clones de GitHub', 'GitHub clones')}</dt>
         <dd className="mono">{info.reposDir}</dd>
       </dl>
       <Appearance />
@@ -33,10 +34,10 @@ export function AppSection({ info, updates, onUpdatesChange }: { info: AppInfo; 
   );
 }
 
-const THEMES: readonly { value: ThemeSetting; label: string }[] = [
-  { value: 'dark', label: 'Oscuro' },
-  { value: 'light', label: 'Claro' },
-  { value: 'system', label: 'Como el sistema' },
+const themes = (): readonly { value: ThemeSetting; label: string }[] => [
+  { value: 'dark', label: tr('Oscuro', 'Dark') },
+  { value: 'light', label: tr('Claro', 'Light') },
+  { value: 'system', label: tr('Como el sistema', 'Same as the system') },
 ];
 
 /**
@@ -61,23 +62,23 @@ function Appearance() {
     try {
       setTheme(await window.radar.app.setTheme(next));
     } catch (err) {
-      setError(`No se pudo cambiar el tema: ${errorMessage(err)}`);
+      setError(tr(`No se pudo cambiar el tema: ${errorMessage(err)}`, `Could not change the theme: ${errorMessage(err)}`));
     }
   };
   return (
     <div className="storage">
-      <h3>Apariencia</h3>
+      <h3>{tr('Apariencia', 'Appearance')}</h3>
       <fieldset className="field">
-        <legend className="label">Tema</legend>
+        <legend className="label">{tr('Tema', 'Theme')}</legend>
         <div className="radios">
-          {THEMES.map((t) => (
+          {themes().map((t) => (
             <label key={t.value} className="check">
               <input type="radio" name="tema" checked={theme === t.value} onChange={() => void choose(t.value)} />
               <span>{t.label}</span>
             </label>
           ))}
         </div>
-        <p className="hint">Se guarda en este equipo y también se usa en la pantalla de acceso.</p>
+        <p className="hint">{tr('Se guarda en este equipo y también se usa en la pantalla de acceso.', 'It is saved on this computer and also used on the sign-in screen.')}</p>
       </fieldset>
       {error ? (
         <p className="form-error" role="alert">
@@ -100,33 +101,36 @@ function Updates({ updates, onChange }: { updates: UpdateSettings; onChange: (pa
     try {
       const u = await window.radar.app.checkUpdate();
       if (u.newer && u.url) {
-        setNotice(`Hay una versión nueva: ${u.latest}.`);
+        setNotice(tr(`Hay una versión nueva: ${u.latest}.`, `A new version is available: ${u.latest}.`));
         setUrl(u.url);
       } else {
-        setNotice(u.latest ? `Tienes la última versión (${u.current}).` : 'Aún no hay versiones publicadas.');
+        setNotice(u.latest ? tr(`Tienes la última versión (${u.current}).`, `You have the latest version (${u.current}).`) : tr('Aún no hay versiones publicadas.', 'No versions published yet.'));
       }
     } catch (err) {
-      setNotice(`No se pudo comprobar: ${errorMessage(err)}`);
+      setNotice(tr(`No se pudo comprobar: ${errorMessage(err)}`, `Could not check: ${errorMessage(err)}`));
     } finally {
       setBusy(false);
     }
   };
   return (
     <div className="storage">
-      <h3>Actualizaciones</h3>
+      <h3>{tr('Actualizaciones', 'Updates')}</h3>
       <CheckField
         checked={updates.check}
         onChange={(check) => onChange({ check })}
-        label="Avisar al abrir si hay una versión nueva"
-        hint="Consulta en GitHub cuál es la última versión publicada, sin enviar ningún dato tuyo. No descarga nada: la versión nueva se instala encima de la anterior y conserva los datos."
+        label={tr('Avisar al abrir si hay una versión nueva', 'Notify on startup if there is a new version')}
+        hint={tr(
+          'Consulta en GitHub cuál es la última versión publicada, sin enviar ningún dato tuyo. No descarga nada: la versión nueva se instala encima de la anterior y conserva los datos.',
+          'Checks GitHub for the latest published version, without sending any of your data. It downloads nothing: the new version installs over the old one and keeps the data.',
+        )}
       />
       <div className="storage-actions">
         <button type="button" className="btn btn-small" onClick={() => void check()} disabled={busy}>
-          Buscar ahora
+          {tr('Buscar ahora', 'Check now')}
         </button>
         {url ? (
           <button type="button" className="btn btn-small" onClick={() => void window.radar.app.openExternal(url)}>
-            Descargar
+            {tr('Descargar', 'Download')}
           </button>
         ) : null}
         {notice ? (
@@ -158,7 +162,12 @@ function Storage() {
     setBusy(true);
     try {
       const r = await window.radar.app.clearCache();
-      setNotice(`Caché vaciada: ${formatBytes(r.bytes)} liberados. El siguiente análisis de cada proyecto será completo.`);
+      setNotice(
+        tr(
+          `Caché vaciada: ${formatBytes(r.bytes)} liberados. El siguiente análisis de cada proyecto será completo.`,
+          `Cache cleared: ${formatBytes(r.bytes)} freed. The next analysis of each project will be a full one.`,
+        ),
+      );
       setInfo(await window.radar.app.storage());
     } catch (err) {
       setNotice(errorMessage(err));
@@ -168,7 +177,7 @@ function Storage() {
   };
   return (
     <div className="storage">
-      <h3>Espacio en disco</h3>
+      <h3>{tr('Espacio en disco', 'Disk space')}</h3>
       <table className="table">
         <tbody>
           {info.cache.parts.map((p) => (
@@ -178,18 +187,20 @@ function Storage() {
             </tr>
           ))}
           <tr>
-            <td>Clones de GitHub</td>
+            <td>{tr('Clones de GitHub', 'GitHub clones')}</td>
             <td className="num">{formatBytes(info.clones.bytes)}</td>
           </tr>
         </tbody>
       </table>
       <p className="hint">
-        La caché acelera los reanálisis y se limpia sola de lo que lleva 90 días sin usarse. Vaciarla no borra los proyectos ni el historial. El clon de un proyecto de
-        GitHub se borra al quitarlo de la lista.
+        {tr(
+          'La caché acelera los reanálisis y se limpia sola de lo que lleva 90 días sin usarse. Vaciarla no borra los proyectos ni el historial. El clon de un proyecto de GitHub se borra al quitarlo de la lista.',
+          'The cache speeds up re-analyses and cleans itself of anything unused for 90 days. Clearing it does not delete projects or history. The clone of a GitHub project is deleted when you remove it from the list.',
+        )}
       </p>
       <div className="storage-actions">
         <button type="button" className="btn btn-small" onClick={() => void clear()} disabled={busy || info.cache.bytes === 0}>
-          Vaciar la caché ({formatBytes(info.cache.bytes)})
+          {tr('Vaciar la caché', 'Clear the cache')} ({formatBytes(info.cache.bytes)})
         </button>
         {notice ? (
           <span className="small" role="status">

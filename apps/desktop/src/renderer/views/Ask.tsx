@@ -6,15 +6,16 @@ import { Icon } from '../components/Icon.js';
 import { SeverityGlyph } from '../components/SeverityMark.js';
 import { parseAnswer, type Inline } from '../lib/answer.js';
 import { formatDateTime } from '../lib/format.js';
+import { tr } from '../i18n.js';
 
 /** Igual que MAX_QUESTION_CHARS de @radar/ai (lo comprueba también el proceso principal). */
 const MAX_QUESTION = 2000;
 
-const SUGGESTIONS = [
-  '¿Por dónde empiezo a reducir la deuda?',
-  '¿Qué deuda es nueva desde el análisis anterior?',
-  '¿Qué archivos concentran más riesgo y por qué?',
-  'Resume el estado del proyecto para el equipo en cinco frases.',
+const suggestions = (): string[] => [
+  tr('¿Por dónde empiezo a reducir la deuda?', 'Where do I start reducing the debt?'),
+  tr('¿Qué deuda es nueva desde el análisis anterior?', 'Which debt is new since the previous analysis?'),
+  tr('¿Qué archivos concentran más riesgo y por qué?', 'Which files concentrate the most risk and why?'),
+  tr('Resume el estado del proyecto para el equipo en cinco frases.', 'Summarize the state of the project for the team in five sentences.'),
 ];
 
 interface Props {
@@ -97,15 +98,18 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
     <div className="ask">
       <div className="ask-head">
         <div>
-          <h2>Preguntar sobre el análisis</h2>
+          <h2>{tr('Preguntar sobre el análisis', 'Ask about the analysis')}</h2>
           <p className="muted small">
-            {isOld ? `Análisis del ${formatDateTime(report.generatedAt)}. ` : ''}La IA solo recibe los datos del análisis (hallazgos, métricas, rutas y cambios
-            desde el anterior), nunca el código.
+            {isOld ? tr(`Análisis del ${formatDateTime(report.generatedAt)}. `, `Analysis from ${formatDateTime(report.generatedAt)}. `) : ''}
+            {tr(
+              'La IA solo recibe los datos del análisis (hallazgos, métricas, rutas y cambios desde el anterior), nunca el código.',
+              'The AI only receives the analysis data (findings, metrics, paths and changes since the previous one), never the code.',
+            )}
           </p>
         </div>
         {messages.length > 0 ? (
           <button type="button" className="btn btn-quiet btn-small" onClick={() => void clear()} disabled={pending !== null}>
-            <Icon name="trash" size={14} /> Borrar la conversación
+            <Icon name="trash" size={14} /> {tr('Borrar la conversación', 'Clear the conversation')}
           </button>
         ) : null}
       </div>
@@ -113,9 +117,9 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
       <div className="ask-log" ref={log} aria-live="polite">
         {empty ? (
           <div className="ask-empty">
-            <p>Prueba con una de estas preguntas o escribe la tuya.</p>
+            <p>{tr('Prueba con una de estas preguntas o escribe la tuya.', 'Try one of these questions or write your own.')}</p>
             <div className="ask-suggestions">
-              {SUGGESTIONS.map((s) => (
+              {suggestions().map((s) => (
                 <button key={s} type="button" className="chip" onClick={() => void ask(s)}>
                   {s}
                 </button>
@@ -126,7 +130,7 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
         {messages.map((m) =>
           m.role === 'user' ? (
             <div key={m.id} className="msg msg-user">
-              <span className="msg-who">Tú</span>
+              <span className="msg-who">{tr('Tú', 'You')}</span>
               <p>{m.content}</p>
             </div>
           ) : (
@@ -136,12 +140,12 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
         {pending ? (
           <>
             <div className="msg msg-user">
-              <span className="msg-who">Tú</span>
+              <span className="msg-who">{tr('Tú', 'You')}</span>
               <p>{pending}</p>
             </div>
             <div className="msg msg-ai" aria-busy="true">
-              <span className="msg-who">IA</span>
-              <p className="muted">Pensando… Con los modelos gratuitos puede tardar hasta un minuto.</p>
+              <span className="msg-who">{tr('IA', 'AI')}</span>
+              <p className="muted">{tr('Pensando… Con los modelos gratuitos puede tardar hasta un minuto.', 'Thinking… With free models it can take up to a minute.')}</p>
             </div>
           </>
         ) : null}
@@ -158,13 +162,13 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
           <div className="ask-error" role="alert">
             <p className="form-error">{error}</p>
             <button type="button" className="btn btn-quiet btn-small" onClick={onOpenSettings}>
-              <Icon name="settings" size={14} /> Configuración
+              <Icon name="settings" size={14} /> {tr('Configuración', 'Settings')}
             </button>
           </div>
         ) : null}
         <div className="ask-input">
           <label htmlFor="pregunta" className="visually-hidden">
-            Pregunta
+            {tr('Pregunta', 'Question')}
           </label>
           <textarea
             id="pregunta"
@@ -174,11 +178,11 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
             maxLength={MAX_QUESTION}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKey}
-            placeholder="Pregunta sobre la deuda de este proyecto (Intro para enviar, Mayús+Intro para otra línea)"
+            placeholder={tr('Pregunta sobre la deuda de este proyecto (Intro para enviar, Mayús+Intro para otra línea)', 'Ask about the debt of this project (Enter to send, Shift+Enter for a new line)')}
             disabled={pending !== null}
           />
           <button type="submit" className="btn btn-primary" disabled={pending !== null || draft.trim() === ''}>
-            Preguntar
+            {tr('Preguntar', 'Ask')}
           </button>
         </div>
       </form>
@@ -191,20 +195,25 @@ function Answer({ message: m, byId, onOpenFinding }: { message: ChatMessage; byI
   const cited = [...new Set(m.meta?.references.map((r) => r.findingId) ?? [])].map((id) => byId.get(id)).filter((f): f is Finding => f !== undefined);
   return (
     <div className="msg msg-ai">
-      <span className="msg-who">IA</span>
+      <span className="msg-who">{tr('IA', 'AI')}</span>
       <div className="msg-body">{renderAnswer(m.content, refs, byId, onOpenFinding)}</div>
-      {m.meta?.truncated ? <p className="small muted">La respuesta se cortó por el límite de longitud.</p> : null}
+      {m.meta?.truncated ? <p className="small muted">{tr('La respuesta se cortó por el límite de longitud.', 'The answer was cut off by the length limit.')}</p> : null}
       {m.meta && m.meta.unknownReferences.length > 0 ? (
-        <p className="small muted">La IA citó referencias que no existen en el análisis ({m.meta.unknownReferences.join(', ')}): ignóralas.</p>
+        <p className="small muted">
+          {tr(
+            `La IA citó referencias que no existen en el análisis (${m.meta.unknownReferences.join(', ')}): ignóralas.`,
+            `The AI cited references that do not exist in the analysis (${m.meta.unknownReferences.join(', ')}): ignore them.`,
+          )}
+        </p>
       ) : null}
       {m.meta ? (
         <p className="small muted">
-          Modelo {m.meta.model}
-          {m.meta.costUsd ? `, ${m.meta.costUsd.toFixed(4)} USD` : ''}. Orientativa: compruébalo en los hallazgos citados.
+          {tr('Modelo', 'Model')} {m.meta.model}
+          {m.meta.costUsd ? `, ${m.meta.costUsd.toFixed(4)} USD` : ''}. {tr('Orientativa: compruébalo en los hallazgos citados.', 'For guidance only: check it in the cited findings.')}
         </p>
       ) : null}
       {cited.length > 0 ? (
-        <ul className="msg-refs" aria-label="Hallazgos citados">
+        <ul className="msg-refs" aria-label={tr('Hallazgos citados', 'Cited findings')}>
           {cited.map((f) => (
             <li key={f.id}>
               <button type="button" className="ref-link" onClick={() => onOpenFinding(f.id)}>
@@ -232,7 +241,7 @@ function renderAnswer(text: string, refs: ReadonlyMap<string, string>, byId: Rea
           {p.alias}
         </button>
       ) : (
-        <span key={i} className="ref-unknown" title="No existe en el análisis">
+        <span key={i} className="ref-unknown" title={tr('No existe en el análisis', 'It does not exist in the analysis')}>
           {p.alias}
         </span>
       );

@@ -3,13 +3,14 @@ import path from 'node:path';
 import { compareReports, type AnalysisReport } from '@radar/engine';
 import type { AccountChannel, AppInfo, ArgsOf, Channel, ResultOf } from '../shared/ipc.js';
 import type { StorageInfo, UpdateInfo } from '../shared/model.js';
-import { normalizeSettings, type AppSettings, type ThemeSetting } from '../shared/settings.js';
+import { normalizeSettings, type AppSettings, type LanguageSetting, type Locale, type ThemeSetting } from '../shared/settings.js';
 import type { AiService } from './ai-service.js';
 import type { CloudSync } from './cloud-sync.js';
 import type { CredentialStore } from './credentials.js';
 import type { JobManager } from './jobs.js';
 import { readSnippet, resolveReportFile } from './snippets.js';
 import type { Store } from './store.js';
+import { tr } from './i18n.js';
 
 /** Lo que los manejadores necesitan del exterior; se inyecta para probarlos sin Electron. */
 export interface HandlerDeps {
@@ -23,6 +24,8 @@ export interface HandlerDeps {
   /** Selector de carpetas del sistema. */
   chooseFolder: () => Promise<string | null>;
   openExternal: (url: string) => Promise<boolean>;
+  /** Cambia el idioma de la aplicación (i18n.ts). */
+  setLanguage: (language: LanguageSetting) => Locale;
   /** Muestra un archivo en el explorador del sistema. */
   reveal: (absPath: string) => void;
   copyText: (text: string) => void;
@@ -66,7 +69,7 @@ export class NotFoundError extends Error {
 
 function report(d: HandlerDeps, analysisId: number): AnalysisReport {
   const r = d.store.getReport(analysisId);
-  if (!r) throw new NotFoundError('Ese análisis ya no existe.');
+  if (!r) throw new NotFoundError(tr('Ese análisis ya no existe.', 'That analysis no longer exists.'));
   return r;
 }
 
@@ -89,6 +92,7 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
   return {
     'app:info': () => d.info(),
     'app:openExternal': (url) => d.openExternal(url),
+    'app:setLanguage': (language) => d.setLanguage(language),
     'app:copyText': (text) => {
       d.copyText(text);
       return null;
@@ -106,12 +110,12 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
       if (!folder) return null;
       const abs = path.resolve(folder);
       const s = await stat(abs).catch(() => null);
-      if (!s?.isDirectory()) throw new NotFoundError(`No existe la carpeta ${abs}.`);
+      if (!s?.isDirectory()) throw new NotFoundError(tr(`No existe la carpeta ${abs}.`, `The folder ${abs} does not exist.`));
       return d.store.addProject({ name: path.basename(abs) || abs, kind: 'local', location: abs });
     },
     'projects:addGithub': (repo, branch) => d.store.addProject({ name: repo.split('/')[1] ?? repo, kind: 'github', location: repo, branch }),
     'projects:remove': async (id) => {
-      if (d.jobs.list().some((j) => j.projectId === id && j.status === 'running')) throw new NotFoundError('Hay un análisis en curso de este proyecto: cancélalo antes de quitarlo.');
+      if (d.jobs.list().some((j) => j.projectId === id && j.status === 'running')) throw new NotFoundError(tr('Hay un análisis en curso de este proyecto: cancélalo antes de quitarlo.', 'This project has an analysis in progress: cancel it before removing the project.'));
       const project = d.store.getProject(id);
       d.store.removeProject(id);
       // El clon lo descargó la aplicación: se borra con el proyecto (la carpeta de un proyecto local, nunca).
@@ -123,8 +127,8 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
     'analyses:report': (analysisId) => report(d, analysisId),
     'analyses:compare': (beforeId, afterId) => {
       const [a, b] = [d.store.getAnalysis(beforeId), d.store.getAnalysis(afterId)];
-      if (!a || !b) throw new NotFoundError('Ese análisis ya no existe.');
-      if (a.projectId !== b.projectId) throw new NotFoundError('Solo se pueden comparar análisis del mismo proyecto.');
+      if (!a || !b) throw new NotFoundError(tr('Ese análisis ya no existe.', 'That analysis no longer exists.'));
+      if (a.projectId !== b.projectId) throw new NotFoundError(tr('Solo se pueden comparar análisis del mismo proyecto.', 'Only analyses of the same project can be compared.'));
       return compareReports(report(d, beforeId), report(d, afterId));
     },
 
@@ -161,7 +165,7 @@ export function createHandlers(d: HandlerDeps): WorkspaceHandlers {
 
     'files:savePatch': async (analysisId, findingId) => {
       const proposal = d.store.getFixProposal(analysisId, findingId);
-      if (!proposal || proposal.patch === '') throw new NotFoundError('No hay ningún parche que guardar.');
+      if (!proposal || proposal.patch === '') throw new NotFoundError(tr('No hay ningún parche que guardar.', 'There is no patch to save.'));
       const project = d.store.getProject(d.store.getAnalysis(analysisId)?.projectId ?? 0);
       const base = (project?.name ?? 'propuesta').replace(/[^\w.-]+/g, '-');
       return d.savePatch(`${base}-${findingId.slice(0, 8)}.patch`, proposal.patch);
