@@ -44,7 +44,7 @@ export function BrandMark({ size = 22 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="12" cy="12" r="10.25" fill="none" stroke="var(--linea-fuerte)" strokeWidth="1.5" />
       <circle cx="12" cy="12" r="5.5" fill="none" stroke="var(--linea-fuerte)" strokeWidth="1.5" />
-      <path d="M12 12 L19.2 4.8" stroke="var(--tiza)" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M12 12 L19.2 4.8" stroke="var(--malva-brillo)" strokeWidth="1.5" strokeLinecap="round" />
       <circle cx="16.4" cy="14.6" r="1.9" fill="var(--sev-medium)" />
       <circle cx="8.6" cy="9.2" r="1.6" fill="var(--sev-critical)" />
     </svg>

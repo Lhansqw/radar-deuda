@@ -11,6 +11,7 @@ import { useProjectData, useProjectMemory, useRadar } from './state.js';
 import { ProjectWorkspace } from './views/ProjectWorkspace.js';
 import { Settings } from './views/Settings.js';
 import { Welcome } from './views/Welcome.js';
+import { tr } from './i18n.js';
 
 /** Vistas del proyecto que existen en esta versión de la interfaz. */
 const PROJECT_VIEWS = ['panel', 'hallazgos', 'archivos', 'historial', 'preguntar'] as const;
@@ -115,7 +116,7 @@ function ErrorNotice({ message, onClose }: { message: string; onClose: () => voi
     <div className="notice" data-tone="error" role="alert">
       <Icon name="alert" size={16} />
       <p>{message}</p>
-      <button type="button" className="btn btn-quiet btn-small" onClick={onClose} aria-label="Cerrar aviso">
+      <button type="button" className="btn btn-quiet btn-small" onClick={onClose} aria-label={tr('Cerrar aviso', 'Close notice')}>
         <Icon name="close" size={14} />
       </button>
     </div>

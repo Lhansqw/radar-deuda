@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { FileAnalyzer } from '../types.js';
+import { translator } from '../i18n.js';
 import { graphFindings, importGraph, type ResolvedImport } from './architecture.js';
 import type { PyToken } from './python-lexer.js';
 import { isName, isOp, parsePython, splitSimple, type PyStatement } from './python-syntax.js';
@@ -177,6 +178,6 @@ export const pythonArchitectureAnalyzer: FileAnalyzer<PyImportsArtifact> = {
       file,
       art.imports.flatMap((ref) => resolvePythonImport(ref, known).map((target) => ({ target, line: ref.line, typeOnly: ref.typeOnly }))),
     ]);
-    return graphFindings(importGraph(resolved), config.thresholds.fanOut, TOOL);
+    return graphFindings(importGraph(resolved), config.thresholds.fanOut, TOOL, translator(config.locale));
   },
 };

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import semver from 'semver';
-import { findingId, SEVERITY_ORDER, type CoverageNote, type Evidence, type Finding, type Location, type ProjectAnalyzer, type ProjectContext, type Severity } from '@radar/engine';
+import { findingId, SEVERITY_ORDER, SPANISH, translator, type Translate, type CoverageNote, type Evidence, type Finding, type Location, type ProjectAnalyzer, type ProjectContext, type Severity } from '@radar/engine';
 import { lockfileLine, parseNpmLockfile, type InstalledPackage } from './lockfile.js';
 import type { OsvClient, Vulnerability } from './osv.js';
 
@@ -58,7 +58,14 @@ export function recommendedVersion(vulns: readonly Vulnerability[]): string | nu
   return minima.length === 0 ? null : (minima.sort(semver.compare).at(-1) as string);
 }
 
-export function vulnerabilityFinding(pkg: InstalledPackage, vulns: readonly Vulnerability[], lockRel: string, lockLines: readonly string[], manifestLocation?: Location): Finding {
+export function vulnerabilityFinding(
+  pkg: InstalledPackage,
+  vulns: readonly Vulnerability[],
+  lockRel: string,
+  lockLines: readonly string[],
+  manifestLocation?: Location,
+  tr: Translate = SPANISH,
+): Finding {
   const base = maxSeverity(vulns.map((v) => v.severity));
   const severity = pkg.dev ? DOWNGRADE[base] : base;
   const fix = recommendedVersion(vulns);
@@ -68,11 +75,19 @@ export function vulnerabilityFinding(pkg: InstalledPackage, vulns: readonly Vuln
   const locations: Location[] = [{ file: lockRel, startLine: line, endLine: line, symbol: `${pkg.name}@${pkg.version}` }];
   if (manifestLocation) locations.push(manifestLocation);
 
-  const parts = [`${pkg.name}@${pkg.version} tiene ${vulns.length === 1 ? 'una vulnerabilidad conocida' : `${vulns.length} vulnerabilidades conocidas`} (${ids}).`];
-  if (fix) parts.push(`Se corrige${unfixed.length > 0 ? ' en parte' : ''} actualizando a ${fix} o superior.`);
-  if (unfixed.length > 0) parts.push(`${unfixed.map((v) => v.id).join(', ')} no tiene versión corregida publicada: valora reemplazar el paquete o mitigar su uso.`);
-  if (!pkg.direct) parts.push(`Es una dependencia transitiva: actualiza el paquete que la requiere o usa "overrides" en package.json.`);
-  if (pkg.dev) parts.push('Solo se instala para desarrollo: severidad reducida un nivel.');
+  const parts = [
+    tr(
+      `${pkg.name}@${pkg.version} tiene ${vulns.length === 1 ? 'una vulnerabilidad conocida' : `${vulns.length} vulnerabilidades conocidas`} (${ids}).`,
+      `${pkg.name}@${pkg.version} has ${vulns.length === 1 ? 'a known vulnerability' : `${vulns.length} known vulnerabilities`} (${ids}).`,
+    ),
+  ];
+  if (fix) parts.push(tr(`Se corrige${unfixed.length > 0 ? ' en parte' : ''} actualizando a ${fix} o superior.`, `It is${unfixed.length > 0 ? ' partly' : ''} fixed by updating to ${fix} or later.`));
+  if (unfixed.length > 0) {
+    const list = unfixed.map((v) => v.id).join(', ');
+    parts.push(tr(`${list} no tiene versión corregida publicada: valora reemplazar el paquete o mitigar su uso.`, `${list} has no published fixed version: consider replacing the package or mitigating its use.`));
+  }
+  if (!pkg.direct) parts.push(tr('Es una dependencia transitiva: actualiza el paquete que la requiere o usa "overrides" en package.json.', 'It is a transitive dependency: update the package that requires it or use "overrides" in package.json.'));
+  if (pkg.dev) parts.push(tr('Solo se instala para desarrollo: severidad reducida un nivel.', 'It is only installed for development: severity lowered one level.'));
 
   const minutes = fix === null || unfixed.length > 0 ? 60 : pkg.direct ? 15 : 30;
   return {
@@ -81,28 +96,39 @@ export function vulnerabilityFinding(pkg: InstalledPackage, vulns: readonly Vuln
     category: 'security',
     severity,
     confidence: 'high',
-    title: `${vulns.length === 1 ? 'Vulnerabilidad conocida' : `${vulns.length} vulnerabilidades conocidas`} en ${pkg.name}@${pkg.version}`,
+    title: tr(
+      `${vulns.length === 1 ? 'Vulnerabilidad conocida' : `${vulns.length} vulnerabilidades conocidas`} en ${pkg.name}@${pkg.version}`,
+      `${vulns.length === 1 ? 'Known vulnerability' : `${vulns.length} known vulnerabilities`} in ${pkg.name}@${pkg.version}`,
+    ),
     message: parts.join(' '),
     locations,
     evidence: vulns.map(
       (v): Evidence => ({
         kind: 'fact',
         tool: TOOL,
-        description: `${v.id}${v.aliases.length > 0 ? ` (${v.aliases.join(', ')})` : ''} — ${v.summary || 'sin resumen'}. Severidad: ${v.severitySource}.${v.fixedIn.length > 0 ? ` Corregida en ${v.fixedIn.join(', ')}.` : ' Sin versión corregida.'}`,
+        description:
+          `${v.id}${v.aliases.length > 0 ? ` (${v.aliases.join(', ')})` : ''} — ${v.summary || tr('sin resumen', 'no summary')}. ` +
+          tr(
+            `Severidad: ${v.severitySource}.${v.fixedIn.length > 0 ? ` Corregida en ${v.fixedIn.join(', ')}.` : ' Sin versión corregida.'}`,
+            `Severity: ${v.severitySource}.${v.fixedIn.length > 0 ? ` Fixed in ${v.fixedIn.join(', ')}.` : ' No fixed version.'}`,
+          ),
         snippet: v.url,
       }),
     ),
     impact: pkg.dev
-      ? 'Afecta a herramientas de desarrollo o construcción; el riesgo principal es para el equipo y la cadena de suministro, no para producción.'
-      : 'El código vulnerable se distribuye con la aplicación y puede ser explotable según cómo se use el paquete.',
+      ? tr(
+          'Afecta a herramientas de desarrollo o construcción; el riesgo principal es para el equipo y la cadena de suministro, no para producción.',
+          'It affects development or build tools; the main risk is to the team and the supply chain, not to production.',
+        )
+      : tr('El código vulnerable se distribuye con la aplicación y puede ser explotable según cómo se use el paquete.', 'The vulnerable code ships with the app and may be exploitable depending on how the package is used.'),
     effort: {
       minutes,
       rationale:
         minutes === 15
-          ? 'Dependencia directa con versión corregida: actualizar y ejecutar las pruebas (15 min).'
+          ? tr('Dependencia directa con versión corregida: actualizar y ejecutar las pruebas (15 min).', 'Direct dependency with a fixed version: update and run the tests (15 min).')
           : minutes === 30
-            ? 'Dependencia transitiva con versión corregida: actualizar el paquete padre o añadir un override (30 min).'
-            : 'Sin corrección publicada para alguna vulnerabilidad: evaluar alternativas o mitigaciones (60 min).',
+            ? tr('Dependencia transitiva con versión corregida: actualizar el paquete padre o añadir un override (30 min).', 'Transitive dependency with a fixed version: update the parent package or add an override (30 min).')
+            : tr('Sin corrección publicada para alguna vulnerabilidad: evaluar alternativas o mitigaciones (60 min).', 'No published fix for some vulnerability: evaluate alternatives or mitigations (60 min).'),
     },
   };
 }
@@ -119,6 +145,7 @@ export function vulnerabilityAnalyzer(client: OsvClient): ProjectAnalyzer {
     description: 'Vulnerabilidades conocidas en dependencias npm (OSV / GitHub Advisory Database).',
     coverage: () => (note ? [note] : []),
     async analyzeProject(ctx) {
+      const tr = translator(ctx.config.locale);
       const locks = await findLockfiles(ctx);
       const findings: Finding[] = [];
       let packages = 0;
@@ -136,15 +163,18 @@ export function vulnerabilityAnalyzer(client: OsvClient): ProjectAnalyzer {
           if (vulns.length === 0) return;
           const idx = pkg.direct ? manifestLines.findIndex((l) => l.includes(`"${pkg.name}"`)) : -1;
           const manifestLocation = idx >= 0 ? { file: manifestRel, startLine: idx + 1, endLine: idx + 1, symbol: pkg.name } : undefined;
-          findings.push(vulnerabilityFinding(pkg, vulns, lockRel, lines, manifestLocation));
+          findings.push(vulnerabilityFinding(pkg, vulns, lockRel, lines, manifestLocation, tr));
         });
       }
-      const pieces = [`${packages} paquete(s) de ${locks.npm.length} package-lock.json consultados en OSV.`];
-      if (locks.unsupported.length > 0) pieces.push(`Sin soporte todavía: ${locks.unsupported.join(', ')}.`);
+      const pieces = [tr(`${packages} paquete(s) de ${locks.npm.length} package-lock.json consultados en OSV.`, `${packages} package(s) from ${locks.npm.length} package-lock.json checked on OSV.`)];
+      if (locks.unsupported.length > 0) pieces.push(tr(`Sin soporte todavía: ${locks.unsupported.join(', ')}.`, `Not supported yet: ${locks.unsupported.join(', ')}.`));
       note = {
-        area: 'Dependencias',
+        area: tr('Dependencias', 'Dependencies'),
         status: locks.npm.length > 0 && locks.unsupported.length === 0 ? 'analyzed' : 'partial',
-        detail: locks.npm.length === 0 && locks.unsupported.length === 0 ? 'No hay lockfile: no se pueden comprobar vulnerabilidades de versiones exactas.' : pieces.join(' '),
+        detail:
+          locks.npm.length === 0 && locks.unsupported.length === 0
+            ? tr('No hay lockfile: no se pueden comprobar vulnerabilidades de versiones exactas.', 'There is no lockfile: vulnerabilities of exact versions cannot be checked.')
+            : pieces.join(' '),
       };
       return findings;
     },

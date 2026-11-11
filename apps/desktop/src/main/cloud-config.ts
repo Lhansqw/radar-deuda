@@ -1,3 +1,4 @@
+import { tr } from './i18n.js';
 /**
  * Conexión con Supabase (fase 13): la URL del proyecto y su clave publicable.
  *
@@ -43,11 +44,11 @@ export function cloudConfig(env: NodeJS.ProcessEnv, built: BuiltCloudConfig | nu
   if (url === '' && key === '') {
     return {
       ok: false,
-      message: `Define ${ENV_URL} y ${ENV_KEY} (la URL y la clave publicable de tu proyecto de Supabase) antes de abrir o de compilar la aplicación. Ver docs/CUENTAS.md.`,
+      message: tr(`Define ${ENV_URL} y ${ENV_KEY} (la URL y la clave publicable de tu proyecto de Supabase) antes de abrir o de compilar la aplicación. Ver docs/CUENTAS.md.`, `Set ${ENV_URL} and ${ENV_KEY} (the URL and publishable key of your Supabase project) before opening or building the app. See docs/CUENTAS.md.`),
     };
   }
-  if (url === '') return { ok: false, message: `Falta ${ENV_URL}: la URL de tu proyecto de Supabase (https://<proyecto>.supabase.co).` };
-  if (key === '') return { ok: false, message: `Falta ${ENV_KEY}: la clave publicable de tu proyecto de Supabase (sb_publishable_…).` };
+  if (url === '') return { ok: false, message: tr(`Falta ${ENV_URL}: la URL de tu proyecto de Supabase (https://<proyecto>.supabase.co).`, `${ENV_URL} is missing: the URL of your Supabase project (https://<project>.supabase.co).`) };
+  if (key === '') return { ok: false, message: tr(`Falta ${ENV_KEY}: la clave publicable de tu proyecto de Supabase (sb_publishable_…).`, `${ENV_KEY} is missing: the publishable key of your Supabase project (sb_publishable_…).`) };
   const urlProblem = checkUrl(url);
   if (urlProblem) return { ok: false, message: urlProblem };
   const keyProblem = checkKey(key);

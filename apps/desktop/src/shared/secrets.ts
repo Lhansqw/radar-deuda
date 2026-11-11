@@ -9,6 +9,14 @@ export const SECRET_LABELS: Readonly<Record<SecretName, string>> = {
   github: 'Token de GitHub (repositorios privados)',
 };
 
+/** Los mismos nombres en inglés. */
+export const SECRET_LABELS_EN: Readonly<Record<SecretName, string>> = {
+  openrouter: 'OpenRouter key',
+  anthropic: 'Anthropic key',
+  openai: 'OpenAI key',
+  github: 'GitHub token (private repositories)',
+};
+
 /** Lo único que la interfaz sabe de las credenciales: si existen y de dónde vienen. Nunca su valor. */
 export interface SecretsStatus {
   /** El sistema ofrece cifrado (en Windows, siempre: DPAPI). */

@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
 import path from 'node:path';
+import { tr } from './i18n.js';
 
 /**
  * Datos de cada cuenta en este equipo (fase 13): proyectos, historial,
@@ -14,7 +15,7 @@ const USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** Carpeta de datos de un usuario. El identificador lo da Supabase: se comprueba que es un UUID. */
 export function userDataDir(dataDir: string, userId: string): string {
-  if (!USER_ID.test(userId)) throw new Error('Identificador de usuario no válido.');
+  if (!USER_ID.test(userId)) throw new Error(tr('Identificador de usuario no válido.', 'Invalid user ID.'));
   return path.join(dataDir, USERS_DIR, userId);
 }
 

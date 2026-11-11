@@ -1,7 +1,8 @@
 import type { DiffHunk } from '@radar/engine';
+import { tr } from '../i18n.js';
 
 const SIGN = { context: ' ', removed: '−', added: '+' } as const;
-const SPOKEN = { context: '', removed: 'eliminada: ', added: 'añadida: ' } as const;
+const spoken = (kind: 'context' | 'removed' | 'added'): string => (kind === 'context' ? '' : kind === 'removed' ? tr('eliminada: ', 'removed: ') : tr('añadida: ', 'added: '));
 
 /**
  * Diferencia unificada: un bloque por cambio con el número de línea antes y
@@ -15,7 +16,7 @@ export function DiffView({ hunks }: { hunks: readonly DiffHunk[] }) {
           <figcaption>
             <span className="mono">{h.file}</span>
             <span className="mono muted">
-              líneas {h.oldStart}–{h.oldStart + Math.max(0, h.oldLines - 1)} → {h.newStart}–{h.newStart + Math.max(0, h.newLines - 1)}
+              {tr('líneas', 'lines')} {h.oldStart}–{h.oldStart + Math.max(0, h.oldLines - 1)} → {h.newStart}–{h.newStart + Math.max(0, h.newLines - 1)}
             </span>
           </figcaption>
           <pre>
@@ -26,7 +27,7 @@ export function DiffView({ hunks }: { hunks: readonly DiffHunk[] }) {
                 <span className="diff-sign" aria-hidden="true">
                   {SIGN[l.kind]}
                 </span>
-                {SPOKEN[l.kind] ? <span className="visually-hidden">{SPOKEN[l.kind]}</span> : null}
+                {spoken(l.kind) ? <span className="visually-hidden">{spoken(l.kind)}</span> : null}
                 {l.text === '' ? ' ' : l.text}
                 {'\n'}
               </span>

@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import semver from 'semver';
-import { findingId, type CoverageNote, type Finding, type ProjectAnalyzer } from '@radar/engine';
+import { findingId, SPANISH, translator, type CoverageNote, type Finding, type ProjectAnalyzer, type Translate } from '@radar/engine';
 import { requestJson, type HttpOptions } from '../http.js';
 import { lockfileLine, parseNpmLockfile, type InstalledPackage } from './lockfile.js';
 import { findLockfiles } from './vulnerabilities.js';
@@ -93,7 +93,7 @@ export function majorsBehind(installed: string, latest: string): number {
   return ml - mi;
 }
 
-export function outdatedFinding(pkg: InstalledPackage, latest: string, behind: number, lockRel: string, lockLines: readonly string[]): Finding {
+export function outdatedFinding(pkg: InstalledPackage, latest: string, behind: number, lockRel: string, lockLines: readonly string[], tr: Translate = SPANISH): Finding {
   const line = lockfileLine(lockLines, pkg.paths[0] ?? `node_modules/${pkg.name}`, pkg.name);
   return {
     id: findingId('dependencies/outdated', lockRel, pkg.name),
@@ -101,16 +101,28 @@ export function outdatedFinding(pkg: InstalledPackage, latest: string, behind: n
     category: 'dependencies',
     severity: behind >= 3 ? 'medium' : 'low',
     confidence: 'high',
-    title: `${pkg.name} está ${behind} ${behind === 1 ? 'versión mayor' : 'versiones mayores'} por detrás (${pkg.version} → ${latest})`,
-    message: `La versión instalada de ${pkg.name} es ${pkg.version} y la más reciente publicada es ${latest}. Cada versión mayor puede incluir cambios incompatibles: revisa sus notas de versión antes de actualizar.`,
+    title: tr(
+      `${pkg.name} está ${behind} ${behind === 1 ? 'versión mayor' : 'versiones mayores'} por detrás (${pkg.version} → ${latest})`,
+      `${pkg.name} is ${behind} major ${behind === 1 ? 'version' : 'versions'} behind (${pkg.version} → ${latest})`,
+    ),
+    message: tr(
+      `La versión instalada de ${pkg.name} es ${pkg.version} y la más reciente publicada es ${latest}. Cada versión mayor puede incluir cambios incompatibles: revisa sus notas de versión antes de actualizar.`,
+      `The installed version of ${pkg.name} is ${pkg.version} and the latest published one is ${latest}. Each major version can include breaking changes: read its release notes before updating.`,
+    ),
     locations: [{ file: lockRel, startLine: line, endLine: line, symbol: `${pkg.name}@${pkg.version}` }],
-    evidence: [{ kind: 'fact', tool: TOOL, description: 'dist-tags.latest del registro de npm', metric: { name: 'majorsBehind', value: behind, threshold: 0, unit: 'versiones mayores' }, snippet: `https://www.npmjs.com/package/${pkg.name}` }],
-    impact: 'Las versiones antiguas dejan de recibir correcciones de seguridad y cuanto más se retrasa la actualización, más costosa es.',
-    effort: { minutes: Math.min(240, 30 * behind), rationale: '30 min por versión mayor de diferencia para revisar cambios incompatibles y probar (máx. 4 h).' },
+    evidence: [{ kind: 'fact', tool: TOOL, description: tr('dist-tags.latest del registro de npm', 'dist-tags.latest from the npm registry'), metric: { name: 'majorsBehind', value: behind, threshold: 0, unit: tr('versiones mayores', 'major versions') }, snippet: `https://www.npmjs.com/package/${pkg.name}` }],
+    impact: tr(
+      'Las versiones antiguas dejan de recibir correcciones de seguridad y cuanto más se retrasa la actualización, más costosa es.',
+      'Old versions stop getting security fixes, and the longer the update is delayed, the more it costs.',
+    ),
+    effort: {
+      minutes: Math.min(240, 30 * behind),
+      rationale: tr('30 min por versión mayor de diferencia para revisar cambios incompatibles y probar (máx. 4 h).', '30 min per major version of difference to review breaking changes and test (max. 4 h).'),
+    },
   };
 }
 
-export function deprecatedFinding(pkg: InstalledPackage, reason: string, lockRel: string, lockLines: readonly string[]): Finding {
+export function deprecatedFinding(pkg: InstalledPackage, reason: string, lockRel: string, lockLines: readonly string[], tr: Translate = SPANISH): Finding {
   const line = lockfileLine(lockLines, pkg.paths[0] ?? `node_modules/${pkg.name}`, pkg.name);
   return {
     id: findingId('dependencies/deprecated', lockRel, `${pkg.name}@${pkg.version}`),
@@ -118,12 +130,12 @@ export function deprecatedFinding(pkg: InstalledPackage, reason: string, lockRel
     category: 'dependencies',
     severity: pkg.dev ? 'low' : 'medium',
     confidence: 'high',
-    title: `${pkg.name}@${pkg.version} está marcado como en desuso`,
-    message: `Sus autores lo marcaron como en desuso: "${reason}".`,
+    title: tr(`${pkg.name}@${pkg.version} está marcado como en desuso`, `${pkg.name}@${pkg.version} is marked as deprecated`),
+    message: tr(`Sus autores lo marcaron como en desuso: "${reason}".`, `Its authors marked it as deprecated: "${reason}".`),
     locations: [{ file: lockRel, startLine: line, endLine: line, symbol: `${pkg.name}@${pkg.version}` }],
-    evidence: [{ kind: 'fact', tool: TOOL, description: 'Campo "deprecated" de la versión en el registro de npm', snippet: reason }],
-    impact: 'Un paquete en desuso no recibirá correcciones; suele existir un sustituto recomendado.',
-    effort: { minutes: 45, rationale: 'Buscar el sustituto recomendado, migrar y probar (estimación fija).' },
+    evidence: [{ kind: 'fact', tool: TOOL, description: tr('Campo "deprecated" de la versión en el registro de npm', '"deprecated" field of the version in the npm registry'), snippet: reason }],
+    impact: tr('Un paquete en desuso no recibirá correcciones; suele existir un sustituto recomendado.', 'A deprecated package will not get fixes; there is usually a recommended replacement.'),
+    effort: { minutes: 45, rationale: tr('Buscar el sustituto recomendado, migrar y probar (estimación fija).', 'Find the recommended replacement, migrate and test (fixed estimate).') },
   };
 }
 
@@ -139,6 +151,7 @@ export function outdatedAnalyzer(registry: NpmRegistryClient): ProjectAnalyzer {
     description: 'Dependencias directas desactualizadas (versiones mayores) o en desuso según el registro de npm.',
     coverage: () => (note ? [note] : []),
     async analyzeProject(ctx) {
+      const tr = translator(ctx.config.locale);
       const findings: Finding[] = [];
       const locks = await findLockfiles(ctx);
       let checked = 0;
@@ -161,10 +174,10 @@ export function outdatedAnalyzer(registry: NpmRegistryClient): ProjectAnalyzer {
             }
             checked++;
             const reason = info.deprecated[pkg.version];
-            if (reason) findings.push(deprecatedFinding(pkg, reason, lockRel, lines));
+            if (reason) findings.push(deprecatedFinding(pkg, reason, lockRel, lines, tr));
             if (info.latest) {
               const behind = majorsBehind(pkg.version, info.latest);
-              if (behind >= 1) findings.push(outdatedFinding(pkg, info.latest, behind, lockRel, lines));
+              if (behind >= 1) findings.push(outdatedFinding(pkg, info.latest, behind, lockRel, lines, tr));
             }
           }
         };
@@ -172,11 +185,18 @@ export function outdatedAnalyzer(registry: NpmRegistryClient): ProjectAnalyzer {
       }
       note =
         locks.npm.length === 0
-          ? { area: 'Versiones de dependencias', status: 'not-analyzed', detail: 'No hay package-lock.json: sin versiones instaladas exactas que comparar con el registro.' }
+          ? {
+              area: tr('Versiones de dependencias', 'Dependency versions'),
+              status: 'not-analyzed',
+              detail: tr('No hay package-lock.json: sin versiones instaladas exactas que comparar con el registro.', 'There is no package-lock.json: no exact installed versions to compare with the registry.'),
+            }
           : {
-              area: 'Versiones de dependencias',
+              area: tr('Versiones de dependencias', 'Dependency versions'),
               status: failed === 0 ? 'analyzed' : 'partial',
-              detail: `${checked} dependencia(s) directa(s) comparadas con el registro de npm${failed > 0 ? `; ${failed} no se pudieron consultar` : ''}.`,
+              detail: tr(
+                `${checked} dependencia(s) directa(s) comparadas con el registro de npm${failed > 0 ? `; ${failed} no se pudieron consultar` : ''}.`,
+                `${checked} direct dependenc${checked === 1 ? 'y' : 'ies'} compared with the npm registry${failed > 0 ? `; ${failed} could not be checked` : ''}.`,
+              ),
             };
       return findings;
     },

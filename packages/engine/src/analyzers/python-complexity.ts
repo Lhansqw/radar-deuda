@@ -1,4 +1,5 @@
 import type { FileAnalyzer, Finding } from '../types.js';
+import { translator } from '../i18n.js';
 import { buildFunctionFinding, type FunctionMetrics } from './complexity.js';
 import type { PyToken } from './python-lexer.js';
 import { isName, isOp, parsePython, type PyKeyword, type PyStatement } from './python-syntax.js';
@@ -240,7 +241,7 @@ export const pythonComplexityAnalyzer: FileAnalyzer = {
     for (const m of collectPythonFunctionMetrics(input.text)) {
       const ordinal = seen.get(m.name) ?? 0;
       seen.set(m.name, ordinal + 1);
-      const f = buildFunctionFinding(input.meta.relPath, m, config.thresholds, ordinal, TOOL);
+      const f = buildFunctionFinding(input.meta.relPath, m, config.thresholds, ordinal, TOOL, translator(config.locale));
       if (f) findings.push(f);
     }
     return { findings };

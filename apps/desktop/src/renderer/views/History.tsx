@@ -6,6 +6,7 @@ import { FindingLine } from '../components/FindingLine.js';
 import { SeverityGlyph } from '../components/SeverityMark.js';
 import { formatDateTime, formatDuration, formatEffort } from '../lib/format.js';
 import { SEVERITY_LABEL } from '../lib/labels.js';
+import { tr } from '../i18n.js';
 
 interface Props {
   analyses: AnalysisSummary[];
@@ -42,33 +43,33 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
   return (
     <div className="history">
       <section className="panel-section">
-        <h2>Análisis guardados</h2>
+        <h2>{tr('Análisis guardados', 'Saved analyses')}</h2>
         <table className="table">
           <thead>
             <tr>
-              <th scope="col">Fecha</th>
+              <th scope="col">{tr('Fecha', 'Date')}</th>
               <th scope="col">Commit</th>
               <th scope="col" className="num">
-                Puntuación
+                {tr('Puntuación', 'Score')}
               </th>
               <th scope="col" className="num">
-                Cambio
+                {tr('Cambio', 'Change')}
               </th>
               <th scope="col" className="num">
-                Hallazgos
+                {tr('Hallazgos', 'Findings')}
               </th>
               <th scope="col" className="num">
-                Altas y críticas
+                {tr('Altas y críticas', 'High and critical')}
               </th>
               <th scope="col" className="num">
-                Esfuerzo
+                {tr('Esfuerzo', 'Effort')}
               </th>
               <th scope="col" className="num">
-                Duración
+                {tr('Duración', 'Duration')}
               </th>
-              <th scope="col">IA</th>
+              <th scope="col">{tr('IA', 'AI')}</th>
               <th scope="col">
-                <span className="visually-hidden">Acciones</span>
+                <span className="visually-hidden">{tr('Acciones', 'Actions')}</span>
               </th>
             </tr>
           </thead>
@@ -82,18 +83,18 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
                   <td className="num">
                     {a.score} <span className="muted">{a.rating}</span>
                   </td>
-                  <td className="num">{prev ? signed(a.score - prev.score) : <span className="muted">primero</span>}</td>
+                  <td className="num">{prev ? signed(a.score - prev.score) : <span className="muted">{tr('primero', 'first')}</span>}</td>
                   <td className="num">{a.findings}</td>
                   <td className="num">{a.bySeverity.critical + a.bySeverity.high}</td>
                   <td className="num">{formatEffort(a.effortMinutes)}</td>
                   <td className="num muted">{formatDuration(a.durationMs)}</td>
-                  <td>{a.withAi ? 'Sí' : <span className="muted">No</span>}</td>
+                  <td>{a.withAi ? tr('Sí', 'Yes') : <span className="muted">No</span>}</td>
                   <td className="actions">
                     {a.id === viewingId ? (
-                      <span className="muted">Mostrando</span>
+                      <span className="muted">{tr('Mostrando', 'Showing')}</span>
                     ) : (
                       <button type="button" className="btn btn-quiet btn-small" onClick={() => onView(a.id)}>
-                        Ver este análisis
+                        {tr('Ver este análisis', 'View this analysis')}
                       </button>
                     )}
                   </td>
@@ -105,14 +106,14 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
       </section>
 
       <section className="panel-section">
-        <h2>Comparar dos análisis</h2>
+        <h2>{tr('Comparar dos análisis', 'Compare two analyses')}</h2>
         {analyses.length < 2 ? (
-          <p className="muted">Con dos análisis o más podrás ver qué deuda es nueva y cuál se resolvió.</p>
+          <p className="muted">{tr('Con dos análisis o más podrás ver qué deuda es nueva y cuál se resolvió.', 'With two or more analyses you can see which debt is new and which was resolved.')}</p>
         ) : (
           <>
             <div className="compare-pick">
               <label className="field">
-                <span className="label">Antes</span>
+                <span className="label">{tr('Antes', 'Before')}</span>
                 <select className="select" value={before ?? ''} onChange={(e) => setBefore(Number(e.target.value))}>
                   {analyses.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -122,7 +123,7 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
                 </select>
               </label>
               <label className="field">
-                <span className="label">Después</span>
+                <span className="label">{tr('Después', 'After')}</span>
                 <select className="select" value={after ?? ''} onChange={(e) => setAfter(Number(e.target.value))}>
                   {analyses.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -132,21 +133,28 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
                 </select>
               </label>
             </div>
-            {before === after ? <p className="muted">Elige dos análisis distintos.</p> : null}
+            {before === after ? <p className="muted">{tr('Elige dos análisis distintos.', 'Choose two different analyses.')}</p> : null}
             {result?.key === key && result.error ? <p className="form-error">{result.error}</p> : null}
             {comparison && after !== null && before !== after ? (
               <>
                 <p className="compare-summary">
-                  Puntuación {signed(comparison.scoreDelta)} y esfuerzo de corrección {signed(comparison.remediationDeltaMinutes, ' min')}. {comparison.persisting}{' '}
-                  {comparison.persisting === 1 ? 'hallazgo sigue' : 'hallazgos siguen'} igual.
+                  {tr(
+                    `Puntuación ${signed(comparison.scoreDelta)} y esfuerzo de corrección ${signed(comparison.remediationDeltaMinutes, ' min')}.`,
+                    `Score ${signed(comparison.scoreDelta)} and fix effort ${signed(comparison.remediationDeltaMinutes, ' min')}.`,
+                  )}{' '}
+                  {comparison.persisting === 1
+                    ? tr('1 hallazgo sigue igual.', '1 finding stays the same.')
+                    : tr(`${comparison.persisting} hallazgos siguen igual.`, `${comparison.persisting} findings stay the same.`)}
                 </p>
                 <div className="compare-columns">
-                  <ChangeList title="Deuda nueva" empty="No hay." findings={comparison.added} onOpen={(id) => onOpenFinding(after, id)} />
-                  <ChangeList title="Resuelta" empty="No hay." findings={comparison.resolved} />
+                  <ChangeList title={tr('Deuda nueva', 'New debt')} empty={tr('No hay.', 'None.')} findings={comparison.added} onOpen={(id) => onOpenFinding(after, id)} />
+                  <ChangeList title={tr('Resuelta', 'Resolved')} empty={tr('No hay.', 'None.')} findings={comparison.resolved} />
                   <div>
-                    <h3>Cambian de severidad ({comparison.changed.length})</h3>
+                    <h3>
+                      {tr('Cambian de severidad', 'Severity changed')} ({comparison.changed.length})
+                    </h3>
                     {comparison.changed.length === 0 ? (
-                      <p className="muted">No hay.</p>
+                      <p className="muted">{tr('No hay.', 'None.')}</p>
                     ) : (
                       <ul className="changes">
                         {comparison.changed.map((c) => (

@@ -29,15 +29,3 @@ export interface JobState {
   aiError: string | null;
 }
 
-export const PHASE_LABELS: Readonly<Record<JobPhase, string>> = {
-  starting: 'Preparando',
-  clone: 'Descargando el repositorio',
-  discovery: 'Buscando archivos',
-  files: 'Analizando archivos',
-  'cross-file': 'Duplicación y dependencias entre módulos',
-  project: 'Dependencias y pruebas',
-  history: 'Leyendo el historial de Git',
-  saving: 'Guardando',
-  ai: 'Explicando con IA',
-  finished: 'Terminado',
-};

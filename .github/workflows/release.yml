@@ -49,20 +49,25 @@ jobs:
         # Las notas propias van delante de las generadas a partir de los commits.
         run: |
           cat > notas.md <<'NOTAS'
-          ## Instalar
+          ## Instalar · Install
 
-          | Sistema | Archivo |
+          | Sistema · System | Archivo · File |
           |---|---|
-          | Windows 10 u 11 | `radar-deuda-…-instalador-windows-x64.exe` |
+          | Windows 10 / 11 | `radar-deuda-…-instalador-windows-x64.exe` |
           | macOS (Apple Silicon / Intel) | `radar-deuda-…-macos-arm64.dmg` / `…-macos-x64.dmg` |
-          | Linux | `.AppImage` (cualquier distribución) o `.deb` (Debian y Ubuntu) |
+          | Linux | `.AppImage` (cualquier distribución · any distribution) o/or `.deb` (Debian, Ubuntu) |
 
-          Los instaladores no están firmados. En Windows aparece «Windows protegió su PC»: pulsa
-          **Más información → Ejecutar de todas formas**. En macOS, la primera vez: clic derecho
-          sobre la aplicación → **Abrir** → **Abrir**.
+          **Español.** Los instaladores no están firmados. En Windows aparece «Windows protegió su
+          PC»: pulsa **Más información → Ejecutar de todas formas**. En macOS, la primera vez: clic
+          derecho sobre la aplicación → **Abrir** → **Abrir**. Si ya tienes una versión instalada,
+          instala esta encima: se conservan los proyectos, el historial y los ajustes. La
+          aplicación está en español e inglés (Configuración → Idioma).
 
-          Si ya tienes una versión instalada, instala esta encima: se conservan los proyectos, el
-          historial y los ajustes.
+          **English.** The installers are not signed. On Windows, "Windows protected your PC"
+          appears: click **More info → Run anyway**. On macOS, the first time: right-click the app
+          → **Open** → **Open**. If you already have a version installed, install this one on top:
+          your projects, history and settings are kept. The app is available in Spanish and
+          English (Settings → Language).
           NOTAS
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --generate-notes --notes-file notas.md --title "Radar de Deuda Técnica $TAG"
 
