@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Finding } from '@radar/engine';
+import type { Finding, Severity } from '@radar/engine';
 import { formatEffort } from '../lib/format.js';
 import { CATEGORY_LABEL, SEVERITY_LABEL } from '../lib/labels.js';
 import { layoutRadar } from '../lib/radar.js';
@@ -30,13 +30,36 @@ function wedge(c: number, r: number, start: number, end: number): string {
  * lo crítico en el centro. La posición codifica la severidad además del
  * color. La lista de hallazgos es su equivalente en tabla.
  */
-export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOpen: (findingId: string) => void }) {
+/** Lo que otra parte del panel señala en el radar: una severidad o un hallazgo. */
+export type RadarHighlight = { severity: Severity } | { findingId: string } | null;
+
+interface RadarProps {
+  findings: readonly Finding[];
+  onOpen: (findingId: string) => void;
+  /** Resaltado que llega de fuera (leyenda, prioridades). */
+  highlight?: RadarHighlight | undefined;
+  /** Avisa del punto señalado con el puntero o el foco (null al salir). */
+  onHighlight?: ((h: RadarHighlight) => void) | undefined;
+}
+
+export function Radar({ findings, onOpen, highlight = null, onHighlight }: RadarProps) {
   const layout = useMemo(() => layoutRadar(findings, SIZE), [findings]);
   const byId = useMemo(() => new Map(findings.map((f) => [f.id, f])), [findings]);
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
   const { center: c, radius: R } = layout;
   const hovered = hover ? byId.get(hover.id) : undefined;
   const drawn = layout.blips.length;
+  const pointed = hover?.id ?? (highlight && 'findingId' in highlight ? highlight.findingId : null);
+  const dimmed = (id: string, severity: Severity): boolean =>
+    highlight === null ? false : 'severity' in highlight ? severity !== highlight.severity : id !== highlight.findingId;
+  const enter = (id: string, x: number, y: number): void => {
+    setHover({ id, x, y });
+    onHighlight?.({ findingId: id });
+  };
+  const leave = (id: string): void => {
+    setHover((h) => (h?.id === id ? null : h));
+    onHighlight?.(null);
+  };
   const activeSector = hover ? layout.sectors.find((s) => s.category === hovered?.category) : undefined;
 
   return (
@@ -108,7 +131,7 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
 
         {layout.blips.map((b) => {
           const f = byId.get(b.findingId);
-          const active = hover?.id === b.findingId;
+          const active = pointed === b.findingId;
           const r = blipRadius(f?.effort.minutes ?? 0);
           const urgent = b.severity === 'critical' || b.severity === 'high';
           return (
@@ -116,13 +139,14 @@ export function Radar({ findings, onOpen }: { findings: readonly Finding[]; onOp
               key={b.findingId}
               className="radar-blip"
               data-active={active || undefined}
+              data-dim={(!hover && dimmed(b.findingId, b.severity)) || undefined}
               tabIndex={0}
               role="button"
               aria-label={f ? `${SEVERITY_LABEL[b.severity]}: ${f.title}` : undefined}
-              onPointerEnter={() => setHover({ id: b.findingId, x: b.x, y: b.y })}
-              onPointerLeave={() => setHover((h) => (h?.id === b.findingId ? null : h))}
-              onFocus={() => setHover({ id: b.findingId, x: b.x, y: b.y })}
-              onBlur={() => setHover((h) => (h?.id === b.findingId ? null : h))}
+              onPointerEnter={() => enter(b.findingId, b.x, b.y)}
+              onPointerLeave={() => leave(b.findingId)}
+              onFocus={() => enter(b.findingId, b.x, b.y)}
+              onBlur={() => leave(b.findingId)}
               onClick={() => onOpen(b.findingId)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {

@@ -94,7 +94,14 @@ function Catalog({
     <div className="catalog">
       <CatalogFilters filter={filter} onChange={onFilter} />
       {error ? <p className="form-error">{error}</p> : null}
-      {!catalog && !error ? <p className="muted">{tr('Cargando el catálogo de OpenRouter…', 'Loading the OpenRouter catalog…')}</p> : null}
+      {!catalog && !error ? (
+        <div className="skeleton-list" role="status">
+          <span className="muted small">{tr('Cargando el catálogo de OpenRouter…', 'Loading the OpenRouter catalog…')}</span>
+          <span className="skeleton" />
+          <span className="skeleton" />
+          <span className="skeleton" />
+        </div>
+      ) : null}
       {catalog ? (
         <>
           <p className="hint">

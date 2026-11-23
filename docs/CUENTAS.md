@@ -73,6 +73,9 @@ La CLI no cambia: no necesita cuenta.
 5. **Contraseñas.** La aplicación exige al menos 8 caracteres. Conviene poner el mismo mínimo
    en la configuración de contraseñas de Authentication (y, si quieres, exigir tipos de
    caracteres: la aplicación muestra el motivo si Supabase rechaza una).
+   **CAPTCHA:** deja desactivado «Enable CAPTCHA protection» en Authentication → Attack
+   Protection. La aplicación no muestra captcha, y con esa opción activada Supabase rechaza
+   el registro, el inicio de sesión y la recuperación con `captcha_failed`.
 6. **Tablas de la nube (13b).** En el editor SQL del proyecto, pega el contenido de
    [`supabase/migrations/20261028000000_proyectos_e_historial.sql`](../supabase/migrations/20261028000000_proyectos_e_historial.sql)
    y ejecútalo una vez (o, con la CLI de Supabase, `supabase link` y `supabase db push`).

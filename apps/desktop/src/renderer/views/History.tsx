@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Finding, ReportComparison } from '@radar/engine';
 import { errorMessage } from '../../shared/errors.js';
 import type { AnalysisSummary } from '../../shared/model.js';
 import { FindingLine } from '../components/FindingLine.js';
 import { SeverityGlyph } from '../components/SeverityMark.js';
+import { TrendChart } from '../components/TrendChart.js';
 import { formatDateTime, formatDuration, formatEffort } from '../lib/format.js';
 import { SEVERITY_LABEL } from '../lib/labels.js';
 import { tr } from '../i18n.js';
@@ -37,11 +38,29 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
     };
   }, [key, before, after]);
 
+  const compareRef = useRef<HTMLElement>(null);
+  /** Un punto de la evolución: compararlo con el análisis anterior a él. */
+  const compareWithPrevious = (id: number): void => {
+    const i = analyses.findIndex((a) => a.id === id);
+    const prev = analyses[i + 1];
+    setAfter(id);
+    if (prev) setBefore(prev.id);
+    const reduce = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    compareRef.current?.scrollIntoView?.({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+  };
+
   const comparison = result?.key === key ? result.comparison : null;
   const label = (a: AnalysisSummary): string => `${formatDateTime(a.finishedAt)} (${a.score}/100${a.head ? `, ${a.head.slice(0, 7)}` : ''})`;
 
   return (
     <div className="history">
+      {analyses.length >= 2 ? (
+        <section className="panel-section">
+          <h2>{tr('Evolución', 'Trend')}</h2>
+          <p className="muted small">{tr('Elige un punto para compararlo con el análisis anterior.', 'Pick a point to compare it with the previous analysis.')}</p>
+          <TrendChart analyses={analyses} selectedId={after} onSelect={compareWithPrevious} />
+        </section>
+      ) : null}
       <section className="panel-section">
         <h2>{tr('Análisis guardados', 'Saved analyses')}</h2>
         <table className="table">
@@ -83,7 +102,7 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
                   <td className="num">
                     {a.score} <span className="muted">{a.rating}</span>
                   </td>
-                  <td className="num">{prev ? signed(a.score - prev.score) : <span className="muted">{tr('primero', 'first')}</span>}</td>
+                  <td className="num">{prev ? <Delta n={a.score - prev.score} /> : <span className="muted">{tr('primero', 'first')}</span>}</td>
                   <td className="num">{a.findings}</td>
                   <td className="num">{a.bySeverity.critical + a.bySeverity.high}</td>
                   <td className="num">{formatEffort(a.effortMinutes)}</td>
@@ -105,7 +124,7 @@ export function History({ analyses, viewingId, onView, onOpenFinding }: Props) {
         </table>
       </section>
 
-      <section className="panel-section">
+      <section className="panel-section" ref={compareRef}>
         <h2>{tr('Comparar dos análisis', 'Compare two analyses')}</h2>
         {analyses.length < 2 ? (
           <p className="muted">{tr('Con dos análisis o más podrás ver qué deuda es nueva y cuál se resolvió.', 'With two or more analyses you can see which debt is new and which was resolved.')}</p>
@@ -211,5 +230,20 @@ function ChangeList({ title, empty, findings, onOpen }: { title: string; empty: 
         </ul>
       )}
     </div>
+  );
+}
+
+/** Cambio de puntuación con flecha y color; el signo del texto ya lo dice sin color. */
+function Delta({ n }: { n: number }) {
+  const trend = n > 0 ? 'up' : n < 0 ? 'down' : 'same';
+  return (
+    <span className="delta" data-trend={trend}>
+      {trend === 'same' ? null : (
+        <span className="delta-arrow" aria-hidden="true">
+          {trend === 'up' ? '▲' : '▼'}
+        </span>
+      )}
+      {signed(n)}
+    </span>
   );
 }

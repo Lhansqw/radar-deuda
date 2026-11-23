@@ -1,13 +1,14 @@
-import { useMemo } from 'react';
-import type { AnalysisReport, Finding, ReportComparison } from '@radar/engine';
+import { useMemo, useState } from 'react';
+import type { AnalysisReport, Finding, ReportComparison, Severity } from '@radar/engine';
 import type { AnalysisSummary } from '../../shared/model.js';
 import { FindingLine } from '../components/FindingLine.js';
-import { Radar } from '../components/Radar.js';
+import { Radar, type RadarHighlight } from '../components/Radar.js';
 import { SeverityBar } from '../components/SeverityBar.js';
 import { TrendChart } from '../components/TrendChart.js';
 import { sortFindings } from '../lib/findings.js';
 import { formatDateTime, formatEffort, formatNumber, formatPercent, formatRelative } from '../lib/format.js';
 import { RATING_HINT } from '../lib/labels.js';
+import { useCountUp } from '../lib/useCountUp.js';
 import { tr } from '../i18n.js';
 
 interface Props {
@@ -21,12 +22,20 @@ interface Props {
   comparison?: ReportComparison | null;
   onShowNew?: () => void;
   onOpenHistory?: () => void;
+  /** Abrir Hallazgos filtrado por una severidad. */
+  onOpenSeverity?: (severity: Severity) => void;
 }
 
 const horizon = (h: 'inmediato' | 'corto' | 'medio'): string => (h === 'inmediato' ? tr('Ya', 'Now') : h === 'corto' ? tr('Pronto', 'Soon') : tr('Más adelante', 'Later'));
 
-export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest, comparison, onShowNew, onOpenHistory }: Props) {
+export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles, onShowLatest, comparison, onShowNew, onOpenHistory, onOpenSeverity }: Props) {
   const s = report.score;
+  // Lo que se señala en un sitio del panel se ilumina en los demás (radar, leyenda, prioridades).
+  const [highlight, setHighlight] = useState<RadarHighlight>(null);
+  const severityOf = useMemo(() => new Map(report.findings.map((f) => [f.id, f.severity])), [report.findings]);
+  const activeSeverity = highlight === null ? null : 'severity' in highlight ? highlight.severity : (severityOf.get(highlight.findingId) ?? null);
+  const pointedId = highlight !== null && 'findingId' in highlight ? highlight.findingId : null;
+  const shownScore = useCountUp(s.score);
   const latest = analyses[0]?.id === analysisId;
 
   return (
@@ -44,13 +53,16 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
 
       <section className="panel-top">
         <div className="panel-radar">
-          <Radar findings={report.findings} onOpen={onOpenFinding} />
+          <Radar findings={report.findings} onOpen={onOpenFinding} highlight={highlight} onHighlight={setHighlight} />
         </div>
         <div className="panel-summary">
           <div className="score">
             <p className="score-figure">
-              {s.score}
-              <span>/100</span>
+              <span className="visually-hidden">{s.score}/100</span>
+              <span aria-hidden="true">
+                {shownScore}
+                <span className="score-of">/100</span>
+              </span>
             </p>
             <p className="score-rating">
               {tr('Calificación', 'Rating')} <strong>{s.rating}</strong>. {RATING_HINT[s.rating]}.
@@ -77,7 +89,7 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
               <dd>{formatNumber(report.findings.length)}</dd>
             </div>
           </dl>
-          <SeverityBar counts={report.summary.bySeverity} />
+          <SeverityBar counts={report.summary.bySeverity} active={activeSeverity} onHighlight={(sev) => setHighlight(sev ? { severity: sev } : null)} onOpen={onOpenSeverity} />
           {comparison ? <SinceLast c={comparison} onShowNew={onShowNew} onOpenHistory={onOpenHistory} /> : null}
           <p className="muted small">
             {tr(
@@ -100,7 +112,7 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
       </section>
 
       <div className="panel-columns">
-        <WhereToStart report={report} onOpenFinding={onOpenFinding} />
+        <WhereToStart report={report} onOpenFinding={onOpenFinding} pointedId={pointedId} onHighlight={setHighlight} />
         <Hotspots report={report} onOpenFiles={onOpenFiles} />
       </div>
 
@@ -110,7 +122,18 @@ export function Panel({ report, analyses, analysisId, onOpenFinding, onOpenFiles
 }
 
 /** El plan de la IA o, si no lo hay, los hallazgos más urgentes. */
-function WhereToStart({ report, onOpenFinding }: { report: AnalysisReport; onOpenFinding: (id: string) => void }) {
+function WhereToStart({
+  report,
+  onOpenFinding,
+  pointedId,
+  onHighlight,
+}: {
+  report: AnalysisReport;
+  onOpenFinding: (id: string) => void;
+  pointedId: string | null;
+  onHighlight: (h: RadarHighlight) => void;
+}) {
+  const row = (f: Finding) => <PriorityRow finding={f} onOpen={onOpenFinding} pointed={pointedId === f.id} onHighlight={onHighlight} />;
   const byId = useMemo(() => new Map(report.findings.map((f) => [f.id, f])), [report.findings]);
   const priorities = useMemo(() => sortFindings(report.findings.filter((f) => f.severity !== 'info'), 'severity').slice(0, 6), [report.findings]);
   const plan = report.ai?.plan;
@@ -132,7 +155,7 @@ function WhereToStart({ report, onOpenFinding }: { report: AnalysisReport; onOpe
                   .slice(0, 4)
                   .map((f) => (
                     <li key={f.id}>
-                      <PriorityRow finding={f} onOpen={onOpenFinding} />
+                      {row(f)}
                     </li>
                   ))}
               </ul>
@@ -143,7 +166,7 @@ function WhereToStart({ report, onOpenFinding }: { report: AnalysisReport; onOpe
         <ul className="priorities">
           {priorities.map((f) => (
             <li key={f.id}>
-              <PriorityRow finding={f} onOpen={onOpenFinding} />
+              {row(f)}
             </li>
           ))}
         </ul>
@@ -256,9 +279,11 @@ function RatingScale({ rating, debtRatio }: { rating: string; debtRatio: number 
   );
 }
 
-function PriorityRow({ finding: f, onOpen }: { finding: Finding; onOpen: (id: string) => void }) {
+function PriorityRow({ finding: f, onOpen, pointed, onHighlight }: { finding: Finding; onOpen: (id: string) => void; pointed: boolean; onHighlight: (h: RadarHighlight) => void }) {
+  const point = (): void => onHighlight({ findingId: f.id });
+  const release = (): void => onHighlight(null);
   return (
-    <button type="button" className="priority" onClick={() => onOpen(f.id)}>
+    <button type="button" className="priority" data-pointed={pointed || undefined} onClick={() => onOpen(f.id)} onPointerEnter={point} onPointerLeave={release} onFocus={point} onBlur={release}>
       <FindingLine finding={f} />
     </button>
   );

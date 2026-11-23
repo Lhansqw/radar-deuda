@@ -145,7 +145,7 @@ export function Ask({ report, analysisId, isOld, onOpenFinding, onOpenSettings }
             </div>
             <div className="msg msg-ai" aria-busy="true">
               <span className="msg-who">{tr('IA', 'AI')}</span>
-              <p className="muted">{tr('Pensando… Con los modelos gratuitos puede tardar hasta un minuto.', 'Thinking… With free models it can take up to a minute.')}</p>
+              <p className="muted">{tr('Pensando…', 'Thinking…')}</p>
             </div>
           </>
         ) : null}

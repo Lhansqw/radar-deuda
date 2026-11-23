@@ -69,6 +69,7 @@ describe('política de seguridad de contenido', () => {
     const csp = contentSecurityPolicy(null);
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain("script-src 'self';");
+    expect(csp).toContain("media-src 'self';");
     expect(csp).not.toMatch(/unsafe-inline|unsafe-eval|https?:|ws:/);
     expect(csp).toContain("frame-ancestors 'none'");
   });

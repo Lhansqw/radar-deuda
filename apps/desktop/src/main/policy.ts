@@ -36,6 +36,8 @@ export function contentSecurityPolicy(devServerUrl: string | null): string {
     dev ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
     "img-src 'self' data:",
     "font-src 'self'",
+    // El video de introducción (components/Intro.tsx).
+    "media-src 'self'",
     dev ? `connect-src 'self' ws://${dev.host}` : "connect-src 'self'",
     "base-uri 'none'",
     "form-action 'none'",

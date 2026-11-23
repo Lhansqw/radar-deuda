@@ -91,6 +91,10 @@ function AnalysisView({
           openFinding(comparison?.added[0]?.id ?? null);
         }}
         onOpenHistory={() => onView('historial')}
+        onOpenSeverity={(severity) => {
+          memory.setFilter(id, () => ({ ...EMPTY_FILTER, severities: new Set([severity]) }));
+          openFinding(null);
+        }}
         onShowLatest={() => memory.chooseAnalysis(id, null)}
       />
     ),
