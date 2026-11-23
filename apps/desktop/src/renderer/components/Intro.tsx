@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { tr } from '../i18n.js';
 
 /** Si el video no termina (no carga, se queda parado), la intro se quita igual. */
@@ -17,11 +17,11 @@ export function Intro({ onDone }: { onDone: () => void }) {
     window.matchMedia('(prefers-color-scheme: dark)').matches ? './intro/intro-dark.mp4' : './intro/intro-light.mp4',
   );
 
-  const finish = (): void => {
+  const finish = useCallback((): void => {
     if (done.current) return;
     done.current = true;
     setLeaving(true);
-  };
+  }, []);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -37,7 +37,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
       window.clearTimeout(timer);
       window.removeEventListener('keydown', onKey);
     };
-  }, []);
+  }, [onDone, finish]);
 
   useEffect(() => {
     if (!leaving) return;
