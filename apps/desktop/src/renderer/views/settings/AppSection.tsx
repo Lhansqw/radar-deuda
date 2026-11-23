@@ -57,11 +57,15 @@ function Appearance() {
   }, []);
 
   if (!theme) return null;
+  // Se marca al momento; si el proceso principal no lo aplica, vuelve al anterior.
   const choose = async (next: ThemeSetting): Promise<void> => {
+    const previous = theme;
     setError(null);
+    setTheme(next);
     try {
       setTheme(await window.radar.app.setTheme(next));
     } catch (err) {
+      setTheme(previous);
       setError(tr(`No se pudo cambiar el tema: ${errorMessage(err)}`, `Could not change the theme: ${errorMessage(err)}`));
     }
   };
