@@ -35,7 +35,12 @@ const BY_CODE: Readonly<Record<string, () => string>> = {
   email_address_invalid: () => tr('Ese correo no parece válido.', 'That email does not look valid.'),
   signup_disabled: () => tr('El registro de cuentas nuevas está desactivado en este proyecto de Supabase.', 'New account sign-up is disabled in this Supabase project.'),
   email_provider_disabled: () => tr('El acceso con correo y contraseña está desactivado en este proyecto de Supabase.', 'Email and password sign-in is disabled in this Supabase project.'),
-  user_banned: () => tr('Esta cuenta está bloqueada.', 'This account is blocked.'),
+  captcha_failed: () =>
+    tr(
+      'El proyecto de Supabase pide un CAPTCHA y la aplicación no lo usa: desactiva «CAPTCHA protection» en Authentication → Attack Protection (ver docs/CUENTAS.md).',
+      'The Supabase project requires a CAPTCHA and the app does not use one: turn off "CAPTCHA protection" in Authentication → Attack Protection (see docs/CUENTAS.md).',
+    ),
+  user_banned: () =>tr('Esta cuenta está bloqueada.', 'This account is blocked.'),
   user_not_found: sessionInvalid,
   session_not_found: sessionInvalid,
   session_expired: sessionExpired,
