@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { AccountState } from '../shared/account.js';
 import { App } from './App.js';
+import { Intro } from './components/Intro.js';
 import { Access } from './views/Access.js';
 import { CloudMissing } from './views/CloudMissing.js';
 
@@ -12,6 +13,8 @@ import { CloudMissing } from './views/CloudMissing.js';
  */
 export function Root() {
   const [state, setState] = useState<AccountState | null>(null);
+  const [introDone, setIntroDone] = useState(false);
+  const endIntro = useCallback(() => setIntroDone(true), []);
 
   useEffect(() => {
     let signedIn = false;
@@ -28,6 +31,15 @@ export function Root() {
     return stop;
   }, []);
 
+  return (
+    <>
+      {screen(state)}
+      {!introDone && <Intro onDone={endIntro} />}
+    </>
+  );
+}
+
+function screen(state: AccountState | null) {
   if (!state) return <div className="access" />;
   if (state.status === 'signed-in') return <App account={state} />;
   if (state.status === 'unconfigured') return <CloudMissing message={state.message} />;
